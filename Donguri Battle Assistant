@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Donguri Battle Assistant
 // @namespace    https://donguri.5ch.net/
-// @version      0.0.6.4
+// @version      0.0.8.4
 // @description  5ちゃんねるのどんぐりシステムから派生したゲームの操作性を改善するためのユーザースクリプト
 // @author       福呼び草
 // @match        https://donguri.5ch.net/teambattle?m=*
@@ -318,6 +318,273 @@
     .dba-setting-row input[type="range"]{
       width: 100%;
       box-sizing: border-box;
+    }
+
+    /* ===== 装備ロスター ===== */
+    #dba-m-roster.dba-m-std{
+      width: min(920px, calc(100vw - 24px));
+      max-height: min(88vh, calc(100vh - 24px));
+      overflow: hidden;
+    }
+    #dba-m-roster.dba-m-std .dba-modal__mid{
+      max-height: calc(min(88vh, calc(100vh - 24px)) - 110px);
+      overflow: auto;
+    }
+    .dba-roster-head{
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .dba-roster-title{
+      font-size: 1.15em;
+      font-weight: 800;
+      text-align: left;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .dba-roster-head-btns{
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+    }
+    .dba-btn-mini{
+      appearance: none;
+      border: 2px solid #000;
+      border-radius: 10px;
+      padding: 6px 10px;
+      margin: 0;
+      font-size: 0.95em;
+      font-weight: 700;
+      cursor: pointer;
+      user-select: none;
+      background: #eee;
+      color: #000;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.12);
+    }
+    .dba-btn-mini:hover{ filter: brightness(0.97); }
+    .dba-btn-mini:active{ transform: translateY(1px); }
+    .dba-btn-mini--danger{ background:#f3d0d0; }
+    .dba-btn-mini--ok{ background:#cfe3ff; }
+
+    .dba-roster-row2{
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: flex-start;
+      margin: 12px 0;
+    }
+    .dba-roster-list{
+      border: 1px solid #000;
+      border-radius: 12px;
+      background: #fff;
+      padding: 8px;
+      overflow: hidden;
+    }
+    .dba-roster-item{
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid #00000022;
+      margin: 6px 0;
+      cursor: pointer;
+      user-select: none;
+    }
+    .dba-roster-item:hover{ background: #f7f7f7; }
+    .dba-roster-item[data-selected="1"]{
+      outline: 3px solid #ea0000;
+      outline-offset: 0px;
+      background: #fff2f2;
+    }
+    .dba-roster-item__name{
+      font-weight: 800;
+      text-align: left;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .dba-roster-item__meta{
+      font-size: 0.9em;
+      font-weight: 700;
+      opacity: 0.9;
+      white-space: nowrap;
+    }
+
+    /* ===== 装備プリセット追加モーダル ===== */
+    #dba-m-roster-add.dba-m-std{
+      width: min(760px, calc(100vw - 24px));
+      max-height: min(88vh, calc(100vh - 24px));
+      overflow: hidden;
+    }
+    #dba-m-roster-add.dba-m-std .dba-modal__mid{
+      max-height: calc(min(88vh, calc(100vh - 24px)) - 110px);
+      overflow: auto;
+    }
+    .dba-add-wrap{
+      display: grid;
+      grid-template-columns: 160px 1fr;
+      gap: 10px;
+      align-items: start;
+    }
+    .dba-add-left{
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: stretch;
+    }
+    .dba-add-right{
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: stretch;
+    }
+    .dba-add-sel{
+      border: 1px solid #000;
+      border-radius: 12px;
+      background: #fff;
+      padding: 8px 10px;
+      min-height: 2.4em;
+      font-weight: 700;
+      text-align: left;
+      overflow-wrap: anywhere;
+    }
+    .dba-add-name{
+      width: 100%;
+      box-sizing: border-box;
+      padding: 10px 12px;
+      border: 2px solid #000;
+      border-radius: 12px;
+      font-size: 1em;
+      font-weight: 700;
+    }
+    .dba-add-bot{
+      display: flex;
+      gap: 12px;
+      justify-content: flex-start;
+      align-items: center;
+      margin-top: 10px;
+    }
+
+    /* ===== アイテム選択（バッグ表） ===== */
+    #dba-m-pick-item.dba-m-std{
+      width: min(1100px, calc(100vw - 24px));
+      max-height: min(90vh, calc(100vh - 24px));
+      overflow: hidden;
+    }
+    #dba-m-pick-item.dba-m-std .dba-modal__mid{
+      max-height: calc(min(90vh, calc(100vh - 24px)) - 110px);
+      overflow: auto;
+    }
+    .dba-pick-hint{
+      font-weight: 700;
+      margin: 0 0 10px 0;
+      text-align: left;
+    }
+
+    /* ===== アイテム選択：レアリティフィルタ ===== */
+    .dba-pick-filterbar{
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-start;
+      margin: 0 0 10px 0;
+      padding: 8px 10px;
+      border: 1px solid #000;
+      border-radius: 12px;
+      background: #fff;
+    }
+    .dba-pick-filterbtn{
+      appearance: none;
+      border: 2px solid #000;
+      border-radius: 10px;
+      padding: 6px 10px;
+      margin: 0;
+      font-size: 0.95em;
+      font-weight: 800;
+      cursor: pointer;
+      user-select: none;
+      background: #eee;
+      color: #000;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.12);
+    }
+    .dba-pick-filterbtn:hover{ filter: brightness(0.97); }
+    .dba-pick-filterbtn:active{ transform: translateY(1px); }
+    .dba-pick-filterbtn[data-active="1"]{
+      outline: 3px solid #ea0000;
+      outline-offset: 0px;
+      background: #fff2f2;
+    }
+    .dba-pick-filterbtn--all{ background:#e8e8e8; }
+    .dba-pick-filterbtn--n{ background:#ffffff; }
+    .dba-pick-filterbtn--r{ background:#3fa435; color:#fff; }
+    .dba-pick-filterbtn--sr{ background:#2175d9; color:#fff; }
+    .dba-pick-filterbtn--ssr{ background:#a633d6; color:#fff; }
+    .dba-pick-filterbtn--ur{ background:#f45d01; color:#fff; }
+
+    /* ===== アイテム選択：MOD 0 フィルタ ===== */
+    .dba-pick-filterchk{
+      display: inline-flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: flex-start;
+      font-weight: 800;
+      user-select: none;
+      cursor: pointer;
+      padding: 4px 6px;
+      border-radius: 10px;
+      border: 1px solid #00000022;
+      background: #fafafa;
+    }
+    .dba-pick-filterchk input[type="checkbox"]{
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+      accent-color: #ea0000;
+    }
+    .dba-pick-filterchk[data-disabled="1"]{
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+    .dba-pick-filterchk[data-disabled="1"] input{
+      cursor: not-allowed;
+    }
+
+    .dba-pick-row-selected{
+      /* tr 自体に背景が乗らない実装もあるため、td 側も別途指定する */
+      background: rgba(255,0,0,0.22) !important;
+      outline: 3px solid rgba(255,0,0,0.75) !important;
+      outline-offset: -2px !important;
+    }
+    /* 多くのテーブルは td に背景が乗っているため、td にも強制適用する */
+    .dba-pick-row-selected > td,
+    .dba-pick-row-selected > th{
+      background: rgba(255,0,0,0.22) !important;
+      /* “赤いフィルタ”っぽく見せるため、内側に薄赤のシェードも追加 */
+      box-shadow: inset 0 0 0 9999px rgba(255,0,0,0.10) !important;
+    }
+    /* クリック対象が a 等でも選択が分かりやすいように */
+    .dba-pick-row-selected a{
+      color: #000 !important;
+      font-weight: 800;
+    }
+    .dba-backup-textarea{
+      width: 100%;
+      box-sizing: border-box;
+      min-height: 240px;
+      resize: vertical;
+      padding: 10px 12px;
+      border: 2px solid #000;
+      border-radius: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      font-size: 0.95em;
+      line-height: 1.25em;
     }
   `;
   // ============================================================
@@ -1121,6 +1388,1276 @@
   function sanitizeText(s){
     if(!s) return '';
     return String(s).replace(/\s+/g,' ').trim();
+  }
+
+  // =========================
+  // 装備ロスター（保存・UI）
+  // =========================
+  const ROSTER_LS_KEY = 'dba.roster.v1';
+
+  function pad2(n){ return String(n).padStart(2,'0'); }
+  function yyyymmddLocal(){
+    const d = new Date();
+    return `${d.getFullYear()}${pad2(d.getMonth()+1)}${pad2(d.getDate())}`;
+  }
+  function nowIso(){ try{ return new Date().toISOString(); }catch(_e){ return ''; } }
+
+  function loadRosterStore(){
+    try{
+      const raw = localStorage.getItem(ROSTER_LS_KEY);
+      if(!raw){
+        return { activeId: null, rosters: {} };
+      }
+      const obj = JSON.parse(raw);
+      if(!obj || typeof obj !== 'object') return { activeId: null, rosters: {} };
+      if(!obj.rosters || typeof obj.rosters !== 'object') obj.rosters = {};
+      if(!('activeId' in obj)) obj.activeId = null;
+      return obj;
+    }catch(_e){
+      return { activeId: null, rosters: {} };
+    }
+  }
+
+  function saveRosterStore(store){
+    try{
+      localStorage.setItem(ROSTER_LS_KEY, JSON.stringify(store));
+    }catch(_e){}
+  }
+
+  function createRosterIfNeeded(){
+    const store = loadRosterStore();
+    const ids = Object.keys(store.rosters || {});
+    if(store.activeId && store.rosters[store.activeId]){
+      return store;
+    }
+    if(ids.length > 0){
+      store.activeId = ids[0];
+      saveRosterStore(store);
+      return store;
+    }
+    // 新規作成
+    const id = `r_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    const title = `装備ロスター_${yyyymmddLocal()}`;
+    store.rosters[id] = {
+      id,
+      title,
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+      presets: {}, // { "name": [weaponId, armorId, necklaceId] }
+      presetOrder: [] // 表示順を保持（追加順／バックアップJSON記述順）
+    };
+    store.activeId = id;
+    saveRosterStore(store);
+    return store;
+  }
+
+  function getActiveRoster(){
+    const store = createRosterIfNeeded();
+    const r = store.rosters[store.activeId];
+    return { store, roster: r };
+  }
+
+  function setRosterTitle(newTitle){
+    const { store, roster } = getActiveRoster();
+    roster.title = sanitizeText(newTitle) || roster.title;
+    roster.updatedAt = nowIso();
+    store.rosters[store.activeId] = roster;
+    saveRosterStore(store);
+  }
+
+  function overwriteRosterFromObject(obj){
+    // バックアップ用：active roster の全体を上書き（最低限 title/presets を使用）
+    const { store, roster } = getActiveRoster();
+    if(!obj || typeof obj !== 'object') throw new Error('Invalid JSON object');
+    const title = sanitizeText(obj.title || roster.title);
+    const presets = (obj.presets && typeof obj.presets === 'object') ? obj.presets : {};
+    const cleaned = {};
+    const order = [];
+    for(const k of Object.keys(presets)){
+      // バックアップJSONの記述順を尊重して order に積む
+      const name = sanitizeText(k);
+      if(!name) continue;
+      const v = presets[k];
+      if(!Array.isArray(v) || v.length !== 3) continue;
+      cleaned[name] = [
+        (v[0] === null || Number.isFinite(Number(v[0]))) ? (v[0] === null ? null : Number(v[0])) : null,
+        (v[1] === null || Number.isFinite(Number(v[1]))) ? (v[1] === null ? null : Number(v[1])) : null,
+        (v[2] === null || Number.isFinite(Number(v[2]))) ? (v[2] === null ? null : Number(v[2])) : null
+      ];
+      order.push(name);
+    }
+    roster.title = title || roster.title;
+    roster.presets = cleaned;
+    // 表示順はバックアップの記述順にする（ここで並び替えない）
+    roster.presetOrder = order;
+    roster.updatedAt = nowIso();
+    store.rosters[store.activeId] = roster;
+    saveRosterStore(store);
+  }
+
+  function deleteActiveRosterAndSwitch(){
+    const store = loadRosterStore();
+    if(store.activeId && store.rosters && store.rosters[store.activeId]){
+      delete store.rosters[store.activeId];
+    }
+    const ids = Object.keys(store.rosters || {});
+    if(ids.length > 0){
+      store.activeId = ids[0];
+      saveRosterStore(store);
+      return createRosterIfNeeded();
+    }
+    // 1つも無ければ新規作成
+    store.activeId = null;
+    store.rosters = {};
+    saveRosterStore(store);
+    return createRosterIfNeeded();
+  }
+
+  function setPreset(name, triple){
+    const { store, roster } = getActiveRoster();
+    const n = sanitizeText(name);
+    if(!n) throw new Error('プリセット名が空です');
+    if(!Array.isArray(triple) || triple.length !== 3) throw new Error('Invalid preset triple');
+    roster.presets = roster.presets || {};
+    roster.presetOrder = Array.isArray(roster.presetOrder) ? roster.presetOrder : [];
+    const existed = !!(roster.presets && Object.prototype.hasOwnProperty.call(roster.presets, n));
+    roster.presets[n] = [
+      (triple[0] === null) ? null : Number(triple[0]),
+      (triple[1] === null) ? null : Number(triple[1]),
+      (triple[2] === null) ? null : Number(triple[2])
+    ];
+    // 既存プリセットを上書きする場合は順序は維持、新規だけ末尾追加
+    if(!existed){
+      roster.presetOrder.push(n);
+    }
+    roster.updatedAt = nowIso();
+    store.rosters[store.activeId] = roster;
+    saveRosterStore(store);
+  }
+
+  function deletePreset(name){
+    const { store, roster } = getActiveRoster();
+    const n = sanitizeText(name);
+    if(!n) return false;
+    if(roster.presets && roster.presets[n]){
+      delete roster.presets[n];
+      // 表示順配列からも削除
+      if(Array.isArray(roster.presetOrder)){
+        roster.presetOrder = roster.presetOrder.filter(x => x !== n);
+      }
+      roster.updatedAt = nowIso();
+      store.rosters[store.activeId] = roster;
+      saveRosterStore(store);
+      return true;
+    }
+    return false;
+  }
+
+  function presetMetaText(triple){
+    const w = (triple && triple[0] != null) ? `W:${triple[0]}` : 'W:-';
+    const a = (triple && triple[1] != null) ? `A:${triple[1]}` : 'A:-';
+    const n = (triple && triple[2] != null) ? `N:${triple[2]}` : 'N:-';
+    return `${w} ${a} ${n}`;
+  }
+
+  async function equipById(id){
+    if(id == null) return true;
+    const url = `https://donguri.5ch.net/equip/${Number(id)}`;
+    const res = await fetch(url, { method:'GET', credentials:'include', cache:'no-store' });
+    if(!res.ok) throw new Error(`equip failed: ${res.status}`);
+    return true;
+  }
+
+  async function equipPresetByName(name){
+    const { roster } = getActiveRoster();
+    const n = sanitizeText(name);
+    const triple = roster && roster.presets ? roster.presets[n] : null;
+    if(!triple) throw new Error('preset not found');
+    // 順番：武器→防具→首
+    await equipById(triple[0]);
+    await equipById(triple[1]);
+    await equipById(triple[2]);
+    return true;
+  }
+
+  // =========================
+  // 装備ロスター：モーダル UI
+  // =========================
+  function buildRosterModal(){
+    if(document.getElementById('dba-m-roster')) return;
+
+    const dlg = document.createElement('dialog');
+    dlg.id = 'dba-m-roster';
+    dlg.className = 'dba-m-std';
+
+    const top = document.createElement('div');
+    top.className = 'dba-modal__top';
+    const title = document.createElement('div');
+    title.className = 'dba-modal__title';
+    title.textContent = '装備ロスター';
+    const btnX = document.createElement('button');
+    btnX.type = 'button';
+    btnX.className = 'dba-btn-x';
+    btnX.textContent = '×';
+    top.appendChild(title);
+    top.appendChild(btnX);
+
+    const mid = document.createElement('div');
+    mid.className = 'dba-modal__mid';
+
+    const box = document.createElement('div');
+    box.id = 'dba-roster-box';
+    mid.appendChild(box);
+
+    const bot = document.createElement('div');
+    bot.className = 'dba-modal__bot';
+    const btnClose = document.createElement('button');
+    btnClose.type = 'button';
+    btnClose.className = 'dba-btn-close';
+    btnClose.textContent = 'Close';
+    bot.appendChild(btnClose);
+
+    dlg.appendChild(top);
+    dlg.appendChild(mid);
+    dlg.appendChild(bot);
+    document.body.appendChild(dlg);
+
+    function closeDirect(){
+      try{ dlg.close(); }catch(_e){ dlg.removeAttribute('open'); }
+    }
+    btnX.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); closeDirect(); });
+    btnClose.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); closeDirect(); });
+    dlg.addEventListener('cancel', (e) => { e.preventDefault(); closeDirect(); });
+  }
+
+  function renderRosterModalState(selectedPresetName){
+    const box = document.getElementById('dba-roster-box');
+    if(!box) return;
+    const { roster } = getActiveRoster();
+    const title = roster ? roster.title : '装備ロスター';
+    const presets = roster && roster.presets ? roster.presets : {};
+    // ★並び替え禁止：表示順は presetOrder（追加順／バックアップ記述順）を優先
+    const order = Array.isArray(roster && roster.presetOrder) ? roster.presetOrder : [];
+    const seen = new Set();
+    const names = [];
+    // まず order の順に並べる（存在するものだけ）
+    for(const nm of order){
+      if(!nm) continue;
+      if(seen.has(nm)) continue;
+      if(Object.prototype.hasOwnProperty.call(presets, nm)){
+        names.push(nm);
+        seen.add(nm);
+      }
+    }
+    // order に無いキーがあれば末尾に追加（ここでも sort しない）
+    for(const nm of Object.keys(presets)){
+      if(seen.has(nm)) continue;
+      names.push(nm);
+      seen.add(nm);
+    }
+
+    box.textContent = '';
+
+    // 1段目：ロスタータイトル + 右ボタン群
+    const head = document.createElement('div');
+    head.className = 'dba-roster-head';
+
+    const headTitle = document.createElement('div');
+    headTitle.className = 'dba-roster-title';
+    headTitle.textContent = title;
+
+    const headBtns = document.createElement('div');
+    headBtns.className = 'dba-roster-head-btns';
+
+    const btnRename = document.createElement('button');
+    btnRename.type = 'button';
+    btnRename.className = 'dba-btn-mini';
+    btnRename.textContent = '名前変更';
+
+    const btnWipe = document.createElement('button');
+    btnWipe.type = 'button';
+    btnWipe.className = 'dba-btn-mini dba-btn-mini--danger';
+    btnWipe.textContent = '全削除';
+
+    const btnBackup = document.createElement('button');
+    btnBackup.type = 'button';
+    btnBackup.className = 'dba-btn-mini';
+    btnBackup.textContent = 'バックアップ';
+
+    headBtns.appendChild(btnRename);
+    headBtns.appendChild(btnWipe);
+    headBtns.appendChild(btnBackup);
+
+    head.appendChild(headTitle);
+    head.appendChild(headBtns);
+    box.appendChild(head);
+
+    // 2段目：追加/削除
+    const row2 = document.createElement('div');
+    row2.className = 'dba-roster-row2';
+
+    const btnAdd = document.createElement('button');
+    btnAdd.type = 'button';
+    btnAdd.className = 'dba-btn-mini dba-btn-mini--ok';
+    btnAdd.textContent = '追加';
+
+    const btnDel = document.createElement('button');
+    btnDel.type = 'button';
+    btnDel.className = 'dba-btn-mini dba-btn-mini--danger';
+    btnDel.textContent = '削除';
+    btnDel.disabled = !selectedPresetName;
+
+    row2.appendChild(btnAdd);
+    row2.appendChild(btnDel);
+    box.appendChild(row2);
+
+    // リスト
+    const list = document.createElement('div');
+    list.className = 'dba-roster-list';
+    if(names.length === 0){
+      const empty = document.createElement('div');
+      empty.style.padding = '10px';
+      empty.style.fontWeight = '700';
+      empty.textContent = 'プリセットがありません。';
+      list.appendChild(empty);
+    }else{
+      for(const nm of names){
+        const triple = presets[nm];
+        const item = document.createElement('div');
+        item.className = 'dba-roster-item';
+        item.dataset.name = nm;
+        item.dataset.selected = (nm === selectedPresetName) ? '1' : '0';
+
+        const n = document.createElement('div');
+        n.className = 'dba-roster-item__name';
+        n.textContent = nm;
+
+        const m = document.createElement('div');
+        m.className = 'dba-roster-item__meta';
+        m.textContent = presetMetaText(triple);
+
+        item.appendChild(n);
+        item.appendChild(m);
+
+        item.addEventListener('click', async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          // クリック＝選択 + 装備適用
+          renderRosterModalState(nm);
+          try{
+            // 体感のため、戦闘結果モーダルを流用して「処理中…」を表示（結果表示ではなくステータス表示）
+            openBattleResultModalWithNode(`装備切替中…\n${nm}\n${presetMetaText(presets[nm])}`, '装備ロスター');
+            await equipPresetByName(nm);
+            openBattleResultModalWithNode(`装備切替完了\n${nm}`, '装備ロスター');
+          }catch(_e2){
+            openBattleResultModalWithNode(`装備切替に失敗しました\n${nm}`, '装備ロスター');
+          }
+        });
+
+        list.appendChild(item);
+      }
+    }
+    box.appendChild(list);
+
+    // --- handlers ---
+    btnRename.addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      openRosterRenameModal(title, (newName) => {
+        setRosterTitle(newName);
+        renderRosterModalState(selectedPresetName || null);
+      });
+    });
+
+    btnWipe.addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      openRosterWipeModal(() => {
+        deleteActiveRosterAndSwitch();
+        renderRosterModalState(null);
+      });
+    });
+
+    btnBackup.addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      openRosterBackupModal(() => {
+        renderRosterModalState(selectedPresetName || null);
+      });
+    });
+
+    btnAdd.addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      openRosterAddPresetModal(() => {
+        renderRosterModalState(null);
+      });
+    });
+
+    btnDel.addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      if(!selectedPresetName) return;
+      // 軽い確認（ここは要求に無いので標準 alert で簡易）
+      const ok = confirm(`プリセット「${selectedPresetName}」を削除しますか？`);
+      if(!ok) return;
+      deletePreset(selectedPresetName);
+      renderRosterModalState(null);
+    });
+  }
+
+  function openRosterModal(){
+    const openNow = () => {
+      buildRosterModal();
+      createRosterIfNeeded();
+      renderRosterModalState(null);
+      const dlg = document.getElementById('dba-m-roster');
+      if(!dlg) return;
+      try{ dlg.showModal(); }catch(_e){ dlg.setAttribute('open',''); }
+    };
+    if(document.body) openNow();
+    else document.addEventListener('DOMContentLoaded', openNow, { once:true });
+  }
+
+  // ---- 名前変更 modal ----
+  function openRosterRenameModal(currentTitle, onOK){
+    const ensure = () => {
+      if(document.getElementById('dba-m-roster-rename')) return;
+      const dlg = document.createElement('dialog');
+      dlg.id = 'dba-m-roster-rename';
+      dlg.className = 'dba-m-std';
+
+      const top = document.createElement('div');
+      top.className = 'dba-modal__top';
+      const t = document.createElement('div');
+      t.className = 'dba-modal__title';
+      t.textContent = '名前変更';
+      const x = document.createElement('button');
+      x.type = 'button';
+      x.className = 'dba-btn-x';
+      x.textContent = '×';
+      top.appendChild(t); top.appendChild(x);
+
+      const mid = document.createElement('div');
+      mid.className = 'dba-modal__mid';
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.id = 'dba-roster-rename-input';
+      input.className = 'dba-add-name';
+      input.value = currentTitle || '';
+      mid.appendChild(input);
+
+      const bot = document.createElement('div');
+      bot.className = 'dba-modal__bot';
+      const ok = document.createElement('button');
+      ok.type = 'button';
+      ok.className = 'dba-btn-ok';
+      ok.textContent = 'OK';
+      const cancel = document.createElement('button');
+      cancel.type = 'button';
+      cancel.className = 'dba-btn-close';
+      cancel.textContent = 'Cancel';
+      bot.appendChild(ok); bot.appendChild(cancel);
+
+      dlg.appendChild(top); dlg.appendChild(mid); dlg.appendChild(bot);
+      document.body.appendChild(dlg);
+
+      function closeDirect(){ try{ dlg.close(); }catch(_e){ dlg.removeAttribute('open'); } }
+      x.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeDirect(); });
+      cancel.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeDirect(); });
+      dlg.addEventListener('cancel', (e)=>{ e.preventDefault(); closeDirect(); });
+      ok.addEventListener('click', (e)=>{
+        e.preventDefault(); e.stopPropagation();
+        const v = document.getElementById('dba-roster-rename-input')?.value || '';
+        try{ onOK && onOK(v); }catch(_e2){}
+        closeDirect();
+      });
+    };
+
+    const openNow = () => {
+      ensure();
+      const dlg = document.getElementById('dba-m-roster-rename');
+      const input = document.getElementById('dba-roster-rename-input');
+      if(input) input.value = currentTitle || '';
+      if(dlg){
+        try{ dlg.showModal(); }catch(_e){ dlg.setAttribute('open',''); }
+        try{ input && input.focus(); input && input.select(); }catch(_e2){}
+      }
+    };
+    if(document.body) openNow(); else document.addEventListener('DOMContentLoaded', openNow, { once:true });
+  }
+
+  // ---- 全削除（ロスター削除） modal ----
+  function openRosterWipeModal(onWipe){
+    const ensure = () => {
+      if(document.getElementById('dba-m-roster-wipe')) return;
+      const dlg = document.createElement('dialog');
+      dlg.id = 'dba-m-roster-wipe';
+      dlg.className = 'dba-m-std';
+
+      const top = document.createElement('div');
+      top.className = 'dba-modal__top';
+      const t = document.createElement('div');
+      t.className = 'dba-modal__title';
+      t.textContent = '全削除';
+      const x = document.createElement('button');
+      x.type = 'button';
+      x.className = 'dba-btn-x';
+      x.textContent = '×';
+      top.appendChild(t); top.appendChild(x);
+
+      const mid = document.createElement('div');
+      mid.className = 'dba-modal__mid';
+      const msg = document.createElement('div');
+      msg.style.fontWeight = '800';
+      msg.style.marginBottom = '10px';
+      msg.style.textAlign = 'left';
+      msg.textContent = '現在読み込んでいる「装備ロスター」データを削除します。よろしいですか？';
+      const chkRow = document.createElement('label');
+      chkRow.style.display = 'flex';
+      chkRow.style.gap = '8px';
+      chkRow.style.alignItems = 'center';
+      chkRow.style.fontWeight = '800';
+      chkRow.style.textAlign = 'left';
+      const chk = document.createElement('input');
+      chk.type = 'checkbox';
+      chk.id = 'dba-roster-wipe-chk';
+      const span = document.createElement('span');
+      span.textContent = '削除することを確認しました';
+      chkRow.appendChild(chk); chkRow.appendChild(span);
+      mid.appendChild(msg);
+      mid.appendChild(chkRow);
+
+      const bot = document.createElement('div');
+      bot.className = 'dba-modal__bot';
+      const wipe = document.createElement('button');
+      wipe.type = 'button';
+      wipe.className = 'dba-btn-close';
+      wipe.textContent = '全削除';
+      const back = document.createElement('button');
+      back.type = 'button';
+      back.className = 'dba-btn-ok';
+      back.textContent = 'やめる';
+      bot.appendChild(wipe); bot.appendChild(back);
+
+      dlg.appendChild(top); dlg.appendChild(mid); dlg.appendChild(bot);
+      document.body.appendChild(dlg);
+
+      function closeDirect(){ try{ dlg.close(); }catch(_e){ dlg.removeAttribute('open'); } }
+      x.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeDirect(); });
+      back.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeDirect(); });
+      dlg.addEventListener('cancel', (e)=>{ e.preventDefault(); closeDirect(); });
+      wipe.addEventListener('click', (e)=>{
+        e.preventDefault(); e.stopPropagation();
+        const c = document.getElementById('dba-roster-wipe-chk');
+        if(!c || !c.checked){
+          alert('確認チェックを入れてください。');
+          return;
+        }
+        try{ onWipe && onWipe(); }catch(_e2){}
+        closeDirect();
+      });
+    };
+
+    const openNow = () => {
+      ensure();
+      const chk = document.getElementById('dba-roster-wipe-chk');
+      if(chk) chk.checked = false;
+      const dlg = document.getElementById('dba-m-roster-wipe');
+      if(dlg){
+        try{ dlg.showModal(); }catch(_e){ dlg.setAttribute('open',''); }
+      }
+    };
+    if(document.body) openNow(); else document.addEventListener('DOMContentLoaded', openNow, { once:true });
+  }
+
+  // ---- バックアップ modal（json表示・保存で上書き） ----
+  function openRosterBackupModal(onDone){
+    const ensure = () => {
+      if(document.getElementById('dba-m-roster-backup')) return;
+      const dlg = document.createElement('dialog');
+      dlg.id = 'dba-m-roster-backup';
+      dlg.className = 'dba-m-std';
+
+      const top = document.createElement('div');
+      top.className = 'dba-modal__top';
+      const t = document.createElement('div');
+      t.className = 'dba-modal__title';
+      t.textContent = 'バックアップ';
+      const x = document.createElement('button');
+      x.type = 'button';
+      x.className = 'dba-btn-x';
+      x.textContent = '×';
+      top.appendChild(t); top.appendChild(x);
+
+      const mid = document.createElement('div');
+      mid.className = 'dba-modal__mid';
+      const ta = document.createElement('textarea');
+      ta.id = 'dba-roster-backup-ta';
+      ta.className = 'dba-backup-textarea';
+      mid.appendChild(ta);
+
+      const bot = document.createElement('div');
+      bot.className = 'dba-modal__bot';
+      const save = document.createElement('button');
+      save.type = 'button';
+      save.className = 'dba-btn-apply';
+      save.textContent = '保存';
+      const cancel = document.createElement('button');
+      cancel.type = 'button';
+      cancel.className = 'dba-btn-close';
+      cancel.textContent = '中止';
+      bot.appendChild(save); bot.appendChild(cancel);
+
+      dlg.appendChild(top); dlg.appendChild(mid); dlg.appendChild(bot);
+      document.body.appendChild(dlg);
+
+      function closeDirect(){ try{ dlg.close(); }catch(_e){ dlg.removeAttribute('open'); } }
+      x.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeDirect(); });
+      cancel.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeDirect(); });
+      dlg.addEventListener('cancel', (e)=>{ e.preventDefault(); closeDirect(); });
+      save.addEventListener('click', (e)=>{
+        e.preventDefault(); e.stopPropagation();
+        const text = document.getElementById('dba-roster-backup-ta')?.value || '';
+        try{
+          const obj = JSON.parse(text);
+          overwriteRosterFromObject(obj);
+          try{ onDone && onDone(); }catch(_e2){}
+          closeDirect();
+        }catch(_e2){
+          alert('JSONの解析に失敗しました。');
+        }
+      });
+    };
+
+    const openNow = () => {
+      ensure();
+      const { roster } = getActiveRoster();
+      const obj = {
+        title: roster.title,
+        presets: roster.presets || {}
+      };
+      const ta = document.getElementById('dba-roster-backup-ta');
+      if(ta){
+        try{
+          // バックアップ表示の改行を減らす：
+          // プリセットの [weaponId, armorId, necklaceId]（長さ3配列）を 1 行に圧縮する
+          let text = JSON.stringify(obj, null, 2);
+          // 例：
+          // [
+          //   111111111,
+          //   222222222,
+          //   333333333
+          // ]
+          // → [111111111,222222222,333333333]
+          text = text.replace(
+            /\[\s*\n\s*(null|\d+)\s*,\s*\n\s*(null|\d+)\s*,\s*\n\s*(null|\d+)\s*\n\s*\]/g,
+            '[$1,$2,$3]'
+          );
+          ta.value = text;
+        }catch(_e){
+          ta.value = '';
+        }
+      }
+      const dlg = document.getElementById('dba-m-roster-backup');
+      if(dlg){
+        try{ dlg.showModal(); }catch(_e){ dlg.setAttribute('open',''); }
+      }
+    };
+    if(document.body) openNow(); else document.addEventListener('DOMContentLoaded', openNow, { once:true });
+  }
+
+  // ---- プリセット追加 modal ----
+  function buildRosterAddModal(){
+    if(document.getElementById('dba-m-roster-add')) return;
+    const dlg = document.createElement('dialog');
+    dlg.id = 'dba-m-roster-add';
+    dlg.className = 'dba-m-std';
+
+    const top = document.createElement('div');
+    top.className = 'dba-modal__top';
+    const t = document.createElement('div');
+    t.className = 'dba-modal__title';
+    t.textContent = 'プリセット追加';
+    const x = document.createElement('button');
+    x.type = 'button';
+    x.className = 'dba-btn-x';
+    x.textContent = '×';
+    top.appendChild(t); top.appendChild(x);
+
+    const mid = document.createElement('div');
+    mid.className = 'dba-modal__mid';
+
+    const wrap = document.createElement('div');
+    wrap.className = 'dba-add-wrap';
+
+    const left = document.createElement('div');
+    left.className = 'dba-add-left';
+
+    const btnW = document.createElement('button');
+    btnW.type = 'button';
+    btnW.className = 'dba-btn-mini';
+    btnW.textContent = '武器';
+    btnW.id = 'dba-add-btn-weapon';
+
+    const btnA = document.createElement('button');
+    btnA.type = 'button';
+    btnA.className = 'dba-btn-mini';
+    btnA.textContent = '防具';
+    btnA.id = 'dba-add-btn-armor';
+
+    const btnN = document.createElement('button');
+    btnN.type = 'button';
+    btnN.className = 'dba-btn-mini';
+    btnN.textContent = 'ネックレス';
+    btnN.id = 'dba-add-btn-necklace';
+
+    left.appendChild(btnW);
+    left.appendChild(btnA);
+    left.appendChild(btnN);
+
+    const right = document.createElement('div');
+    right.className = 'dba-add-right';
+
+    const selW = document.createElement('div');
+    selW.className = 'dba-add-sel';
+    selW.id = 'dba-add-sel-weapon';
+    selW.textContent = '未選択（武器）';
+
+    const selA = document.createElement('div');
+    selA.className = 'dba-add-sel';
+    selA.id = 'dba-add-sel-armor';
+    selA.textContent = '未選択（防具）';
+
+    const selN = document.createElement('div');
+    selN.className = 'dba-add-sel';
+    selN.id = 'dba-add-sel-necklace';
+    selN.textContent = '未選択（ネックレス）';
+
+    right.appendChild(selW);
+    right.appendChild(selA);
+    right.appendChild(selN);
+
+    wrap.appendChild(left);
+    wrap.appendChild(right);
+    mid.appendChild(wrap);
+
+    const name = document.createElement('input');
+    name.type = 'text';
+    name.className = 'dba-add-name';
+    name.id = 'dba-add-preset-name';
+    name.placeholder = 'プリセット名';
+    mid.appendChild(name);
+
+    const botRow = document.createElement('div');
+    botRow.className = 'dba-add-bot';
+    const reg = document.createElement('button');
+    reg.type = 'button';
+    reg.className = 'dba-btn-apply';
+    reg.textContent = '登録';
+    reg.id = 'dba-add-btn-register';
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'dba-btn-close';
+    cancel.textContent = '中止';
+    cancel.id = 'dba-add-btn-cancel';
+    botRow.appendChild(reg);
+    botRow.appendChild(cancel);
+    mid.appendChild(botRow);
+
+    const bot = document.createElement('div');
+    bot.className = 'dba-modal__bot';
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'dba-btn-close';
+    close.textContent = 'Close';
+    bot.appendChild(close);
+
+    dlg.appendChild(top);
+    dlg.appendChild(mid);
+    dlg.appendChild(bot);
+    document.body.appendChild(dlg);
+
+    function closeDirect(){ try{ dlg.close(); }catch(_e){ dlg.removeAttribute('open'); } }
+    x.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeDirect(); });
+    close.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeDirect(); });
+    cancel.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeDirect(); });
+    dlg.addEventListener('cancel', (e)=>{ e.preventDefault(); closeDirect(); });
+  }
+
+  function openRosterAddPresetModal(onDone){
+    const openNow = () => {
+      buildRosterAddModal();
+      // 状態初期化
+      const st = { weaponId: null, armorId: null, necklaceId: null, weaponLabel:'未選択（武器）', armorLabel:'未選択（防具）', necklaceLabel:'未選択（ネックレス）' };
+      const selW = document.getElementById('dba-add-sel-weapon');
+      const selA = document.getElementById('dba-add-sel-armor');
+      const selN = document.getElementById('dba-add-sel-necklace');
+      const name = document.getElementById('dba-add-preset-name');
+      if(selW) selW.textContent = st.weaponLabel;
+      if(selA) selA.textContent = st.armorLabel;
+      if(selN) selN.textContent = st.necklaceLabel;
+      if(name) name.value = '';
+
+      const btnW = document.getElementById('dba-add-btn-weapon');
+      const btnA = document.getElementById('dba-add-btn-armor');
+      const btnN = document.getElementById('dba-add-btn-necklace');
+      const btnReg = document.getElementById('dba-add-btn-register');
+      const dlg = document.getElementById('dba-m-roster-add');
+
+      function refreshLabels(){
+        if(selW) selW.textContent = st.weaponLabel;
+        if(selA) selA.textContent = st.armorLabel;
+        if(selN) selN.textContent = st.necklaceLabel;
+      }
+
+      if(btnW){
+        btnW.onclick = async (e) => {
+          e.preventDefault(); e.stopPropagation();
+          try{
+            const picked = await openPickItemModal('weapon');
+            st.weaponId = picked.id;
+            st.weaponLabel = picked.label;
+            refreshLabels();
+          }catch(_e2){}
+        };
+      }
+      if(btnA){
+        btnA.onclick = async (e) => {
+          e.preventDefault(); e.stopPropagation();
+          try{
+            const picked = await openPickItemModal('armor');
+            st.armorId = picked.id;
+            st.armorLabel = picked.label;
+            refreshLabels();
+          }catch(_e2){}
+        };
+      }
+      if(btnN){
+        btnN.onclick = async (e) => {
+          e.preventDefault(); e.stopPropagation();
+          try{
+            const picked = await openPickItemModal('necklace');
+            st.necklaceId = picked.id;
+            st.necklaceLabel = picked.label;
+            refreshLabels();
+          }catch(_e2){}
+        };
+      }
+
+      if(btnReg){
+        btnReg.onclick = (e) => {
+          e.preventDefault(); e.stopPropagation();
+          const pn = sanitizeText(name && name.value ? name.value : '');
+          if(!pn){
+            alert('プリセット名を入力してください。');
+            return;
+          }
+          try{
+            setPreset(pn, [st.weaponId, st.armorId, st.necklaceId]);
+            try{ onDone && onDone(); }catch(_e2){}
+            try{ dlg.close(); }catch(_e2){ dlg.removeAttribute('open'); }
+          }catch(_e2){
+            alert('登録に失敗しました。');
+          }
+        };
+      }
+
+      if(dlg){
+        try{ dlg.showModal(); }catch(_e){ dlg.setAttribute('open',''); }
+      }
+    };
+    if(document.body) openNow(); else document.addEventListener('DOMContentLoaded', openNow, { once:true });
+  }
+
+  // ---- アイテム選択 modal（/bag から table 抜き出し） ----
+  function buildPickItemModal(){
+    if(document.getElementById('dba-m-pick-item')) return;
+    const dlg = document.createElement('dialog');
+    dlg.id = 'dba-m-pick-item';
+    dlg.className = 'dba-m-std';
+
+    const top = document.createElement('div');
+    top.className = 'dba-modal__top';
+    const t = document.createElement('div');
+    t.className = 'dba-modal__title';
+    t.id = 'dba-pick-title';
+    t.textContent = 'アイテム選択';
+    const x = document.createElement('button');
+    x.type = 'button';
+    x.className = 'dba-btn-x';
+    x.textContent = '×';
+    top.appendChild(t); top.appendChild(x);
+
+    const mid = document.createElement('div');
+    mid.className = 'dba-modal__mid';
+    const hint = document.createElement('div');
+    hint.className = 'dba-pick-hint';
+    hint.id = 'dba-pick-hint';
+    hint.textContent = '行をクリックして選択してください。';
+    const box = document.createElement('div');
+    box.id = 'dba-pick-box';
+    mid.appendChild(hint);
+    mid.appendChild(box);
+
+    const bot = document.createElement('div');
+    bot.className = 'dba-modal__bot';
+    const ok = document.createElement('button');
+    ok.type = 'button';
+    ok.className = 'dba-btn-ok';
+    ok.textContent = 'OK';
+    ok.id = 'dba-pick-ok';
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'dba-btn-close';
+    cancel.textContent = 'Cancel';
+    cancel.id = 'dba-pick-cancel';
+    bot.appendChild(ok);
+    bot.appendChild(cancel);
+
+    dlg.appendChild(top);
+    dlg.appendChild(mid);
+    dlg.appendChild(bot);
+    document.body.appendChild(dlg);
+
+    function closeDirect(){ try{ dlg.close(); }catch(_e){ dlg.removeAttribute('open'); } }
+    x.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeDirect(); });
+    cancel.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeDirect(); });
+    dlg.addEventListener('cancel', (e)=>{ e.preventDefault(); closeDirect(); });
+  }
+
+  function hideColumnsByHeaderText(table, headerTexts){
+    if(!table) return [];
+    const ths = Array.from(table.querySelectorAll('thead th'));
+    const idxs = [];
+    for(let i=0;i<ths.length;i++){
+      const ht = sanitizeText(ths[i].textContent || '');
+      if(headerTexts.includes(ht)){
+        idxs.push(i);
+      }
+    }
+    // display none for each index (td/th)
+    for(const i of idxs){
+      for(const tr of Array.from(table.querySelectorAll('tr'))){
+        const cells = Array.from(tr.children);
+        const cell = cells[i];
+        if(cell && cell.style){
+          cell.style.display = 'none';
+        }
+      }
+    }
+    return idxs;
+  }
+
+  function extractEquipIdFromRow(row){
+    if(!row) return null;
+    const a = row.querySelector('a[href*="/equip/"]');
+    if(!a) return null;
+    const href = a.getAttribute('href') || '';
+    const m = href.match(/\/equip\/(\d+)/);
+    if(!m) return null;
+    return Number(m[1]);
+  }
+
+  function extractRowLabel(row, kind){
+    // 1列目（名前セル）を優先
+    const td0 = row ? row.querySelector('td') : null;
+    const nm = sanitizeText(td0 ? td0.innerText : '');
+    const id = extractEquipIdFromRow(row);
+    const k = (kind === 'weapon') ? '武器' : (kind === 'armor') ? '防具' : 'ネックレス';
+    if(id != null){
+      return `${k}: ${nm || '(名称不明)'} / ID:${id}`;
+    }
+    return `${k}: ${nm || '(未選択)'} / ID:-`;
+  }
+
+  async function fetchBagTableDoc(){
+    const url = 'https://donguri.5ch.net/bag';
+    const res = await fetch(url, { method:'GET', credentials:'include', cache:'no-store' });
+    if(!res.ok) throw new Error(`bag fetch failed: ${res.status}`);
+    const html = await res.text();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    return doc;
+  }
+
+  function pickTableIdByKind(kind){
+    if(kind === 'weapon') return 'weaponTable';
+    if(kind === 'armor') return 'armorTable';
+    return 'necklaceTable';
+  }
+
+  function normalizeRgb(s){
+    // getComputedStyle() の "rgb(r, g, b)" / "rgba(r, g, b, a)" を比較しやすく
+    const t = sanitizeText(String(s || '')).toLowerCase();
+    if(!t) return '';
+    if(t === 'white') return 'rgb(255, 255, 255)';
+    // rgba を rgb に寄せる（a は無視）
+    const m = t.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*([0-9.]+))?\s*\)/);
+    if(m) return `rgb(${Number(m[1])}, ${Number(m[2])}, ${Number(m[3])})`;
+    return t;
+  }
+
+  function detectRarityFromRow(tr){
+    // ルール：
+    // N   … 名称欄に [N] / 背景色 white
+    // R   … 名称欄に [R] / 背景色 rgb(63,164,53)
+    // SR  … 名称欄に [SR] / 背景色 rgb(33,117,217)
+    // SSR … 名称欄に [SSR] / 背景色 rgb(166,51,214)
+    // UR  … 名称欄に [UR] / 背景色 rgb(244,93,1)
+    const td0 = tr ? tr.querySelector('td') : null;
+    const nameText = sanitizeText(td0 ? td0.innerText : '');
+    // まずは文字の [XXX] を優先（背景色が上書きされるケースでも安定）
+    if(nameText.includes('[UR]')) return 'UR';
+    if(nameText.includes('[SSR]')) return 'SSR';
+    if(nameText.includes('[SR]')) return 'SR';
+    // [R] は [SR]/[SSR]/[UR] に含まれないよう上で先に判定
+    if(nameText.includes('[R]')) return 'R';
+    if(nameText.includes('[N]')) return 'N';
+
+    // 背景色（td0優先→tr→最初のtd）
+    let bg = '';
+    try{
+      if(td0) bg = normalizeRgb(getComputedStyle(td0).backgroundColor);
+      if(!bg || bg === 'transparent' || bg === 'rgba(0, 0, 0, 0)'){
+        bg = normalizeRgb(getComputedStyle(tr).backgroundColor);
+      }
+      if((!bg || bg === 'transparent' || bg === 'rgba(0, 0, 0, 0)') && tr){
+        const anyTd = tr.querySelector('td,th');
+        if(anyTd) bg = normalizeRgb(getComputedStyle(anyTd).backgroundColor);
+      }
+    }catch(_e){}
+
+    // 背景色で判定（getComputedStyle は rgb で返る想定）
+    if(bg === 'rgb(63, 164, 53)') return 'R';
+    if(bg === 'rgb(33, 117, 217)') return 'SR';
+    if(bg === 'rgb(166, 51, 214)') return 'SSR';
+    if(bg === 'rgb(244, 93, 1)') return 'UR';
+    if(bg === 'rgb(255, 255, 255)') return 'N';
+
+    // 何も判定できない場合は N 扱いに寄せる（見落とし回避）
+    return 'N';
+  }
+
+  function getHeaderIndexByText(table, headerText){
+    if(!table) return -1;
+    const ths = Array.from(table.querySelectorAll('thead th'));
+    for(let i=0;i<ths.length;i++){
+      const t = sanitizeText(ths[i].textContent || '');
+      if(t === headerText) return i;
+    }
+    return -1;
+  }
+
+  function getRowCellTextByIndex(tr, idx){
+    if(!tr || idx < 0) return '';
+    const cells = Array.from(tr.children);
+    const cell = cells[idx];
+    if(!cell) return '';
+    return sanitizeText(cell.textContent || '');
+  }
+
+  function isModZeroRow(tr, modIdx){
+    // MOD 列の値が 0（"0" / "0.0" / "0%" 等）なら true
+    if(modIdx < 0) return false;
+    const t = getRowCellTextByIndex(tr, modIdx);
+    if(!t) return false;
+    // 0, 0.0, 0.00, 0%, 0.0% などを 0 扱い
+    const m = t.match(/-?\d+(?:\.\d+)?/);
+    if(!m) return false;
+    const v = Number(m[0]);
+    if(!Number.isFinite(v)) return false;
+    return Math.abs(v) === 0;
+  }
+
+  async function openPickItemModal(kind){
+    buildPickItemModal();
+    const dlg = document.getElementById('dba-m-pick-item');
+    const title = document.getElementById('dba-pick-title');
+    const hint = document.getElementById('dba-pick-hint');
+    const box = document.getElementById('dba-pick-box');
+    const ok = document.getElementById('dba-pick-ok');
+    const cancel = document.getElementById('dba-pick-cancel');
+    if(!dlg || !box || !ok || !cancel) throw new Error('pick modal missing');
+
+    const kLabel = (kind === 'weapon') ? '武器' : (kind === 'armor') ? '防具' : 'ネックレス';
+    if(title) title.textContent = `${kLabel}を選択`;
+    if(hint) hint.textContent = '行をクリックして選択してください（装/解/分解列は非表示）。';
+    box.textContent = '読み込み中…';
+
+    let selectedRow = null;
+    let activeRarity = 'ALL';
+    let hideModZero = false;
+    let modColIdx = -1;
+
+    // 表を取得して表示
+    const doc = await fetchBagTableDoc();
+    const tableId = pickTableIdByKind(kind);
+    const srcTable = doc.getElementById(tableId);
+    if(!srcTable){
+      box.textContent = 'テーブルが見つかりませんでした。';
+    }else{
+      const imported = document.importNode(srcTable, true);
+
+      // 装/解/分解列を非表示（列は残して ID 抽出に使う）
+      hideColumnsByHeaderText(imported, ['装','解','分解']);
+
+      // MOD 列 index（無ければ -1）
+      modColIdx = getHeaderIndexByText(imported, 'MOD');
+
+      // フィルタ適用（レアリティ + MOD0）
+      const applyPickFilters = () => {
+        const trs = Array.from(imported.querySelectorAll('tbody tr'));
+        for(const tr of trs){
+          const r = detectRarityFromRow(tr);
+          const okRarity = (activeRarity === 'ALL') ? true : (r === activeRarity);
+          const okMod = (!hideModZero) ? true : (!isModZeroRow(tr, modColIdx));
+          const show = okRarity && okMod;
+          tr.style.display = show ? '' : 'none';
+        }
+        // 選択行が非表示になったら選択解除
+        if(selectedRow && selectedRow.style && selectedRow.style.display === 'none'){
+          try{
+            selectedRow.classList.remove('dba-pick-row-selected');
+            for(const td of Array.from(selectedRow.querySelectorAll('td,th'))){
+              td.classList.remove('dba-pick-row-selected');
+            }
+          }catch(_e2){}
+          selectedRow = null;
+        }
+      };
+
+      // レアリティフィルタUI（テーブルの上に設置）
+      // - box の先頭にバーを挿入し、以降にテーブルを置く
+      const filterBar = document.createElement('div');
+      filterBar.className = 'dba-pick-filterbar';
+      filterBar.id = 'dba-pick-filterbar';
+
+      const mkBtn = (label, rar, cls) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = `dba-pick-filterbtn ${cls || ''}`.trim();
+        b.textContent = label;
+        b.dataset.rarity = rar;
+        b.dataset.active = (rar === 'ALL') ? '1' : '0';
+        b.addEventListener('click', (e) => {
+          e.preventDefault(); e.stopPropagation();
+          activeRarity = rar;
+          // active 表示
+          for(const x of Array.from(filterBar.querySelectorAll('.dba-pick-filterbtn'))){
+            x.dataset.active = (x.dataset.rarity === rar) ? '1' : '0';
+          }
+          applyPickFilters();
+        });
+        return b;
+      };
+
+      filterBar.appendChild(mkBtn('ALL', 'ALL', 'dba-pick-filterbtn--all'));
+      filterBar.appendChild(mkBtn('N',   'N',   'dba-pick-filterbtn--n'));
+      filterBar.appendChild(mkBtn('R',   'R',   'dba-pick-filterbtn--r'));
+      filterBar.appendChild(mkBtn('SR',  'SR',  'dba-pick-filterbtn--sr'));
+      filterBar.appendChild(mkBtn('SSR', 'SSR', 'dba-pick-filterbtn--ssr'));
+      filterBar.appendChild(mkBtn('UR',  'UR',  'dba-pick-filterbtn--ur'));
+
+      // チェックボックス：MOD 0 は表示しない
+      const chkWrap = document.createElement('label');
+      chkWrap.className = 'dba-pick-filterchk';
+      chkWrap.id = 'dba-pick-chk-mod0-wrap';
+
+      const chk = document.createElement('input');
+      chk.type = 'checkbox';
+      chk.id = 'dba-pick-chk-mod0';
+
+      const chkText = document.createElement('span');
+      chkText.textContent = 'MOD 0 は表示しない';
+
+      chkWrap.appendChild(chk);
+      chkWrap.appendChild(chkText);
+      filterBar.appendChild(chkWrap);
+
+      // MOD列が無いテーブルでは無効化（例：ネックレス等のケース）
+      if(modColIdx < 0){
+        chk.disabled = true;
+        chkWrap.dataset.disabled = '1';
+      }else{
+        chkWrap.dataset.disabled = '0';
+        chk.addEventListener('change', (e) => {
+          e.stopPropagation();
+          hideModZero = !!chk.checked;
+          applyPickFilters();
+        });
+      }
+
+      // 選択ハンドラ
+      for(const tr of Array.from(imported.querySelectorAll('tbody tr'))){
+        tr.style.cursor = 'pointer';
+        tr.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          // 以前の選択を解除（tr と td の両方）
+          if(selectedRow){
+            try{
+              selectedRow.classList.remove('dba-pick-row-selected');
+              for(const td of Array.from(selectedRow.querySelectorAll('td,th'))){
+                td.classList.remove('dba-pick-row-selected');
+              }
+            }catch(_e2){}
+          }
+
+          selectedRow = tr;
+
+          // 新しい選択に “赤フィルタ” を適用（tr と td の両方）
+          try{
+            selectedRow.classList.add('dba-pick-row-selected');
+            for(const td of Array.from(selectedRow.querySelectorAll('td,th'))){
+              td.classList.add('dba-pick-row-selected');
+            }
+          }catch(_e2){}
+        });
+      }
+
+      box.textContent = '';
+      // 先にフィルタバー、その下にテーブル
+      box.appendChild(filterBar);
+      box.appendChild(imported);
+
+      // 初期状態でフィルタ適用（念のため）
+      applyPickFilters();
+    }
+
+    // promise で OK/CANCEL を待つ
+    return await new Promise((resolve, reject) => {
+      function cleanup(){
+        ok.onclick = null;
+        cancel.onclick = null;
+      }
+      function closeDirect(){ try{ dlg.close(); }catch(_e){ dlg.removeAttribute('open'); } }
+
+      ok.onclick = (e) => {
+        e.preventDefault(); e.stopPropagation();
+        if(!selectedRow){
+          // 未選択は null を返す（要件：未選択は null で埋める）
+          cleanup();
+          closeDirect();
+          resolve({ id: null, label: `未選択（${kLabel}）` });
+          return;
+        }
+        // 念のため、非表示行は選択不可扱い（フィルタで隠れている時）
+        if(selectedRow.style && selectedRow.style.display === 'none'){
+          cleanup();
+          closeDirect();
+          resolve({ id: null, label: `未選択（${kLabel}）` });
+          return;
+        }
+        const id = extractEquipIdFromRow(selectedRow);
+        const label = extractRowLabel(selectedRow, kind);
+        cleanup();
+        closeDirect();
+        resolve({ id: (id == null ? null : Number(id)), label });
+      };
+      cancel.onclick = (e) => {
+        e.preventDefault(); e.stopPropagation();
+        cleanup();
+        closeDirect();
+        reject(new Error('cancel'));
+      };
+
+      try{ dlg.showModal(); }catch(_e){ dlg.setAttribute('open',''); }
+    });
   }
 
   const DBA_BATTLEINFO_LOG_PREFIX = '[DBA][BattleInfo]';
@@ -2221,6 +3758,18 @@
       openSettingsModal();
     });
 
+    const btnRoster = document.createElement('button');
+    btnRoster.type = 'button';
+    btnRoster.className = 'dba-btn-fn';
+    btnRoster.textContent = '装備ロスター';
+    btnRoster.id = 'dba-btn-roster';
+    btnRoster.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openRosterModal();
+    });
+
+
     const btnBattleInfo = document.createElement('button');
     btnBattleInfo.type = 'button';
     btnBattleInfo.className = 'dba-btn-fn';
@@ -2269,6 +3818,7 @@
     });
 
     bar.appendChild(btnSettings);
+    bar.appendChild(btnRoster);
     bar.appendChild(btnBattleInfo);
     return bar;
   }
