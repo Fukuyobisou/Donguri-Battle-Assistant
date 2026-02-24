@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Donguri Battle Assistant
 // @namespace    https://donguri.5ch.net/
-// @version      0.0.8.5
+// @version      0.0.9.6
 // @description  5ちゃんねるのどんぐりシステムから派生したゲームの操作性を改善するためのユーザースクリプト
 // @author       福呼び草
 // @match        https://donguri.5ch.net/teambattle?m=*
@@ -84,8 +84,9 @@
       display: flex;
       align-items: flex-start;
       justify-content: flex-start;
-      font-size: 0.9rem; /* レイヤー上のセルのフォントサイズ */
+      font-size: 0.95rem; /* レイヤー上のセルのフォントサイズ */
       font-weight: 700;
+      letter-spacing: -0.08rem;
       line-height: 0.95rem;
       opacity: var(--dba-layer-text-opacity);
       user-select: none;
@@ -99,8 +100,8 @@
       word-break: break-word;     /* 互換用 */
       text-align: left;
       text-shadow:
-        0 0 2px rgba(255,255,255,0.95),
-        0 0 6px rgba(255,255,255,0.75);
+        0 0 4px rgba(255,255,255,1),
+        0 0 8px rgba(255,255,255,0.75);
     }
 
     /* 汎用ボタン（機能系ボタン共通） */
@@ -120,9 +121,18 @@
       box-shadow: 0 1px 2px rgba(0,0,0,0.12);
       transition: transform 0.05s ease, box-shadow 0.15s ease, background 0.15s ease;
     }
+    /* ラピッド攻撃：ON状態の視認性 */
+    .dba-btn-fn[data-on="1"]{
+      background: #33a033;
+      color: #fff;
+    }
     .dba-btn-fn:hover{
       background: #0000e0;
       box-shadow: 0 2px 6px rgba(0,0,0,0.16);
+    }
+    /* ON状態hoverは“青”に上書きされないようにする */
+    .dba-btn-fn[data-on="1"]:hover{
+      background: #2a8c2a;
     }
     .dba-btn-fn:active{
       transform: translateY(1px);
@@ -194,6 +204,101 @@
       /* スクロールは mid のみに限定（dialog全体にはスクロールを出さない） */
       overflow: hidden;
     }
+
+    /* 戦闘結果モーダル：トップ欄を「左=タイトル / 中央=チェック / 右=×」にする */
+    #dba-m-battle-result.dba-m-std .dba-modal__top{
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      column-gap: 10px;
+    }
+    #dba-m-battle-result.dba-m-std .dba-modal__title{
+      justify-self: start;
+    }
+    .dba-br-top-center{
+      justify-self: center;
+      display: inline-flex;
+      align-items: center;
+    }
+
+    /* 戦闘結果：オプションボタン */
+    .dba-br-btn-opt{
+      appearance: none;
+      border: 2px solid #000;
+      border-radius: 10px;
+      padding: 6px 10px;
+      margin: 0;
+      font-size: 0.95em;
+      font-weight: 800;
+      cursor: pointer;
+      user-select: none;
+      background: #eee;
+      color: #000;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.12);
+    }
+    .dba-br-btn-opt:hover{ filter: brightness(0.97); }
+    .dba-br-btn-opt:active{ transform: translateY(1px); }
+
+    /* 戦闘結果：クリック透過モード（Close/Option以外は透過） */
+    #dba-m-battle-result.dba-m-std.dba-br-pass{
+      opacity: 0.55;
+      pointer-events: none; /* 基本はクリックを下に通す */
+    }
+    /* 透過中でも「Close」「オプション」だけはクリック可 */
+    #dba-m-battle-result.dba-m-std.dba-br-pass #dba-br-btn-option,
+    #dba-m-battle-result.dba-m-std.dba-br-pass .dba-btn-close{
+      pointer-events: auto;
+    }
+    /* ★透過中でも Close/Option は不透過（親opacityの影響を打ち消す） */
+    #dba-m-battle-result.dba-m-std.dba-br-pass #dba-br-btn-option,
+    #dba-m-battle-result.dba-m-std.dba-br-pass .dba-btn-close{
+      opacity: 1 !important;
+      filter: none !important;
+    }
+    /* 透過中は × を完全に消す（見た目＋クリック判定なし） */
+    #dba-m-battle-result.dba-m-std.dba-br-pass .dba-btn-x{
+      display: none !important;
+    }
+
+    /* ===== 戦闘結果：透過ON時の表示は dialog を使わずフロートパネルで表示 ===== */
+    #dba-br-float{
+      position: fixed;
+      top: calc(var(--dba-fn-height) + 480px);  /* フロートパネルの表示位置（高さ） */
+      left: 12px;
+      right: 12px;
+      margin: 0 auto;
+      width: min(360px, calc(100vw - 24px));
+      max-height: min(88vh, calc(100vh - 24px));
+      border: 4px solid #080;
+      border-radius: 12px;
+      padding: 0;
+      background: rgba(248,248,248,0.55); /* 半透明 */
+      color: #111;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+      z-index: 999995; /* fnbar(999999)より下、マップより上 */
+      display: none;
+      overflow: hidden;
+      pointer-events: none; /* まずは全体を透過 */
+    }
+    #dba-br-float[data-open="1"]{ display: block; }
+    #dba-br-float .dba-modal__top,
+    #dba-br-float .dba-modal__mid,
+    #dba-br-float .dba-modal__bot{
+      pointer-events: none; /* パネル自体は透過（ボタンのみ例外） */
+    }
+    #dba-br-float #dba-br-float-btn-option,
+    #dba-br-float .dba-btn-close{
+      pointer-events: auto; /* Option/Closeだけ押せる */
+      opacity: 1 !important; /* 不透過 */
+    }
+    /* フロート内は × は表示しない（透過要件に合わせる） */
+    #dba-br-float .dba-btn-x{ display:none !important; }
+    #dba-br-float .dba-modal__mid{
+      overflow: auto;
+      max-height: calc(min(88vh, calc(100vh - 24px)) - 110px);
+      scrollbar-gutter: stable both-edges;
+    }
+
     #dba-m-battle-result.dba-m-std .dba-modal__mid{
       /* 常にスクロール可能（短い時はスクロールは出ない） */
       overflow: auto;
@@ -202,6 +307,7 @@
       /* スクロールバーを見やすく（OS依存だが効く環境では効く） */
       scrollbar-gutter: stable both-edges;
     }
+
     /* 戦闘結果テキストをそのまま読みやすく表示 */
     .dba-battle-result-text{
       white-space: pre-wrap;
@@ -211,6 +317,28 @@
       font-weight: 600;
       font-size: 0.98em;
       text-align: left; /* 戦闘結果は左寄せ */
+    }
+
+    /* ===== 戦闘結果：タイトル欄の「末尾2行のみ表示」チェック ===== */
+    .dba-br-tail2-chk{
+      display: inline-flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: flex-start;
+      font-weight: 800;
+      user-select: none;
+      cursor: pointer;
+      padding: 4px 6px;
+      border-radius: 10px;
+      border: 1px solid #00000022;
+      background: #fafafa;
+      white-space: nowrap;
+    }
+    .dba-br-tail2-chk input[type="checkbox"]{
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+      accent-color: #ea0000;
     }
 
     /* ===== モーダル（アラート） ===== */
@@ -416,6 +544,17 @@
       white-space: nowrap;
     }
 
+    /* 装備変更結果（ロスター）テキスト表示 */
+    .dba-roster-result-text{
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      line-height: 1.25em;
+      font-weight: 600;
+      font-size: 0.98em;
+      text-align: left;
+    }
+
     /* ===== 装備プリセット追加モーダル ===== */
     #dba-m-roster-add.dba-m-std{
       width: min(760px, calc(100vw - 24px));
@@ -605,11 +744,119 @@
   // 設定（保存・適用）
   // =========================
   const LS_KEY = 'dba.settings.v1';
+  const LS_RAPID_KEY = 'dba.rapidAttack.v1'; // ラピッド攻撃 ON/OFF
+  const LS_BR_TAIL2_KEY = 'dba.battleResult.tail2.v1'; // 戦闘結果「末尾2行のみ表示」ON/OFF
+  const LS_BR_ALIGN_KEY = 'dba.battleResult.align.v1'; // left / center / right
+  const LS_BR_PASS_KEY  = 'dba.battleResult.passThrough.v1'; // 0/1 クリック透過
+
 
   const DEFAULT_SETTINGS = {
     scale: { rb: 100, hc: 100, l: 100 },
     layer: { textOpacity: 100 } // 0〜100（レイヤー文字濃度）
   };
+
+  function loadBattleResultTail2Enabled(){
+    try{
+      const raw = localStorage.getItem(LS_BR_TAIL2_KEY);
+      // デフォルトOFF
+      if(raw == null) return false;
+      return raw === '1';
+    }catch(_e){
+      return false;
+    }
+  }
+
+  function saveBattleResultTail2Enabled(on){
+    try{
+      localStorage.setItem(LS_BR_TAIL2_KEY, on ? '1' : '0');
+    }catch(_e){}
+  }
+
+  function loadBattleResultAlign(){
+    try{
+      const raw = localStorage.getItem(LS_BR_ALIGN_KEY);
+      if(raw === 'left' || raw === 'right' || raw === 'center') return raw;
+      return 'center';
+    }catch(_e){
+      return 'center';
+    }
+  }
+
+  function saveBattleResultAlign(v){
+    const x = (v === 'left' || v === 'right' || v === 'center') ? v : 'center';
+    try{ localStorage.setItem(LS_BR_ALIGN_KEY, x); }catch(_e){}
+  }
+
+  function loadBattleResultPassThrough(){
+    try{
+      const raw = localStorage.getItem(LS_BR_PASS_KEY);
+      if(raw == null) return false;
+      return raw === '1';
+    }catch(_e){
+      return false;
+    }
+  }
+
+  function saveBattleResultPassThrough(on){
+    try{ localStorage.setItem(LS_BR_PASS_KEY, on ? '1' : '0'); }catch(_e){}
+  }
+
+  function loadRapidAttackEnabled(){
+    try{
+      const raw = localStorage.getItem(LS_RAPID_KEY);
+      // デフォルトOFF
+      if(raw == null) return false;
+      return raw === '1';
+    }catch(_e){
+      return false;
+    }
+  }
+
+  function saveRapidAttackEnabled(on){
+    try{
+      localStorage.setItem(LS_RAPID_KEY, on ? '1' : '0');
+    }catch(_e){}
+  }
+
+  function getTeamChallengeUrl(){
+    return `https://donguri.5ch.net/teamchallenge?m=${mode}`;
+  }
+
+  async function rapidAttackAt(row, col){
+    // セル詳細を経由せず、teamchallenge に直接 POST
+    // ※占領済み/空きセルの分岐はサーバー側が判断（＝「このエリアを捕らえよ」or「エリアに挑む」相当）
+    openBattleResultModalWithNode('戦闘結果を取得中…', 'ラピッド攻撃');
+
+    const fd = new FormData();
+    fd.append('row', String(row));
+    fd.append('col', String(col));
+
+    const res = await fetch(getTeamChallengeUrl(), {
+      method: 'POST',
+      credentials: 'include',
+      cache: 'no-store',
+      body: fd
+    });
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    const ct = (res.headers.get('content-type') || '').toLowerCase();
+    const bodyText = await res.text();
+
+    // 返却がHTMLではなく短文だけのケースにも対応（既存 battle-result と同じ方針）
+    if(!ct.includes('text/html')){
+      openBattleResultModalWithNode(bodyText || '結果を表示できませんでした。', 'ラピッド攻撃');
+      return;
+    }
+
+    const doc = new DOMParser().parseFromString(bodyText, 'text/html');
+    const block = extractBattleResultBlock(doc);
+    if(block){
+      const text = (doc.body && doc.body.innerText) ? doc.body.innerText : sanitizeText(block.textContent || '');
+      openBattleResultModalWithNode(text || '結果を表示できませんでした。', 'ラピッド攻撃');
+      return;
+    }
+    openBattleResultModalWithNode((doc.body && doc.body.innerText) ? doc.body.innerText : '結果を表示できませんでした。', 'ラピッド攻撃');
+  }
 
   function clampInt(n, min, max){
     const x = Number.parseInt(n, 10);
@@ -773,8 +1020,14 @@
       const c = Math.floor(rx / cellCss);
       const r = Math.floor(ry / cellCss);
       if(r<0||c<0||r>=GRID_SIZE||c>=GRID_SIZE) return;
-      // 遷移を抑止し、セル詳細をモーダル表示
-      openCellDetailModal(r, c);
+      // 遷移を抑止し、セル詳細 or ラピッド攻撃
+      if(loadRapidAttackEnabled()){
+        rapidAttackAt(r, c).catch(() => {
+          alert('ラピッド攻撃に失敗しました。');
+        });
+      }else{
+        openCellDetailModal(r, c);
+      }
     }
 
     overlay.addEventListener('click', onPointerCapture, true);
@@ -906,12 +1159,24 @@
     title.className = 'dba-modal__title';
     title.textContent = '戦闘結果';
 
+    const center = document.createElement('div');
+    center.className = 'dba-br-top-center';
+
+    // オプションボタン（戦闘結果専用オプションmodalを開く）
+    const btnOpt = document.createElement('button');
+    btnOpt.type = 'button';
+    btnOpt.id = 'dba-br-btn-option';
+    btnOpt.className = 'dba-br-btn-opt';
+    btnOpt.textContent = 'オプション';
+    center.appendChild(btnOpt);
+
     const btnX = document.createElement('button');
     btnX.type = 'button';
     btnX.className = 'dba-btn-x';
     btnX.textContent = '×';
 
     top.appendChild(title);
+    top.appendChild(center);
     top.appendChild(btnX);
 
     const mid = document.createElement('div');
@@ -955,6 +1220,402 @@
       e.preventDefault();
       closeDirect();
     });
+
+    // オプションボタン
+    btnOpt.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openBattleResultOptionsModal();
+    });
+
+    // 初期状態（配置/透過）を反映
+    applyBattleResultOptionsToModal();
+  }
+
+  // =========================
+  // 戦闘結果：透過ON時の表示用フロートパネル（dialogを使わない）
+  //  - dialog(top-layer)が下のクリックを塞ぐ環境対策
+  // =========================
+  function ensureBattleResultFloatPanel(){
+    if(document.getElementById('dba-br-float')) return;
+    const root = document.createElement('div');
+    root.id = 'dba-br-float';
+    root.dataset.open = '0';
+
+    const top = document.createElement('div');
+    top.className = 'dba-modal__top';
+
+    const title = document.createElement('div');
+    title.className = 'dba-modal__title';
+    title.id = 'dba-br-float-title';
+    title.textContent = '戦闘結果';
+
+    const center = document.createElement('div');
+    center.className = 'dba-br-top-center';
+    const btnOpt = document.createElement('button');
+    btnOpt.type = 'button';
+    btnOpt.id = 'dba-br-float-btn-option';
+    btnOpt.className = 'dba-br-btn-opt';
+    btnOpt.textContent = 'オプション';
+    center.appendChild(btnOpt);
+
+    top.appendChild(title);
+    top.appendChild(center);
+
+    const mid = document.createElement('div');
+    mid.className = 'dba-modal__mid';
+    const box = document.createElement('div');
+    box.id = 'dba-br-float-box';
+    mid.appendChild(box);
+
+    const bot = document.createElement('div');
+    bot.className = 'dba-modal__bot';
+    const btnClose = document.createElement('button');
+    btnClose.type = 'button';
+    btnClose.className = 'dba-btn-close';
+    btnClose.textContent = 'Close';
+    bot.appendChild(btnClose);
+
+    root.appendChild(top);
+    root.appendChild(mid);
+    root.appendChild(bot);
+    document.body.appendChild(root);
+
+    btnOpt.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openBattleResultOptionsModal();
+    });
+    btnClose.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      closeBattleResultFloatPanel();
+    });
+  }
+
+  function openBattleResultFloatPanelWithText(text, titleText){
+    ensureBattleResultFloatPanel();
+    const root = document.getElementById('dba-br-float');
+    const box = document.getElementById('dba-br-float-box');
+    const title = document.getElementById('dba-br-float-title');
+    if(!root || !box) return;
+    if(title) title.textContent = titleText || '戦闘結果';
+
+    // 全文保持（末尾2行切替用）
+    root.dataset.dbaBattleFullText = String(text ?? '');
+
+    const showText = loadBattleResultTail2Enabled() ? getLastTwoLines(root.dataset.dbaBattleFullText) : root.dataset.dbaBattleFullText;
+    box.textContent = '';
+    const pre = document.createElement('div');
+    pre.className = 'dba-battle-result-text';
+    pre.textContent = showText;
+    box.appendChild(pre);
+
+    root.dataset.open = '1';
+    applyBattleResultOptionsToFloat(); // 位置など（透過機能に紐づけない）
+  }
+
+  function closeBattleResultFloatPanel(){
+    const root = document.getElementById('dba-br-float');
+    if(!root) return;
+    root.dataset.open = '0';
+  }
+
+  function applyBattleResultOptionsToFloat(){
+    const root = document.getElementById('dba-br-float');
+    if(!root) return;
+    // ※「配置移動」機能は passThrough と独立（ここでは align のみ反映）
+    const align = loadBattleResultAlign();
+    if(align === 'left'){
+      root.style.left = '12px';
+      root.style.right = 'auto';
+    }else if(align === 'right'){
+      root.style.left = 'auto';
+      root.style.right = '12px';
+    }else{
+      root.style.left = '12px';
+      root.style.right = '12px';
+    }
+  }
+
+  // =========================
+  // 戦闘結果：オプションモーダル（dba-m-battle-result専用）
+  // =========================
+  function applyBattleResultOptionsToModal(){
+    const dlg = document.getElementById('dba-m-battle-result');
+    if(!dlg) return;
+
+    // 配置（dialogの左右余白で寄せる）
+    const align = loadBattleResultAlign();
+    if(align === 'left'){
+      dlg.style.marginLeft = '12px';
+      dlg.style.marginRight = 'auto';
+    }else if(align === 'right'){
+      dlg.style.marginLeft = 'auto';
+      dlg.style.marginRight = '12px';
+    }else{
+      dlg.style.marginLeft = 'auto';
+      dlg.style.marginRight = 'auto';
+    }
+
+    // クリック透過（Close/Option以外は透過 + 半透明 + ×非表示はCSS側）
+    const pass = loadBattleResultPassThrough();
+    if(pass) dlg.classList.add('dba-br-pass');
+    else dlg.classList.remove('dba-br-pass');
+  }
+
+  function buildBattleResultOptionsModal(){
+    if(document.getElementById('dba-m-battle-result-opt')) return;
+
+    const dlg = document.createElement('dialog');
+    dlg.id = 'dba-m-battle-result-opt';
+    dlg.className = 'dba-m-std';
+
+    const top = document.createElement('div');
+    top.className = 'dba-modal__top';
+
+    const title = document.createElement('div');
+    title.className = 'dba-modal__title';
+    title.textContent = '戦闘結果：オプション';
+
+    const btnX = document.createElement('button');
+    btnX.type = 'button';
+    btnX.className = 'dba-btn-x';
+    btnX.textContent = '×';
+
+    top.appendChild(title);
+    top.appendChild(btnX);
+
+    const mid = document.createElement('div');
+    mid.className = 'dba-modal__mid';
+
+    // (1) 末尾2行のみ表示
+    const tail2 = document.createElement('label');
+    tail2.className = 'dba-br-tail2-chk';
+    tail2.id = 'dba-br-opt-tail2-wrap';
+    const tail2Chk = document.createElement('input');
+    tail2Chk.type = 'checkbox';
+    tail2Chk.id = 'dba-br-opt-tail2';
+    const tail2Text = document.createElement('span');
+    tail2Text.textContent = '末尾2行のみ表示';
+    tail2.appendChild(tail2Chk);
+    tail2.appendChild(tail2Text);
+    mid.appendChild(tail2);
+
+    // (2) 配置場所（ラジオ）
+    const placeWrap = document.createElement('div');
+    placeWrap.style.marginTop = '12px';
+    placeWrap.style.border = '1px solid #00000022';
+    placeWrap.style.borderRadius = '12px';
+    placeWrap.style.background = '#fff';
+    placeWrap.style.padding = '10px 10px';
+
+    const placeTitle = document.createElement('div');
+    placeTitle.style.fontWeight = '900';
+    placeTitle.style.textAlign = 'left';
+    placeTitle.style.marginBottom = '8px';
+    placeTitle.textContent = '配置場所';
+    placeWrap.appendChild(placeTitle);
+
+    const mkRadio = (value, label) => {
+      const lab = document.createElement('label');
+      lab.style.display = 'inline-flex';
+      lab.style.alignItems = 'center';
+      lab.style.gap = '8px';
+      lab.style.marginRight = '14px';
+      lab.style.fontWeight = '800';
+      lab.style.cursor = 'pointer';
+      const r = document.createElement('input');
+      r.type = 'radio';
+      r.name = 'dba-br-opt-align';
+      r.value = value;
+      const sp = document.createElement('span');
+      sp.textContent = label;
+      lab.appendChild(r);
+      lab.appendChild(sp);
+      return lab;
+    };
+
+    placeWrap.appendChild(mkRadio('left', '左寄り'));
+    placeWrap.appendChild(mkRadio('center', '中央'));
+    placeWrap.appendChild(mkRadio('right', '右寄り'));
+    mid.appendChild(placeWrap);
+
+    // (3) クリック透過
+    const passWrap = document.createElement('label');
+    passWrap.className = 'dba-br-tail2-chk';
+    passWrap.id = 'dba-br-opt-pass-wrap';
+    passWrap.style.marginTop = '12px';
+
+    const passChk = document.createElement('input');
+    passChk.type = 'checkbox';
+    passChk.id = 'dba-br-opt-pass';
+    const passText = document.createElement('span');
+    passText.textContent = '「Close」「オプション」ボタン以外はクリック判定を透過';
+    passWrap.appendChild(passChk);
+    passWrap.appendChild(passText);
+    mid.appendChild(passWrap);
+
+    const bot = document.createElement('div');
+    bot.className = 'dba-modal__bot';
+    const btnClose = document.createElement('button');
+    btnClose.type = 'button';
+    btnClose.className = 'dba-btn-close';
+    btnClose.textContent = 'Close';
+    bot.appendChild(btnClose);
+
+    dlg.appendChild(top);
+    dlg.appendChild(mid);
+    dlg.appendChild(bot);
+    document.body.appendChild(dlg);
+
+    function closeDirect(){
+      try{ dlg.close(); }catch(_e){ dlg.removeAttribute('open'); }
+    }
+
+    btnX.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); closeDirect(); });
+    btnClose.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); closeDirect(); });
+    dlg.addEventListener('cancel', (e) => { e.preventDefault(); closeDirect(); });
+
+    // 初期値反映（open時にも更新するが、念のため）
+    tail2Chk.checked = loadBattleResultTail2Enabled();
+    passChk.checked = loadBattleResultPassThrough();
+    const align = loadBattleResultAlign();
+    for(const r of Array.from(dlg.querySelectorAll('input[type="radio"][name="dba-br-opt-align"]'))){
+      r.checked = (r.value === align);
+    }
+
+    // 変更イベント
+    tail2Chk.addEventListener('change', (e) => {
+      e.stopPropagation();
+      saveBattleResultTail2Enabled(!!tail2Chk.checked);
+      updateBattleResultModalTextView();
+    });
+    passChk.addEventListener('change', (e) => {
+      e.stopPropagation();
+      saveBattleResultPassThrough(!!passChk.checked);
+      applyBattleResultOptionsToModal();
+      // 透過ON/OFFでモーダルの開き方が変わるため、開いてるなら表示形態を揃える
+      normalizeBattleResultDialogOpenMode();
+    });
+    dlg.addEventListener('change', (e) => {
+      const t = e.target;
+      if(!(t instanceof HTMLInputElement)) return;
+      if(t.type !== 'radio') return;
+      if(t.name !== 'dba-br-opt-align') return;
+      saveBattleResultAlign(t.value);
+      applyBattleResultOptionsToModal();
+      applyBattleResultOptionsToFloat();
+    }, true);
+  }
+
+  function openBattleResultOptionsModal(){
+    buildBattleResultOptionsModal();
+    const dlg = document.getElementById('dba-m-battle-result-opt');
+    if(!dlg) return;
+
+    // 開くたびに最新の保存値を反映
+    const tail2Chk = dlg.querySelector('#dba-br-opt-tail2');
+    if(tail2Chk) tail2Chk.checked = loadBattleResultTail2Enabled();
+    const passChk = dlg.querySelector('#dba-br-opt-pass');
+    if(passChk) passChk.checked = loadBattleResultPassThrough();
+    const align = loadBattleResultAlign();
+    for(const r of Array.from(dlg.querySelectorAll('input[type="radio"][name="dba-br-opt-align"]'))){
+      r.checked = (r.value === align);
+    }
+
+    try{ dlg.showModal(); }catch(_e){ dlg.setAttribute('open',''); }
+  }
+
+  // ★重要：戦闘結果のオプション modal は常に最前面（top-layerの一番上）に保つ
+  // - battle-result 側を showModal で出し直す等で前後関係が崩れるケースの対策
+  // - 状態は localStorage に保存されているため、閉じて即再表示してもUIは復元できる
+  function bringBattleResultOptionsModalToFront(){
+    const opt = document.getElementById('dba-m-battle-result-opt');
+    if(!opt) return;
+    const isOpen = !!(opt.open || opt.hasAttribute('open'));
+    if(!isOpen) return;
+    try{ opt.close(); }catch(_e){ opt.removeAttribute('open'); }
+    try{ opt.showModal(); }catch(_e2){ opt.setAttribute('open',''); }
+  }
+
+  function normalizeBattleResultDialogOpenMode(){
+    // クリック透過ON：dialog(top-layer)自体がクリックを塞ぐ環境があるため、
+    // dialogを閉じ、floatへ切り替える
+    const dlg = document.getElementById('dba-m-battle-result');
+    if(!dlg) return;
+    const pass = loadBattleResultPassThrough();
+    const isDlgOpen = dlg.hasAttribute('open');
+
+    if(pass){
+      if(isDlgOpen){
+        const ttl = dlg.querySelector('.dba-modal__title')?.textContent || '戦闘結果';
+        const full = dlg.dataset.dbaBattleFullText || (document.getElementById('dba-battle-result-box')?.textContent || '');
+        try{ dlg.close(); }catch(_e){ dlg.removeAttribute('open'); }
+        openBattleResultFloatPanelWithText(full, ttl);
+      }
+      // 既にfloat表示なら、位置だけ合わせる
+      applyBattleResultOptionsToFloat();
+    }else{
+      // pass OFF：floatが出ていれば閉じ、必要なら dialog を再表示（全文保持がある時だけ）
+      const floatRoot = document.getElementById('dba-br-float');
+      if(floatRoot && floatRoot.dataset.open === '1'){
+        const ttl = document.getElementById('dba-br-float-title')?.textContent || '戦闘結果';
+        const full = floatRoot.dataset.dbaBattleFullText || '';
+        closeBattleResultFloatPanel();
+        if(full){
+          openBattleResultModalWithNode(full, ttl);
+          // ★battle-result が前に出て opt が操作不能になるのを防ぐ
+          bringBattleResultOptionsModalToFront();
+        }
+      }
+    }
+  }
+
+  function getLastTwoLines(text){
+    const raw = String(text ?? '');
+    // 改行正規化
+    let lines = raw.replace(/\r/g, '').split('\n');
+    // 末尾の空行は落とす（「最後の2行」を安定化）
+    while(lines.length > 0 && lines[lines.length - 1] === ''){
+      lines.pop();
+    }
+    if(lines.length <= 2) return lines.join('\n');
+    return lines.slice(-2).join('\n');
+  }
+
+  function updateBattleResultModalTextView(){
+    const on = loadBattleResultTail2Enabled();
+    const dlg = document.getElementById('dba-m-battle-result');
+    const box = document.getElementById('dba-battle-result-box');
+    const floatRoot = document.getElementById('dba-br-float');
+    const floatBox  = document.getElementById('dba-br-float-box');
+
+    const full =
+      (floatRoot && floatRoot.dataset.open === '1' && floatRoot.dataset.dbaBattleFullText)
+        ? (floatRoot.dataset.dbaBattleFullText || '')
+        : (dlg ? (dlg.dataset.dbaBattleFullText || '') : '');
+
+    // full が無い場合は何もしない（node表示やエラー文などに干渉しない）
+    if(!full) return;
+
+    const showText = on ? getLastTwoLines(full) : full;
+    // dialog側
+    if(dlg && box){
+      box.textContent = '';
+      const pre = document.createElement('div');
+      pre.className = 'dba-battle-result-text';
+      pre.textContent = showText;
+      box.appendChild(pre);
+    }
+    // float側
+    if(floatRoot && floatRoot.dataset.open === '1' && floatBox){
+      floatBox.textContent = '';
+      const pre2 = document.createElement('div');
+      pre2.className = 'dba-battle-result-text';
+      pre2.textContent = showText;
+      floatBox.appendChild(pre2);
+    }
   }
 
   function openBattleResultModalWithNode(nodeOrText, titleText){
@@ -964,18 +1625,145 @@
     const title = dlg ? dlg.querySelector('.dba-modal__title') : null;
     if(!dlg || !box) return;
     if(title) title.textContent = titleText || '戦闘結果';
+    // オプション（配置/透過）を反映
+    applyBattleResultOptionsToModal();
+
+    // クリック透過ON：dialog(top-layer)を使うと下のクリックが塞がる環境があるため、
+    // ここでは dialog を開かず、透過フロートで表示する
+    const pass = loadBattleResultPassThrough();
+    if(pass){
+      // dialogが開いていたら閉じる（底辺へ飛ぶ副作用も回避）
+      try{ dlg.close(); }catch(_e){ dlg.removeAttribute('open'); }
+      // floatへ表示
+      if(typeof nodeOrText === 'string'){
+        openBattleResultFloatPanelWithText(nodeOrText, titleText || '戦闘結果');
+      }else if(nodeOrText instanceof Node){
+        // nodeの場合はテキスト化して表示（透過モードは軽量優先）
+        const txt = sanitizeText(nodeOrText.textContent || '') || '結果を表示できませんでした。';
+        openBattleResultFloatPanelWithText(txt, titleText || '戦闘結果');
+      }else{
+        openBattleResultFloatPanelWithText('結果を表示できませんでした。', titleText || '戦闘結果');
+      }
+      return;
+    }else{
+      // passThrough OFF のときは float が出ていたら消す
+      closeBattleResultFloatPanel();
+    }
+
+    box.textContent = '';
+    if(typeof nodeOrText === 'string'){
+      // 全文を保持（チェックON時に末尾2行表示へ切替するため）
+      dlg.dataset.dbaBattleFullText = nodeOrText;
+      const pre = document.createElement('div');
+      pre.className = 'dba-battle-result-text';
+      // 初期描画はチェック状態に従う
+      pre.textContent = loadBattleResultTail2Enabled() ? getLastTwoLines(nodeOrText) : nodeOrText;
+      box.appendChild(pre);
+    }else if(nodeOrText instanceof Node){
+      // node 表示時は「全文保持」をクリア（チェック表示切替の対象外）
+      delete dlg.dataset.dbaBattleFullText;
+      box.appendChild(nodeOrText);
+    }else{
+      delete dlg.dataset.dbaBattleFullText;
+      const pre = document.cr
+      eateElement('div');
+      pre.className = 'dba-battle-result-text';
+      pre.textContent = '結果を表示できませんでした。';
+      box.appendChild(pre);
+    }
+    // passThrough OFF：従来通り dialog で表示
+    try{ dlg.showModal(); }catch(_e){ dlg.setAttribute('open',''); }
+    // ★battle-result を表示しても、オプションが開いているなら必ずオプションを最前面へ
+    bringBattleResultOptionsModalToFront();
+  }
+
+  // =========================
+  // 装備変更結果モーダル（装備ロスター専用）
+  //  - 戦闘結果(dba-m-battle-result)とは分離
+  //  - 汎用レイアウト(dba-m-std)を使用
+  // =========================
+  function buildRosterResultModal(){
+    if(document.getElementById('dba-m-roster-result')) return;
+
+    const dlg = document.createElement('dialog');
+    dlg.id = 'dba-m-roster-result';
+    dlg.className = 'dba-m-std';
+
+    const top = document.createElement('div');
+    top.className = 'dba-modal__top';
+
+    const title = document.createElement('div');
+    title.className = 'dba-modal__title';
+    title.textContent = '装備変更結果';
+
+    const btnX = document.createElement('button');
+    btnX.type = 'button';
+    btnX.className = 'dba-btn-x';
+    btnX.textContent = '×';
+
+    top.appendChild(title);
+    top.appendChild(btnX);
+
+    const mid = document.createElement('div');
+    mid.className = 'dba-modal__mid';
+
+    const box = document.createElement('div');
+    box.id = 'dba-roster-result-box';
+    box.textContent = '';
+    mid.appendChild(box);
+
+    const bot = document.createElement('div');
+    bot.className = 'dba-modal__bot';
+
+    const btnClose = document.createElement('button');
+    btnClose.type = 'button';
+    btnClose.className = 'dba-btn-close';
+    btnClose.textContent = 'Close';
+    bot.appendChild(btnClose);
+
+    dlg.appendChild(top);
+    dlg.appendChild(mid);
+    dlg.appendChild(bot);
+    document.body.appendChild(dlg);
+
+    function closeDirect(){
+      try{ dlg.close(); }catch(_e){ dlg.removeAttribute('open'); }
+    }
+    btnX.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      closeDirect();
+    });
+    btnClose.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      closeDirect();
+    });
+    dlg.addEventListener('cancel', (e) => {
+      e.preventDefault();
+      closeDirect();
+    });
+  }
+
+  function openRosterResultModalWithNode(nodeOrText, titleText){
+    buildRosterResultModal();
+    const dlg = document.getElementById('dba-m-roster-result');
+    const box = document.getElementById('dba-roster-result-box');
+    const title = dlg ? dlg.querySelector('.dba-modal__title') : null;
+    if(!dlg || !box) return;
+    if(title) title.textContent = titleText || '装備変更結果';
 
     box.textContent = '';
     if(typeof nodeOrText === 'string'){
       const pre = document.createElement('div');
-      pre.className = 'dba-battle-result-text';
+      pre.className = 'dba-roster-result-text';
       pre.textContent = nodeOrText;
       box.appendChild(pre);
     }else if(nodeOrText instanceof Node){
       box.appendChild(nodeOrText);
     }else{
       const pre = document.createElement('div');
-      pre.className = 'dba-battle-result-text';
+      pre.className = 'dba-roster-result-text';
       pre.textContent = '結果を表示できませんでした。';
       box.appendChild(pre);
     }
@@ -1180,7 +1968,13 @@
             if(Number.isFinite(r) && Number.isFinite(c)){
               evt.preventDefault();
               evt.stopImmediatePropagation();
-              openCellDetailModal(r, c);
+              if(loadRapidAttackEnabled()){
+                rapidAttackAt(r, c).catch(() => {
+                  alert('ラピッド攻撃に失敗しました。');
+                });
+              }else{
+                openCellDetailModal(r, c);
+              }
               return;
             }
           }catch(_e){}
@@ -1202,7 +1996,13 @@
 
       evt.preventDefault();
       evt.stopImmediatePropagation();
-      openCellDetailModal(r, c);
+      if(loadRapidAttackEnabled()){
+        rapidAttackAt(r, c).catch(() => {
+          alert('ラピッド攻撃に失敗しました。');
+        });
+      }else{
+        openCellDetailModal(r, c);
+      }
     }, true); // capture：既存遷移より先に止める
   }
 
@@ -1389,6 +2189,64 @@
     if(!s) return '';
     return String(s).replace(/\s+/g,' ').trim();
   }
+
+  // =========================
+  // レギュレーション表示の簡略化
+  // 例：
+  //  [N]だけ                      -> N
+  //  [SSR]まで                    -> --SSR
+  //  [R]から[SSR]まで             -> R-SSR
+  //  [SSR]だけ|[エリート]         -> SSR.エ
+  //  [R]まで|[警備員]だけ         -> --R.警
+  //  [SSR]だけ|[警備員]だけ|[エリート] -> SSR.警エ
+  // =========================
+  function simplifyRegulationText(raw){
+    const src0 = sanitizeText(raw || '');
+    if(!src0) return '---';
+
+    // 区切り文字などを正規化（"|" をスペースへ、全角空白もまとめる）
+    const src = src0.replace(/\|/g, ' ').replace(/\u3000/g, ' ');
+
+    // 特殊フラグ
+    const hasElite = src.includes('エリート');
+    const hasGuard = src.includes('警備員'); // 表記ゆれ（[警備員]だけ / 警備員だけ）を広く拾う
+
+    // レアリティ（想定：N/R/SR/SSR/UR）
+    // - 「だけ」
+    let m = src.match(/\[(N|R|SR|SSR|UR)\]\s*だけ/);
+    if(m){
+      let out = m[1];
+      if(hasGuard && hasElite) out += '.警エ';
+      else if(hasGuard) out += '.警';
+      else if(hasElite) out += '.エ';
+      return out;
+    }
+
+    // - 「まで」
+    m = src.match(/\[(N|R|SR|SSR|UR)\]\s*まで/);
+    if(m){
+      let out = `--${m[1]}`;
+      if(hasGuard && hasElite) out += '.警エ';
+      else if(hasGuard) out += '.警';
+      else if(hasElite) out += '.エ';
+      return out;
+    }
+
+    // - 「～から～まで」
+    m = src.match(/\[(N|R|SR|SSR|UR)\]\s*から\s*\[(N|R|SR|SSR|UR)\]\s*まで/);
+    if(m){
+      let out = `${m[1]}-${m[2]}`;
+      if(hasGuard && hasElite) out += '.警エ';
+      else if(hasGuard) out += '.警';
+      else if(hasElite) out += '.エ';
+      return out;
+    }
+
+    // 想定外フォーマットは、最低限の整形だけして返す（デバッグしやすくする）
+    // 例：未知の表現が来ても "空" にはしない
+    return src0;
+  }
+
 
   // =========================
   // 装備ロスター（保存・UI）
@@ -1745,12 +2603,12 @@
           // クリック＝選択 + 装備適用
           renderRosterModalState(nm);
           try{
-            // 体感のため、戦闘結果モーダルを流用して「処理中…」を表示（結果表示ではなくステータス表示）
-            openBattleResultModalWithNode(`装備切替中…\n${nm}\n${presetMetaText(presets[nm])}`, '装備ロスター');
+            // 装備ロスター専用の結果モーダルで表示
+            openRosterResultModalWithNode(`装備切替中…\n${nm}\n${presetMetaText(presets[nm])}`, '装備ロスター');
             await equipPresetByName(nm);
-            openBattleResultModalWithNode(`装備切替完了\n${nm}`, '装備ロスター');
+            openRosterResultModalWithNode(`装備切替完了\n${nm}`, '装備ロスター');
           }catch(_e2){
-            openBattleResultModalWithNode(`装備切替に失敗しました\n${nm}`, '装備ロスター');
+            openRosterResultModalWithNode(`装備切替に失敗しました\n${nm}`, '装備ロスター');
           }
         });
 
@@ -2988,6 +3846,11 @@
         reg = sanitizeText(m ? m[0] : '');
       }
 
+      // ★追加：レギュレーション表示を指定ルールで簡略化
+      // - regEl が短い（例：[R]まで）場合でも、tdTextRaw 側に [警備員] / [エリート] が混在する可能性があるため、
+      //   ここでは tdTextRaw を優先して判定材料にする（ただし base の抽出は [N]/[R]/[SR]/[SSR]/[UR] に限定している）
+      reg = simplifyRegulationText(tdTextRaw || reg);
+
       dbgLog('battleInfo', 'info', 'PARSE extracted', {
         row: ctx?.row, col: ctx?.col, mode: ctx?.mode, url: ctx?.url,
         holder, reg,
@@ -3758,6 +4621,24 @@
       openSettingsModal();
     });
 
+    const btnRapid = document.createElement('button');
+    btnRapid.type = 'button';
+    btnRapid.className = 'dba-btn-fn';
+    btnRapid.id = 'dba-btn-rapid-attack';
+    function syncRapidBtn(){
+      const on = loadRapidAttackEnabled();
+      btnRapid.dataset.on = on ? '1' : '0';
+      btnRapid.textContent = on ? 'ラピッド攻撃:ON' : 'ラピッド攻撃:OFF';
+    }
+    syncRapidBtn();
+    btnRapid.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const next = !loadRapidAttackEnabled();
+      saveRapidAttackEnabled(next);
+      syncRapidBtn();
+    });
+
     const btnRoster = document.createElement('button');
     btnRoster.type = 'button';
     btnRoster.className = 'dba-btn-fn';
@@ -3768,7 +4649,6 @@
       e.stopPropagation();
       openRosterModal();
     });
-
 
     const btnBattleInfo = document.createElement('button');
     btnBattleInfo.type = 'button';
@@ -3818,6 +4698,7 @@
     });
 
     bar.appendChild(btnSettings);
+    bar.appendChild(btnRapid);
     bar.appendChild(btnRoster);
     bar.appendChild(btnBattleInfo);
     return bar;
