@@ -1,0 +1,2311 @@
+// ==UserScript==
+// @name         Donguri Battle Assistant
+// @namespace    https://donguri.5ch.net/
+// @version      0.0.6.4
+// @description  5ちゃんねるのどんぐりシステムから派生したゲームの操作性を改善するためのユーザースクリプト
+// @author       福呼び草
+// @match        https://donguri.5ch.net/teambattle?m=*
+// @run-at       document-start
+// @grant        GM_addStyle
+// ==/UserScript==
+
+(function() {
+  'use strict';
+
+  // 対象モード（hc / l / rb）以外では動かさない
+  const mode = new URL(location.href).searchParams.get('m');
+  if (!['hc', 'l', 'rb'].includes(mode)) return;
+
+  // ============================================================
+  // ▽ここから▽ CSS 定義ゾーン（集中管理）
+  // ============================================================
+  const CSS = `
+    :root{
+      --dba-fn-bg: #f0f0f0;
+      --dba-fn-fg: #111;
+      --dba-fn-border: #000;
+      --dba-fn-shadow: rgba(0,0,0,0.15);
+      --dba-fn-height: 50px; /* ファンクションセクションの高さ */
+      --dba-layer-text-opacity: 1; /* 0.0 - 1.0（レイヤー上の文字濃度） */
+    }
+
+    /* ファンクションセクション本体 */
+    #dba-function-section{
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: var(--dba-fn-height);
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      background: var(--dba-fn-bg);
+      color: var(--dba-fn-fg);
+      border-bottom: 1px solid var(--dba-fn-border);
+      box-shadow: 0 2px 8px var(--dba-fn-shadow);
+      z-index: 999999;
+    }
+
+    /* 既存ページを隠さないため、上に余白を確保 */
+    html.dba-has-fnbar body{
+      padding-top: calc(var(--dba-fn-height) + 4px) !important;
+    }
+
+    /* ===== バトルマップ透明レイヤー（将来の拡張用土台） ===== */
+    #dba-battlemap-layer{
+      position: fixed;
+      left: 0;
+      top: 0;
+      width: 0;
+      height: 0;
+      z-index: 999990; /* fnbar(999999)より下、マップより上 */
+      pointer-events: none; /* 現段階ではページ既存操作を妨げない */
+      background: transparent;
+    }
+    #dba-battlemap-layer-grid{
+      width: 100%;
+      height: 100%;
+      display: grid;
+      background: transparent;
+      box-sizing: border-box;
+    }
+    .dba-layer-cell{
+      position: relative;
+      background: transparent;
+      box-sizing: border-box;
+    }
+    .dba-layer-cell__content{
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: flex-start;
+      justify-content: flex-start;
+      font-size: 0.9rem; /* レイヤー上のセルのフォントサイズ */
+      font-weight: 700;
+      line-height: 0.95rem;
+      opacity: var(--dba-layer-text-opacity);
+      user-select: none;
+      pointer-events: none;
+      /* 左上寄せ + 折り返し + 下方向は隠す */
+      padding: 2px 2px;
+      box-sizing: border-box;
+      overflow: hidden;           /* 下にあふれた分は非表示 */
+      white-space: pre-wrap;      /* 改行を維持しつつ折り返し */
+      overflow-wrap: anywhere;    /* 長い単語も折り返し */
+      word-break: break-word;     /* 互換用 */
+      text-align: left;
+      text-shadow:
+        0 0 2px rgba(255,255,255,0.95),
+        0 0 6px rgba(255,255,255,0.75);
+    }
+
+    /* 汎用ボタン（機能系ボタン共通） */
+    .dba-btn-fn{
+      appearance: none;
+      margin:4px;
+      padding: 8px 4px;
+      border: 2px solid #000;
+      border-radius: 12px;
+      background: #f08800;
+      color: #fff;
+      font-size: 1em;
+      font-weight: 500;
+      line-height: 1em;
+      cursor: pointer;
+      user-select: none;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.12);
+      transition: transform 0.05s ease, box-shadow 0.15s ease, background 0.15s ease;
+    }
+    .dba-btn-fn:hover{
+      background: #0000e0;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.16);
+    }
+    .dba-btn-fn:active{
+      transform: translateY(1px);
+      box-shadow: 0 1px 2px rgba(0,0,0,0.12);
+    }
+    .dba-btn-fn:focus{
+      outline: 2px solid #ea0000;
+      outline-offset: 2px;
+    }
+    /* ===== モーダル（標準） ===== */
+    .dba-m-std{
+      border: 4px solid #080;
+      border-radius: 12px;
+      padding: 0;
+      margin: auto;
+      width: min(560px, calc(100vw - 24px));
+      max-height: min(80vh, calc(100vh - 24px));
+      background: #f8f8f8;
+      color: #111;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.35);
+    }
+    .dba-m-std::backdrop{
+      background: rgba(0,0,0,0.55);
+    }
+    .dba-m-std .dba-modal__top{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 12px;
+      border-bottom: 1px solid #000;
+      background: #f0f0f0;
+    }
+    .dba-m-std .dba-modal__title{
+      font-size: 1.25em;
+      font-weight: 700;
+      margin: 0;
+      padding: 0;
+    }
+    .dba-m-std .dba-modal__mid{
+      padding: 12px;
+      overflow: auto;
+      max-height: calc(min(80vh, calc(100vh - 24px)) - 110px);
+    }
+    .dba-m-std .dba-modal__bot{
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-top: 1px solid #000;
+      background: #f0f0f0;
+    }
+
+    /* ===== セル詳細モーダル（サイズ最適化） ===== */
+    #dba-m-cell-detail.dba-m-std{
+      width: min(760px, calc(100vw - 24px));
+      max-height: min(88vh, calc(100vh - 24px));
+    }
+    #dba-m-cell-detail.dba-m-std .dba-modal__mid{
+      /* 標準(80vh)の計算を、セル詳細(88vh)に合わせて上書き */
+      max-height: calc(min(88vh, calc(100vh - 24px)) - 110px);
+    }
+
+    /* ===== 戦闘結果モーダル（サイズ最適化 + スクロール） ===== */
+    #dba-m-battle-result.dba-m-std{
+      width: min(820px, calc(100vw - 24px));
+      /* 長い時はここで上限、短い時は content に合わせて自然に縮む */
+      max-height: min(88vh, calc(100vh - 24px));
+      /* スクロールは mid のみに限定（dialog全体にはスクロールを出さない） */
+      overflow: hidden;
+    }
+    #dba-m-battle-result.dba-m-std .dba-modal__mid{
+      /* 常にスクロール可能（短い時はスクロールは出ない） */
+      overflow: auto;
+      /* 上限は max-height で決まる。短文なら高さは自然に小さくなる */
+      max-height: calc(min(88vh, calc(100vh - 24px)) - 110px);
+      /* スクロールバーを見やすく（OS依存だが効く環境では効く） */
+      scrollbar-gutter: stable both-edges;
+    }
+    /* 戦闘結果テキストをそのまま読みやすく表示 */
+    .dba-battle-result-text{
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      line-height: 1.25em;
+      font-weight: 600;
+      font-size: 0.98em;
+      text-align: left; /* 戦闘結果は左寄せ */
+    }
+
+    /* ===== モーダル（アラート） ===== */
+    #dba-m-alert.dba-m-alert{
+      border: 4px solid #e00;
+      border-radius: 12px;
+      padding: 0;
+      margin: auto;
+      width: min(420px, calc(100vw - 24px));
+      background: #f0f0cc;
+      color: #000;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.35);
+    }
+    #dba-m-alert.dba-m-alert::backdrop{
+      background: rgba(0,0,0,0.55);
+    }
+    #dba-m-alert .dba-alert__mid{
+      padding: 14px 12px;
+      font-size: 1.15em;
+      font-weight: 700;
+      line-height: 1.3em;
+    }
+    #dba-m-alert .dba-alert__bot{
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-top: 1px solid #000;
+      background: #f0f0e0;
+    }
+
+    /* ===== モーダル用ボタン（標準化） ===== */
+    .dba-btn-ok,
+    .dba-btn-apply,
+    .dba-btn-close,
+    .dba-btn-x{
+      appearance: none;
+      width: 4em;
+      border: 2px solid #000;
+      border-radius: 12px;
+      margin: 4px 8px;
+      padding: 8px auto;
+      font-size: 1em;
+      font-weight: 600;
+      line-height: 1.1em;
+      cursor: pointer;
+      user-select: none;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.12);
+      transition: transform 0.05s ease, box-shadow 0.15s ease, filter 0.15s ease;
+      background: #f00;
+      color: #fff;
+    }
+    .dba-btn-ok:hover,
+    .dba-btn-apply:hover,
+    .dba-btn-close:hover,
+    .dba-btn-x:hover{
+      filter: brightness(0.97);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.16);
+    }
+    .dba-btn-ok:active,
+    .dba-btn-apply:active,
+    .dba-btn-close:active,
+    .dba-btn-x:active{
+      transform: translateY(1px);
+      box-shadow: 0 1px 2px rgba(0,0,0,0.12);
+    }
+    .dba-btn-ok{ background:#2280e0; color:#fff; }
+    .dba-btn-apply{ background:#33a033; color:#fff; }
+    .dba-btn-close{ background:#e02222; color:#fff; }
+    .dba-btn-x{
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      border-radius: 16px;
+      background:#e02222;
+      color:#fff;
+      font-size: 1.4rem;
+      line-height: 1.4rem;
+    }
+
+    /* 設定UI小物 */
+    .dba-setting-row{
+      display: grid;
+      grid-template-columns: 1fr 120px;
+      gap: 10px;
+      align-items: center;
+      padding: 8px 6px;
+      border: 1px solid #00000022;
+      border-radius: 10px;
+      background: #fff;
+      margin-bottom: 10px;
+    }
+    .dba-setting-row label{
+      text-align: left;
+      font-weight: 700;
+    }
+    .dba-setting-row input[type="number"]{
+      width: 100%;
+      box-sizing: border-box;
+      padding: 6px 8px;
+      border: 1px solid #00000055;
+      border-radius: 10px;
+      font-size: 1em;
+    }
+    .dba-setting-row input[type="range"]{
+      width: 100%;
+      box-sizing: border-box;
+    }
+  `;
+  // ============================================================
+  // △ここまで△ CSS 定義ゾーン（集中管理）
+  // ============================================================
+
+  function addStyle(cssText) {
+    if (typeof GM_addStyle === 'function') {
+      GM_addStyle(cssText);
+      return;
+    }
+    const style = document.createElement('style');
+    style.textContent = cssText;
+    document.documentElement.appendChild(style);
+  }
+
+  // =========================
+  // 設定（保存・適用）
+  // =========================
+  const LS_KEY = 'dba.settings.v1';
+
+  const DEFAULT_SETTINGS = {
+    scale: { rb: 100, hc: 100, l: 100 },
+    layer: { textOpacity: 100 } // 0〜100（レイヤー文字濃度）
+  };
+
+  function clampInt(n, min, max){
+    const x = Number.parseInt(n, 10);
+    if (!Number.isFinite(x)) return min;
+    return Math.max(min, Math.min(max, x));
+  }
+
+  function sanitizeScale(v){
+    // 指定範囲外や不正値は 100 に戻す
+    const x = Number.parseInt(v, 10);
+    if (!Number.isFinite(x)) return 100;
+    if (x < 100 || x > 200) return 100;
+    return x;
+  }
+
+  function sanitizeOpacity(v){
+    const x = Number.parseInt(v, 10);
+    if(!Number.isFinite(x)) return 100;
+    if(x < 0) return 0;
+    if(x > 100) return 100;
+    return x;
+  }
+
+  function loadSettings(){
+    try{
+      const raw = localStorage.getItem(LS_KEY);
+      if(!raw) return JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+      const obj = JSON.parse(raw);
+      const out = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+      if(obj && obj.scale){
+        for(const k of ['rb','hc','l']){
+          out.scale[k] = sanitizeScale(obj.scale[k]);
+        }
+      }
+      if(obj && obj.layer){
+        out.layer.textOpacity = sanitizeOpacity(obj.layer.textOpacity);
+      }
+      return out;
+    }catch(_e){
+      return JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+    }
+  }
+
+  function saveSettings(s){
+    try{
+      const out = {
+        scale: { rb: sanitizeScale(s?.scale?.rb), hc: sanitizeScale(s?.scale?.hc), l: sanitizeScale(s?.scale?.l) },
+        layer: { textOpacity: sanitizeOpacity(s?.layer?.textOpacity) }
+      };
+      localStorage.setItem(LS_KEY, JSON.stringify(out));
+    }catch(_e){}
+  }
+
+  function getModeLabel(m){
+    if(m === 'rb') return 'レッドvsブルーモード';
+    if(m === 'hc') return 'ハードモード';
+    if(m === 'l') return 'ラダーモード';
+    return m;
+  }
+
+  function applyScaleToGrid(scalePct){
+    const grid = document.querySelector('.grid');
+    if(!grid) return false;
+
+    const s = sanitizeScale(scalePct);
+    const scale = s / 100;
+
+    // grid-template-columns / rows を更新（repeat(n, 35px) の px を拡大）
+    const gtc = grid.style.gridTemplateColumns || '';
+    const gtr = grid.style.gridTemplateRows || '';
+    const m1 = gtc.match(/repeat\(\s*(\d+)\s*,\s*(\d+)px\s*\)/);
+    const m2 = gtr.match(/repeat\(\s*(\d+)\s*,\s*(\d+)px\s*\)/);
+
+    if(m1){
+      const n = Number(m1[1]);
+      const base = Number(m1[2]);
+      const px = Math.max(1, Math.round(base * scale));
+      grid.style.gridTemplateColumns = `repeat(${n}, ${px}px)`;
+    }
+    if(m2){
+      const n = Number(m2[1]);
+      const base = Number(m2[2]);
+      const px = Math.max(1, Math.round(base * scale));
+      grid.style.gridTemplateRows = `repeat(${n}, ${px}px)`;
+    }
+
+    // 各セルサイズ（ページ側で inline 指定されても上書き）
+    const cellPx = Math.max(1, Math.round(30 * scale));
+    for(const el of grid.querySelectorAll('.cell')){
+      el.style.width = cellPx + 'px';
+      el.style.height = cellPx + 'px';
+    }
+
+    scheduleBattlemapLayerSync();
+    return true;
+  }
+
+  function applyScaleToCanvasWrap(scalePct){
+    const wrap = document.getElementById('gridWrap');
+    if(!wrap) return false;
+    const s = sanitizeScale(scalePct);
+    const scale = s / 100;
+    wrap.style.transformOrigin = 'left top';
+    wrap.style.transform = `scale(${scale})`;
+    scheduleBattlemapLayerSync();
+    return true;
+  }
+
+  function applyLayerTextOpacity(opacityPct){
+    const s = sanitizeOpacity(opacityPct);
+    const v = (s / 100).toFixed(2);
+    document.documentElement.style.setProperty('--dba-layer-text-opacity', v);
+  }
+
+  function getRbGridSizeFromPageScript(){
+    // RBページの IIFE スクリプト内に "const GRID_SIZE = N;" がある想定
+    const scripts = Array.from(document.querySelectorAll('script'));
+    for(const sc of scripts){
+      const t = sc.textContent || '';
+      if(!t) continue;
+      if(t.includes('const GRID_SIZE') && t.includes('modeQS') && t.includes('&m=rb')){
+        const m = t.match(/const\s+GRID_SIZE\s*=\s*(\d+)\s*;/);
+        if(m) return Number(m[1]);
+      }
+      // modeQS が無いサンプルにも備えて、rb らしさで緩めに判定
+      if(t.includes('const GRID_SIZE') && t.includes('gridWrap') && t.includes('gridOverlay')){
+        const m = t.match(/const\s+GRID_SIZE\s*=\s*(\d+)\s*;/);
+        if(m) return Number(m[1]);
+      }
+    }
+    return null;
+  }
+
+  function ensureRbPointerFix(){
+    // gridOverlay の既存クリックを潰し、スケール後も正しく座標→r,c を解釈する
+    const overlay = document.getElementById('gridOverlay');
+    if(!overlay) return false;
+
+    if(overlay.dataset.dbaPointerFix === '1') return true;
+    overlay.dataset.dbaPointerFix = '1';
+
+    function clientXY(evt){
+      if(evt.touches && evt.touches[0]) return {x: evt.touches[0].clientX, y: evt.touches[0].clientY};
+      return {x: evt.clientX, y: evt.clientY};
+    }
+
+    function onPointerCapture(evt){
+      const GRID_SIZE = getRbGridSizeFromPageScript() || 16;
+
+      // 既存ハンドラを無効化
+      evt.preventDefault();
+      evt.stopImmediatePropagation();
+
+      const rect = overlay.getBoundingClientRect();
+      const {x,y} = clientXY(evt);
+      const rx = x - rect.left;
+      const ry = y - rect.top;
+      if(rx < 0 || ry < 0 || rx >= rect.width || ry >= rect.height) return;
+
+      const cellCss = rect.width / GRID_SIZE; // 見た目上のセルサイズ
+      const c = Math.floor(rx / cellCss);
+      const r = Math.floor(ry / cellCss);
+      if(r<0||c<0||r>=GRID_SIZE||c>=GRID_SIZE) return;
+      // 遷移を抑止し、セル詳細をモーダル表示
+      openCellDetailModal(r, c);
+    }
+
+    overlay.addEventListener('click', onPointerCapture, true);
+    overlay.addEventListener('touchstart', onPointerCapture, { capture: true, passive: false });
+    return true;
+  }
+
+  // =========================
+  // セル詳細モーダル（セルクリックで表示）
+  //  - 詳細ページ: https://donguri.5ch.net/teambattle?r={row}&c={col}&m={mode}
+  //  - <header> の次にある <table> を抽出して表示
+  //  - table内の form（「エリアに挑む」「アリーナを強化する」「アリーナを弱体化する」等）はそのまま機能
+  // =========================
+  function buildCellDetailModal(){
+    if(document.getElementById('dba-m-cell-detail')) return;
+
+    const dlg = document.createElement('dialog');
+    dlg.id = 'dba-m-cell-detail';
+    dlg.className = 'dba-m-std';
+
+    // Top
+    const top = document.createElement('div');
+    top.className = 'dba-modal__top';
+
+    const title = document.createElement('div');
+    title.className = 'dba-modal__title';
+    title.textContent = 'セル詳細';
+
+    const btnX = document.createElement('button');
+    btnX.type = 'button';
+    btnX.className = 'dba-btn-x';
+    btnX.textContent = '×';
+
+    top.appendChild(title);
+    top.appendChild(btnX);
+
+    // Mid
+    const mid = document.createElement('div');
+    mid.className = 'dba-modal__mid';
+
+    const box = document.createElement('div');
+    box.id = 'dba-cell-detail-box';
+    box.textContent = '';
+    mid.appendChild(box);
+
+    // Bot（Close）
+    const bot = document.createElement('div');
+    bot.className = 'dba-modal__bot';
+
+    const btnClose = document.createElement('button');
+    btnClose.type = 'button';
+    btnClose.className = 'dba-btn-close';
+    btnClose.textContent = 'Close';
+    bot.appendChild(btnClose);
+
+    dlg.appendChild(top);
+    dlg.appendChild(mid);
+    dlg.appendChild(bot);
+
+    document.body.appendChild(dlg);
+
+    function closeDirect(){
+      try{ dlg.close(); }catch(_e){ dlg.removeAttribute('open'); }
+    }
+
+    btnX.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      closeDirect();
+    });
+
+    btnClose.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      closeDirect();
+    });
+
+    // ESC で閉じる
+    dlg.addEventListener('cancel', (e) => {
+      e.preventDefault();
+      closeDirect();
+    });
+
+    // ★重要：セル詳細内の form submit（例：「エリアに挑む」）を捕捉して遷移抑止 → 戦闘結果モーダル表示
+    // - capture で先に止める
+    dlg.addEventListener('submit', (e) => {
+      const form = e.target;
+      if(!(form instanceof HTMLFormElement)) return;
+      // セル詳細ボックス配下の form だけ対象
+      if(!box.contains(form)) return;
+
+      // 「エリアに挑む」以外（強化/弱体化等）は従来通り遷移させても良いが、
+      // ここでは要望に合わせて
+      //  - 「エリアに挑む / エリアに挑戦」
+      //  - 「このエリアを捕らえよ」
+      // を戦闘結果モーダル化する
+      // （他の2ボタンは現状の機能維持：＝通常submitで遷移）
+      const submitter = e.submitter;
+      const submitText = sanitizeText(submitter && (submitter.textContent || submitter.value || ''));
+      if(
+        !submitText.includes('エリアに挑む') &&
+        !submitText.includes('エリアに挑戦') &&
+        !submitText.includes('このエリアを捕らえよ')
+      ) return;
+
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      fetchFormAndShowBattleResult(form, submitter).catch(() => {
+        // 失敗時は控えめに
+        alert('戦闘結果の取得に失敗しました。');
+      });
+    }, true);
+  }
+
+  // =========================
+  // 戦闘結果モーダル（「エリアに挑む」結果を表示）
+  // =========================
+  function buildBattleResultModal(){
+    if(document.getElementById('dba-m-battle-result')) return;
+
+    const dlg = document.createElement('dialog');
+    dlg.id = 'dba-m-battle-result';
+    dlg.className = 'dba-m-std';
+
+    const top = document.createElement('div');
+    top.className = 'dba-modal__top';
+
+    const title = document.createElement('div');
+    title.className = 'dba-modal__title';
+    title.textContent = '戦闘結果';
+
+    const btnX = document.createElement('button');
+    btnX.type = 'button';
+    btnX.className = 'dba-btn-x';
+    btnX.textContent = '×';
+
+    top.appendChild(title);
+    top.appendChild(btnX);
+
+    const mid = document.createElement('div');
+    mid.className = 'dba-modal__mid';
+
+    const box = document.createElement('div');
+    box.id = 'dba-battle-result-box';
+    box.textContent = '';
+    mid.appendChild(box);
+
+    const bot = document.createElement('div');
+    bot.className = 'dba-modal__bot';
+
+    const btnClose = document.createElement('button');
+    btnClose.type = 'button';
+    btnClose.className = 'dba-btn-close';
+    btnClose.textContent = 'Close';
+    bot.appendChild(btnClose);
+
+    dlg.appendChild(top);
+    dlg.appendChild(mid);
+    dlg.appendChild(bot);
+    document.body.appendChild(dlg);
+
+    function closeDirect(){
+      try{ dlg.close(); }catch(_e){ dlg.removeAttribute('open'); }
+    }
+
+    btnX.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      closeDirect();
+    });
+    btnClose.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      closeDirect();
+    });
+
+    dlg.addEventListener('cancel', (e) => {
+      e.preventDefault();
+      closeDirect();
+    });
+  }
+
+  function openBattleResultModalWithNode(nodeOrText, titleText){
+    buildBattleResultModal();
+    const dlg = document.getElementById('dba-m-battle-result');
+    const box = document.getElementById('dba-battle-result-box');
+    const title = dlg ? dlg.querySelector('.dba-modal__title') : null;
+    if(!dlg || !box) return;
+    if(title) title.textContent = titleText || '戦闘結果';
+
+    box.textContent = '';
+    if(typeof nodeOrText === 'string'){
+      const pre = document.createElement('div');
+      pre.className = 'dba-battle-result-text';
+      pre.textContent = nodeOrText;
+      box.appendChild(pre);
+    }else if(nodeOrText instanceof Node){
+      box.appendChild(nodeOrText);
+    }else{
+      const pre = document.createElement('div');
+      pre.className = 'dba-battle-result-text';
+      pre.textContent = '結果を表示できませんでした。';
+      box.appendChild(pre);
+    }
+
+    try{ dlg.showModal(); }catch(_e){ dlg.setAttribute('open',''); }
+  }
+
+  function extractBattleResultBlock(doc){
+    // 戦闘結果はページ実装差があり得るため、特徴語を含む要素を優先して拾う
+    // 例（サンプル）: 「アリーナチャレンジ開始」「ターン」「が勝った！」等 :contentReference[oaicite:2]{index=2}
+    const keywords = [
+      'アリーナチャレンジ開始',
+      'ターン',
+      'が勝った',
+      'チャレンジに成功',
+      'アリーナリーダー',
+      // 空きセルの「このエリアを捕らえよ」→「リーダーになった」等の短文返却対策
+      'リーダーになった',
+      'リーダーになりました',
+      'あなたはリーダー'
+    ];
+
+    const all = Array.from(doc.querySelectorAll('body *'));
+    let best = null;
+    let bestScore = 0;
+    for(const el of all){
+      const t = sanitizeText(el.textContent || '');
+      if(!t) continue;
+      let score = 0;
+      for(const k of keywords){
+        if(t.includes(k)) score++;
+      }
+      if(score > bestScore){
+        bestScore = score;
+        best = el;
+      }
+    }
+
+    // ほどほど以上ヒットしている要素があれば、それを（親がpre/divなら親を）返す
+    // ただし「リーダーになった」系の短文はヒット数が1でも拾えるようにする
+    if(best && (bestScore >= 2 || (bestScore >= 1 && sanitizeText(best.textContent || '').includes('リーダー')))){
+      const p = best.closest('pre, div, section, article, main') || best;
+      return p;
+    }
+
+    // fallback：header の次の主要ブロック
+    const header = doc.querySelector('header');
+    if(header){
+      let el = header.nextElementSibling;
+      // table（セル詳細）を飛ばす
+      while(el && el.tagName && el.tagName.toLowerCase() === 'table'){
+        el = el.nextElementSibling;
+      }
+      if(el) return el;
+    }
+
+    return doc.body || null;
+  }
+
+  async function fetchFormAndShowBattleResult(form, submitter){
+    // submitter がある場合、その name/value も FormData に含める（ボタン識別が必要な実装に備える）
+    const method = (form.method || 'GET').toUpperCase();
+    const action = form.getAttribute('action') || location.href;
+    const url = new URL(action, location.origin);
+
+    const fd = new FormData(form);
+    if(submitter && submitter.name){
+      // 同名が既に入っていても上書きせず追加（サーバー実装依存）
+      fd.append(submitter.name, submitter.value || sanitizeText(submitter.textContent || ''));
+    }
+
+    // 戦闘結果モーダルを先に開いて「取得中…」を出す（体感をよくする）
+    openBattleResultModalWithNode('戦闘結果を取得中…', '戦闘結果');
+
+    let fetchUrl = url.toString();
+    let init = { method, credentials:'include', cache:'no-store' };
+
+    if(method === 'GET'){
+      // GET は query へ
+      for(const [k,v] of fd.entries()){
+        url.searchParams.append(k, String(v));
+      }
+      fetchUrl = url.toString();
+    }else{
+      // POST 等は body に
+      init.body = fd;
+    }
+
+    const res = await fetch(fetchUrl, init);
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const ct = (res.headers.get('content-type') || '').toLowerCase();
+    const bodyText = await res.text();
+
+    // 返却が HTML ではなく、短いテキスト（例：「リーダーになった」）だけのケースに備える
+    if(!ct.includes('text/html')){
+      openBattleResultModalWithNode(bodyText || '結果を表示できませんでした。', '戦闘結果');
+      return;
+    }
+
+    const doc = new DOMParser().parseFromString(bodyText, 'text/html');
+
+    const block = extractBattleResultBlock(doc);
+    if(block){
+      // 表示用に import（scriptは inert なので、結果表示だけなら問題なし）
+      const imported = document.importNode(block, true);
+      // ただし余計なフォーム等が混ざっても良い（表示目的）。見やすさ優先でテキスト整形 fallback を用意。
+      const text = sanitizeText(imported.textContent || '');
+      // 中身が薄い場合は body のテキストを表示
+      if(text.length < 8){
+        openBattleResultModalWithNode((doc.body && doc.body.innerText) ? doc.body.innerText : '結果を表示できませんでした。', '戦闘結果');
+        return;
+      }
+
+      // できるだけ「結果本文」っぽく見せるため、imported をテキスト表示に寄せる（縦長にも対応）
+      // （DOMそのまま表示が崩れる場合があるので、まずはテキストで確実に見せる）
+      openBattleResultModalWithNode((doc.body && doc.body.innerText) ? doc.body.innerText : imported.textContent, '戦闘結果');
+      return;
+    }
+
+    openBattleResultModalWithNode((doc.body && doc.body.innerText) ? doc.body.innerText : '結果を表示できませんでした。', '戦闘結果');
+  }
+
+  function findFirstTableAfterHeader(doc){
+    const tables = Array.from(doc.querySelectorAll('table'));
+    if(tables.length === 0) return null;
+    const header = doc.querySelector('header');
+    if(!header) return tables[0];
+    for(const t of tables){
+      try{
+        const pos = header.compareDocumentPosition(t);
+        if(pos & Node.DOCUMENT_POSITION_FOLLOWING) return t;
+      }catch(_e){}
+    }
+    return tables[0];
+  }
+
+  async function openCellDetailModal(row, col){
+    const openNow = async () => {
+      buildCellDetailModal();
+      const dlg = document.getElementById('dba-m-cell-detail');
+      const box = document.getElementById('dba-cell-detail-box');
+      const title = dlg ? dlg.querySelector('.dba-modal__title') : null;
+      if(!dlg || !box) return;
+
+      if(title) title.textContent = `セル詳細 (${row},${col})`;
+      box.textContent = '読み込み中…';
+
+      try{
+        const url = `https://donguri.5ch.net/teambattle?r=${row}&c=${col}&m=${mode}`;
+        const res = await fetch(url, { method:'GET', credentials:'include', cache:'no-store' });
+        if(!res.ok) throw new Error(`HTTP ${res.status}`);
+        const html = await res.text();
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const table = findFirstTableAfterHeader(doc);
+        if(!table){
+          box.textContent = 'テーブルが見つかりませんでした。';
+        }else{
+          // table をそのまま移植（form submit を維持）
+          const imported = document.importNode(table, true);
+          box.textContent = '';
+          box.appendChild(imported);
+        }
+      }catch(_e){
+        box.textContent = '取得に失敗しました。';
+      }
+
+      try{ dlg.showModal(); }catch(_e){ dlg.setAttribute('open',''); }
+    };
+
+    if(document.body) await openNow();
+    else document.addEventListener('DOMContentLoaded', () => { openNow(); }, { once:true });
+  }
+
+  // HC/L：バトルマップ内クリックを捕捉して遷移を抑止→モーダル表示
+  //  - a[href*="teambattle?r="] があれば URL から r,c を読む
+  //  - それが無い場合は .cell の index と列数から r,c を推定
+  function initBattlemapCellClickIntercept(){
+    if(document.documentElement.dataset.dbaCellIntercept === '1') return;
+    document.documentElement.dataset.dbaCellIntercept = '1';
+
+    document.addEventListener('click', (evt) => {
+      if(mode === 'rb') return; // RB は gridOverlay 側で捕捉済み
+
+      const grid = document.querySelector('.grid');
+      if(!grid) return;
+      if(!evt.target) return;
+
+      // grid 内だけ対象
+      const t = evt.target;
+      const inGrid = (t instanceof Element) ? !!t.closest('.grid') : false;
+      if(!inGrid) return;
+
+      // 1) まずリンク遷移を狙っている場合（href から r,c を抽出）
+      const a = (t instanceof Element) ? t.closest('a[href]') : null;
+      if(a && a.getAttribute('href')){
+        const href = a.getAttribute('href');
+        if(href && href.includes('teambattle') && href.includes('r=') && href.includes('c=')){
+          try{
+            const u = new URL(href, location.origin);
+            const r = Number(u.searchParams.get('r'));
+            const c = Number(u.searchParams.get('c'));
+            if(Number.isFinite(r) && Number.isFinite(c)){
+              evt.preventDefault();
+              evt.stopImmediatePropagation();
+              openCellDetailModal(r, c);
+              return;
+            }
+          }catch(_e){}
+        }
+      }
+
+      // 2) リンクが無い/取れない場合：.cell の index から推定
+      const cell = (t instanceof Element) ? t.closest('.cell') : null;
+      if(!cell) return;
+      const cells = Array.from(grid.querySelectorAll('.cell'));
+      const idx = cells.indexOf(cell);
+      if(idx < 0) return;
+
+      const spec = getHcLGridSpec(grid);
+      const cols = spec.cols || 0;
+      if(cols <= 0) return;
+      const r = Math.floor(idx / cols);
+      const c = idx % cols;
+
+      evt.preventDefault();
+      evt.stopImmediatePropagation();
+      openCellDetailModal(r, c);
+    }, true); // capture：既存遷移より先に止める
+  }
+
+  // =========================
+  // バトルマップ透明レイヤー
+  // =========================
+  let dbaLayerInited = false;
+  let dbaLayerRAF = 0;
+  let dbaLayerLastKey = '';
+  let dbaLayerResizeObs = null;
+  let dbaLayerMutObs = null;
+
+  function ensureBattlemapLayerDOM(){
+    if(document.getElementById('dba-battlemap-layer')) return;
+    const root = document.createElement('div');
+    root.id = 'dba-battlemap-layer';
+    const grid = document.createElement('div');
+    grid.id = 'dba-battlemap-layer-grid';
+    root.appendChild(grid);
+    (document.body || document.documentElement).appendChild(root);
+  }
+
+  function rebuildLayerCells(rows, cols){
+    const grid = document.getElementById('dba-battlemap-layer-grid');
+    if(!grid) return;
+    grid.textContent = '';
+    const frag = document.createDocumentFragment();
+    for(let r=0;r<rows;r++){
+      for(let c=0;c<cols;c++){
+        const cell = document.createElement('div');
+        cell.className = 'dba-layer-cell';
+        cell.dataset.row = String(r);
+        cell.dataset.col = String(c);
+        const content = document.createElement('div');
+        content.className = 'dba-layer-cell__content';
+        content.textContent = ''; // 将来：ここに文字列/絵文字を配置
+        cell.appendChild(content);
+        frag.appendChild(cell);
+      }
+    }
+    grid.appendChild(frag);
+  }
+
+  function getHcLGridSpec(gridEl){
+    const cs = getComputedStyle(gridEl);
+    const cols = (cs.gridTemplateColumns || '').trim().split(/\s+/).filter(Boolean);
+    const rows = (cs.gridTemplateRows || '').trim().split(/\s+/).filter(Boolean);
+    const colN = cols.length || 0;
+    const rowN = rows.length || 0;
+    return {
+      rows: rowN,
+      cols: colN,
+      gtc: cs.gridTemplateColumns,
+      gtr: cs.gridTemplateRows,
+      gap: cs.gap || `${cs.rowGap || '0px'} ${cs.columnGap || '0px'}`
+    };
+  }
+
+  function syncBattlemapLayer(){
+    const root = document.getElementById('dba-battlemap-layer');
+    const grid = document.getElementById('dba-battlemap-layer-grid');
+    if(!root || !grid) return false;
+
+    let target = null;
+    let spec = null;
+
+    if(mode === 'rb'){
+      target = document.getElementById('gridWrap');
+      if(!target) return false;
+      const n = getRbGridSizeFromPageScript();
+      const size = Number.isFinite(n) ? n : 16;
+      spec = {
+        rows: size,
+        cols: size,
+        gtc: `repeat(${size}, 1fr)`,
+        gtr: `repeat(${size}, 1fr)`,
+        gap: '0px'
+      };
+    }else{
+      target = document.querySelector('.grid');
+      if(!target) return false;
+      spec = getHcLGridSpec(target);
+      if(!spec.rows || !spec.cols) return false;
+    }
+
+    const rect = target.getBoundingClientRect();
+    // rectがゼロのときはまだ描画途中
+    if(rect.width <= 1 || rect.height <= 1) return false;
+
+    // 位置・サイズ追従（position:fixed）
+    root.style.left = rect.left + 'px';
+    root.style.top = rect.top + 'px';
+    root.style.width = rect.width + 'px';
+    root.style.height = rect.height + 'px';
+
+    // グリッド仕様追従
+    grid.style.gridTemplateColumns = spec.gtc;
+    grid.style.gridTemplateRows = spec.gtr;
+    grid.style.gap = spec.gap;
+
+    const key = `${mode}:${spec.rows}x${spec.cols}:${spec.gtc}|${spec.gtr}|${spec.gap}`;
+    if(key !== dbaLayerLastKey){
+      dbaLayerLastKey = key;
+      rebuildLayerCells(spec.rows, spec.cols);
+    }
+
+    return true;
+  }
+
+  function scheduleBattlemapLayerSync(){
+    if(dbaLayerRAF) return;
+    dbaLayerRAF = requestAnimationFrame(() => {
+      dbaLayerRAF = 0;
+      syncBattlemapLayer();
+    });
+  }
+
+  function initBattlemapLayer(){
+    if(dbaLayerInited) return;
+    dbaLayerInited = true;
+
+    // bodyが無い可能性を考慮
+    const start = () => {
+      ensureBattlemapLayerDOM();
+      // 初期値反映（文字濃度）
+      const s = loadSettings();
+      applyLayerTextOpacity(s.layer.textOpacity);
+
+      // まず同期
+      scheduleBattlemapLayerSync();
+
+      // スクロール・リサイズ追従
+      window.addEventListener('scroll', scheduleBattlemapLayerSync, { passive: true });
+      window.addEventListener('resize', scheduleBattlemapLayerSync, { passive: true });
+      window.addEventListener('orientationchange', scheduleBattlemapLayerSync, { passive: true });
+      if(window.visualViewport){
+        window.visualViewport.addEventListener('resize', scheduleBattlemapLayerSync, { passive: true });
+        window.visualViewport.addEventListener('scroll', scheduleBattlemapLayerSync, { passive: true });
+      }
+
+      // ターゲットの変化追従（サイズ・DOM）
+      const target = (mode === 'rb') ? document.getElementById('gridWrap') : document.querySelector('.grid');
+      if(target && typeof ResizeObserver === 'function'){
+        dbaLayerResizeObs = new ResizeObserver(() => scheduleBattlemapLayerSync());
+        dbaLayerResizeObs.observe(target);
+      }
+      dbaLayerMutObs = new MutationObserver(() => scheduleBattlemapLayerSync());
+      dbaLayerMutObs.observe(document.documentElement, { childList: true, subtree: true, attributes: true });
+    };
+
+    if(document.body) start();
+    else document.addEventListener('DOMContentLoaded', start, { once: true });
+  }
+
+  function applyCurrentModeScale(){
+    const settings = loadSettings();
+    applyLayerTextOpacity(settings.layer.textOpacity);
+    if(mode === 'rb'){
+      applyScaleToCanvasWrap(settings.scale.rb);
+      ensureRbPointerFix();
+      scheduleBattlemapLayerSync();
+      return;
+    }
+    if(mode === 'hc'){
+      applyScaleToGrid(settings.scale.hc);
+      scheduleBattlemapLayerSync();
+      return;
+    }
+    if(mode === 'l'){
+      applyScaleToGrid(settings.scale.l);
+      scheduleBattlemapLayerSync();
+      return;
+    }
+  }
+
+  // =========================
+  // 戦況情報（全セル巡回→レイヤー表示）
+  // =========================
+  function raf2(){
+    return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  }
+
+  function sanitizeText(s){
+    if(!s) return '';
+    return String(s).replace(/\s+/g,' ').trim();
+  }
+
+  const DBA_BATTLEINFO_LOG_PREFIX = '[DBA][BattleInfo]';
+  // ============================================================
+  // ▽ここから▽ Debug スイッチ（機能ごとにON/OFF）
+  //  - デフォルトは全て OFF
+  //  - 将来的に問題切り分けが必要になったら、該当フラグだけ true にする
+  // ============================================================
+  const DBA_DEBUG = {
+    battleInfo: false, // 戦況情報 fetch/parse 周り
+    battlemapRefresh: false, // 戦況情報の前にトップページからバトルマップのみ差し替え
+    layerSync:  false, // 透明レイヤー追従（必要になったら追加でログ出し）
+    rbPointer:  false  // RBの座標計算（必要になったら追加でログ出し）
+  };
+  // ============================================================
+  // △ここまで△ Debug スイッチ（機能ごとにON/OFF）
+  // ============================================================
+
+  function dbgLog(flagKey, level, msg, obj){
+    if(!DBA_DEBUG || !DBA_DEBUG[flagKey]) return;
+    const fn = (level === 'warn') ? console.warn
+              : (level === 'error') ? console.error
+              : (level === 'info') ? console.info
+              : console.log;
+    try{
+      fn(`${DBA_BATTLEINFO_LOG_PREFIX} ${msg}`, obj || {});
+    }catch(_e){
+      // noop
+    }
+  }
+
+  // =========================
+  // バトルマップ差し替え（トップページから取得→マップ部分だけ再構成）
+  //  - 目的：スクロールや更新時のちらつきを抑えつつ、最新マップへ更新してから詳細取得へ進む
+  //  - 注意：DOMParser由来の <script> は inert（非実行）なので、差し替え後に再生成して実行する
+  // =========================
+  function findCurrentBattlemapRoot(){
+    if(mode === 'rb'){
+      return document.querySelector('.gridCanvasOuter') || document.getElementById('gridWrap');
+    }
+    return document.querySelector('.grid');
+  }
+
+  function findFetchedBattlemapRoot(doc){
+    if(mode === 'rb'){
+      return doc.querySelector('.gridCanvasOuter') || doc.getElementById('gridWrap');
+    }
+    return doc.querySelector('.grid');
+  }
+
+  function reactivateScriptsWithin(root){
+    if(!root) return 0;
+    const scripts = Array.from(root.querySelectorAll('script'));
+    let count = 0;
+    for(const old of scripts){
+      const s = document.createElement('script');
+      // type属性を維持（基本は未指定のIIFE想定）
+      if(old.type) s.type = old.type;
+      if(old.noModule) s.noModule = true;
+      // src は本ページでは基本使われていない想定だが、一応コピー
+      if(old.src){
+        s.src = old.src;
+      }else{
+        s.textContent = old.textContent || '';
+      }
+      old.replaceWith(s);
+      count++;
+    }
+    return count;
+  }
+
+  function validateBattlemapAfterRefresh(){
+    try{
+      if(mode === 'rb'){
+        const wrap = document.getElementById('gridWrap');
+        const base = document.getElementById('gridBase');
+        const ovl  = document.getElementById('gridOverlay');
+        const ok = !!(wrap && base && ovl);
+        return { ok, detail: { hasGridWrap: !!wrap, hasGridBase: !!base, hasGridOverlay: !!ovl } };
+      }
+      const grid = document.querySelector('.grid');
+      if(!grid) return { ok:false, detail:{ hasGrid:false, cellCount:0 } };
+      const cellCount = grid.querySelectorAll('.cell').length;
+      // 0 だと、差し替え後のIIFEが実行されていない可能性が高い
+      const ok = cellCount > 0;
+      return { ok, detail:{ hasGrid:true, cellCount } };
+    }catch(e){
+      return { ok:false, detail:{ error: String(e && e.message ? e.message : e) } };
+    }
+  }
+
+  // =========================
+  // バトルマップ差し替え（fetch済み doc を使って差し替え）
+  //  - updateOnlyChangedCellsFromTopPage の (2-3) で、
+  //    既に取得済みの最新HTML/Docを再利用して「最新版への差し替え（再描画）」を行うためのヘルパー
+  // =========================
+  async function refreshBattlemapFromFetchedDoc(doc, meta){
+    const topUrl = meta?.topUrl || `https://donguri.5ch.net/teambattle?m=${mode}`;
+    const t0 = performance.now();
+    const sx = window.scrollX;
+    const sy = window.scrollY;
+
+    dbgLog('battlemapRefresh', 'info', 'REFRESH(pre-fetched) start', { mode, topUrl, scrollX: sx, scrollY: sy });
+
+    const curRoot = findCurrentBattlemapRoot();
+    if(!curRoot){
+      dbgLog('battlemapRefresh', 'warn', 'REFRESH(pre-fetched) skipped: current battlemap root not found', { mode, topUrl });
+      return false;
+    }
+    if(!doc){
+      dbgLog('battlemapRefresh', 'warn', 'REFRESH(pre-fetched) skipped: doc is null', { mode, topUrl });
+      return false;
+    }
+
+    try{
+      const fetchedRoot = findFetchedBattlemapRoot(doc);
+      if(!fetchedRoot){
+        dbgLog('battlemapRefresh', 'warn', 'REFRESH(pre-fetched) failed: fetched battlemap root not found', { mode, topUrl });
+        return false;
+      }
+
+      const parent = curRoot.parentNode;
+      if(!parent){
+        dbgLog('battlemapRefresh', 'warn', 'REFRESH(pre-fetched) failed: current root has no parent', { mode, topUrl });
+        return false;
+      }
+
+      const imported = document.importNode(fetchedRoot, true);
+      parent.replaceChild(imported, curRoot);
+
+      const reactivated = reactivateScriptsWithin(imported);
+      dbgLog('battlemapRefresh', 'info', 'REFRESH(pre-fetched) scripts reactivated', { mode, topUrl, scripts: reactivated });
+
+      await raf2();
+      window.scrollTo(sx, sy);
+
+      applyCurrentModeScale();
+      if(mode === 'rb') ensureRbPointerFix();
+      scheduleBattlemapLayerSync();
+
+      const v = validateBattlemapAfterRefresh();
+      const dt = Math.round(performance.now() - t0);
+      if(v.ok){
+        dbgLog('battlemapRefresh', 'info', 'REFRESH(pre-fetched) success', { mode, topUrl, ms: dt, ...v.detail });
+      }else{
+        dbgLog('battlemapRefresh', 'warn', 'REFRESH(pre-fetched) failed: validation NG', { mode, topUrl, ms: dt, ...v.detail });
+      }
+      return v.ok;
+    }catch(e){
+      dbgLog('battlemapRefresh', 'error', 'REFRESH(pre-fetched) exception', { mode, topUrl, error: String(e && e.message ? e.message : e) });
+      try{ window.scrollTo(sx, sy); }catch(_e){}
+      return false;
+    }
+  }
+
+  async function refreshBattlemapFromTopPage(){
+    const topUrl = `https://donguri.5ch.net/teambattle?m=${mode}`;
+    const t0 = performance.now();
+    const sx = window.scrollX;
+    const sy = window.scrollY;
+
+    dbgLog('battlemapRefresh', 'info', 'REFRESH start', { mode, topUrl, scrollX: sx, scrollY: sy });
+
+    const curRoot = findCurrentBattlemapRoot();
+    if(!curRoot){
+      dbgLog('battlemapRefresh', 'warn', 'REFRESH skipped: current battlemap root not found', { mode, topUrl });
+      return false;
+    }
+
+    try{
+      const res = await fetch(topUrl, { method:'GET', credentials:'include', cache:'no-store' });
+      if(!res.ok){
+        dbgLog('battlemapRefresh', 'warn', 'REFRESH fetch failed', { mode, topUrl, status: res.status, statusText: res.statusText });
+        return false;
+      }
+      const html = await res.text();
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const fetchedRoot = findFetchedBattlemapRoot(doc);
+      if(!fetchedRoot){
+        dbgLog('battlemapRefresh', 'warn', 'REFRESH failed: fetched battlemap root not found', { mode, topUrl, htmlLen: html?.length || 0 });
+        return false;
+      }
+
+      // DOM差し替え（位置/スクロール維持）
+      const parent = curRoot.parentNode;
+      if(!parent){
+        dbgLog('battlemapRefresh', 'warn', 'REFRESH failed: current root has no parent', { mode, topUrl });
+        return false;
+      }
+
+      const imported = document.importNode(fetchedRoot, true);
+      parent.replaceChild(imported, curRoot);
+
+      // inert script を再生成して実行
+      const reactivated = reactivateScriptsWithin(imported);
+      dbgLog('battlemapRefresh', 'info', 'REFRESH scripts reactivated', { mode, topUrl, scripts: reactivated });
+
+      // 2 raf 待機（スクリプトによるDOM反映・描画を待つ）
+      await raf2();
+
+      // スクロール維持（差し替えによる微妙なレイアウト変動でズレるのを戻す）
+      window.scrollTo(sx, sy);
+
+      // スケール・ポインタ補正・レイヤー追従を再適用
+      applyCurrentModeScale();
+      if(mode === 'rb') ensureRbPointerFix();
+      scheduleBattlemapLayerSync();
+
+      const v = validateBattlemapAfterRefresh();
+      const dt = Math.round(performance.now() - t0);
+      if(v.ok){
+        dbgLog('battlemapRefresh', 'info', 'REFRESH success', { mode, topUrl, ms: dt, ...v.detail });
+      }else{
+        dbgLog('battlemapRefresh', 'warn', 'REFRESH failed: validation NG', { mode, topUrl, ms: dt, ...v.detail });
+      }
+      return v.ok;
+    }catch(e){
+      dbgLog('battlemapRefresh', 'error', 'REFRESH exception', { mode, topUrl, error: String(e && e.message ? e.message : e) });
+      try{ window.scrollTo(sx, sy); }catch(_e){}
+      return false;
+    }
+  }
+
+  function textIncludesJP(s, keyword){
+    return sanitizeText(s).includes(keyword);
+  }
+
+  function parseCellDetailHTML(htmlText, ctx){
+    try{
+      const doc = new DOMParser().parseFromString(htmlText, 'text/html');
+      const tables = Array.from(doc.querySelectorAll('table'));
+      dbgLog('battleInfo', 'info', 'PARSE start', {
+        row: ctx?.row, col: ctx?.col, mode: ctx?.mode, url: ctx?.url,
+        tables: tables.length,
+        htmlLen: (htmlText && htmlText.length) ? htmlText.length : 0
+      });
+
+      if(tables.length === 0){
+        dbgLog('battleInfo', 'warn', 'PARSE no table', { row: ctx?.row, col: ctx?.col, mode: ctx?.mode, url: ctx?.url });
+        return { holder: '---', reg: '---' };
+      }
+
+      // 「ホルダー」ヘッダーを持つ table を優先して探す（モード差・余計なtable混在対策）
+      let targetTable = null;
+      for(const t of tables){
+        const ths = Array.from(t.querySelectorAll('tr th')).map(th => sanitizeText(th.textContent));
+        if(ths.some(x => x.includes('ホルダー'))){
+          targetTable = t;
+          break;
+        }
+      }
+      if(!targetTable) targetTable = tables[0];
+
+      // ヘッダー行（th を含む tr）を特定
+      const headerTr = targetTable.querySelector('tr:has(th)') || targetTable.querySelector('tr');
+      const thList = headerTr ? Array.from(headerTr.querySelectorAll('th')).map(th => sanitizeText(th.textContent)) : [];
+      let holderIdx = -1;
+      for(let i=0;i<thList.length;i++){
+        if(thList[i].includes('ホルダー')){
+          holderIdx = i;
+          break;
+        }
+      }
+
+      dbgLog('info', 'PARSE table selected', {
+        row: ctx?.row, col: ctx?.col, mode: ctx?.mode, url: ctx?.url,
+        ths: thList,
+        holderIdx
+      });
+      dbgLog('battleInfo', 'info', 'PARSE table selected', {
+        row: ctx?.row, col: ctx?.col, mode: ctx?.mode, url: ctx?.url,
+        ths: thList,
+        holderIdx
+      });
+
+      // データ行を取得（th行を避けて最初のtd行）
+      const trs = Array.from(targetTable.querySelectorAll('tr'));
+      let dataTr = null;
+      for(const tr of trs){
+        if(tr.querySelector('td')){
+          dataTr = tr;
+          break;
+        }
+      }
+      if(!dataTr){
+        dbgLog('battleInfo', 'warn', 'PARSE no data tr', {
+          row: ctx?.row, col: ctx?.col, mode: ctx?.mode, url: ctx?.url,
+          trCount: trs.length
+        });
+        return { holder: '---', reg: '---' };
+      }
+
+      const tds = Array.from(dataTr.querySelectorAll('td'));
+      dbgLog('battleInfo', 'info', 'PARSE data row', {
+        row: ctx?.row, col: ctx?.col, mode: ctx?.mode, url: ctx?.url,
+        tdCount: tds.length
+      });
+
+      // holderIdx が取れない/範囲外のときは、従来通り “2列目” をフォールバック
+      const idx = (holderIdx >= 0 && holderIdx < tds.length) ? holderIdx : 1;
+      const tdHolder = (tds.length > idx) ? tds[idx] : null;
+      if(!tdHolder){
+        dbgLog('battleInfo', 'warn', 'PARSE no holder td', {
+          row: ctx?.row, col: ctx?.col, mode: ctx?.mode, url: ctx?.url,
+          idx
+        });
+        return { holder: '---', reg: '---' };
+      }
+
+      // 抽出（strong/small 優先、無ければテキストから推測）
+      const holderEl = tdHolder.querySelector('strong');
+      const regEl = tdHolder.querySelector('small');
+
+      const tdTextRaw = sanitizeText(tdHolder.textContent);
+      let holder = sanitizeText(holderEl ? holderEl.textContent : '');
+      let reg = sanitizeText(regEl ? regEl.textContent : '');
+
+      if(!holder){
+        // 「エリアに挑む」等のボタン文言以降は捨てる
+        holder = tdTextRaw
+          .replace(/エリアに挑む.*$/,'')
+          .replace(/エリアに挑戦.*$/,'')
+          .trim();
+      }
+      if(!reg){
+        // [N]から[SR]まで / [SSR]まで 等をテキストから拾う
+        const m = tdTextRaw.match(/\[[^\]]+\](?:から\[[^\]]+\])?まで/);
+        reg = sanitizeText(m ? m[0] : '');
+      }
+
+      dbgLog('battleInfo', 'info', 'PARSE extracted', {
+        row: ctx?.row, col: ctx?.col, mode: ctx?.mode, url: ctx?.url,
+        holder, reg,
+        tdTextSample: tdTextRaw.slice(0, 140)
+      });
+
+      const out = { holder: holder || '---', reg: reg || '---' };
+      if(out.holder === '---' && out.reg === '---'){
+        // 失敗時だけ、HTML先頭を少し出す（巨大ログ回避）
+        dbgLog('battleInfo', 'warn', 'PARSE result is ---/---', {
+          row: ctx?.row, col: ctx?.col, mode: ctx?.mode, url: ctx?.url,
+          htmlHead: String(htmlText || '').slice(0, 400)
+        });
+      }
+      return out;
+    }catch(_e){
+      dbgLog('battleInfo', 'error', 'PARSE exception', {
+        row: ctx?.row, col: ctx?.col, mode: ctx?.mode, url: ctx?.url,
+        error: String(_e && _e.message ? _e.message : _e)
+      });
+      return { holder: '---', reg: '---' };
+    }
+  }
+
+  async function fetchCellDetail(row, col){
+    const url = `https://donguri.5ch.net/teambattle?r=${row}&c=${col}&m=${mode}`;
+    try{
+      const res = await fetch(url, {
+        method: 'GET',
+        credentials: 'include',
+        cache: 'no-store'
+      });
+      if(!res.ok){
+        dbgLog('battleInfo', 'warn', 'FAIL fetch', { row, col, mode, status: res.status, statusText: res.statusText, url });
+        throw new Error(`HTTP ${res.status}`);
+      }
+      dbgLog('battleInfo', 'info', 'OK fetch', { row, col, mode, status: res.status, url });
+      const html = await res.text();
+      const parsed = parseCellDetailHTML(html, { row, col, mode, url });
+      if(parsed && parsed.holder === '---' && parsed.reg === '---'){
+        dbgLog('battleInfo', 'warn', 'FETCH ok but PARSE returned ---/---', { row, col, mode, url });
+      }
+      return parsed;
+    }catch(e){
+      dbgLog('battleInfo', 'warn', 'FAIL fetch (exception)', { row, col, mode, url, error: String(e && e.message ? e.message : e) });
+      throw e;
+    }
+  }
+
+  async function mapLimit(items, limit, mapper){
+    const results = new Array(items.length);
+    let i = 0;
+    let active = 0;
+    return await new Promise((resolve) => {
+      const next = () => {
+        while(active < limit && i < items.length){
+          const idx = i++;
+          active++;
+          Promise.resolve()
+            .then(() => mapper(items[idx], idx))
+            .then((val) => { results[idx] = val; })
+            .catch((err) => { results[idx] = { error: err }; })
+            .finally(() => {
+              active--;
+              if(i >= items.length && active === 0) resolve(results);
+              else next();
+            });
+        }
+        if(items.length === 0) resolve([]);
+      };
+      next();
+    });
+  }
+
+  function setLayerCellText(row, col, text){
+    const cell = document.querySelector(`#dba-battlemap-layer-grid .dba-layer-cell[data-row="${row}"][data-col="${col}"] .dba-layer-cell__content`);
+    if(cell) cell.textContent = text;
+  }
+
+  function clearLayerTexts(){
+    for(const el of document.querySelectorAll('#dba-battlemap-layer-grid .dba-layer-cell__content')){
+      el.textContent = '';
+    }
+  }
+
+  async function scanAllCellsAndRender(){
+    const btn = document.getElementById('dba-btn-battleinfo');
+    if(btn){
+      btn.disabled = true;
+      btn.dataset.dbaBusy = '1';
+      btn.textContent = 'マップ更新中…';
+    }
+
+    // 先にトップページからバトルマップだけ更新（スクロール/ちらつき抑制）
+    // 失敗しても戦況取得自体は続行（ただし debug ON 時に成否ログが出る）
+    const refreshed = await refreshBattlemapFromTopPage();
+    if(btn){
+      btn.textContent = refreshed ? '戦況取得中…' : '戦況取得中…(マップ更新失敗)';
+    }
+
+    // レイヤーが未生成なら生成＆同期（マップ更新後にやる：セル数変動に追従させる）
+    initBattlemapLayer();
+    scheduleBattlemapLayerSync();
+    await raf2(); // cells が rebuild されるのを待つ
+
+    // まず全セルにプレースホルダ
+    clearLayerTexts();
+    const cells = Array.from(document.querySelectorAll('#dba-battlemap-layer-grid .dba-layer-cell'));
+    for(const c of cells){
+      setLayerCellText(c.dataset.row, c.dataset.col, '…');
+    }
+
+    // fetch の並列数（多すぎると重いので抑制）
+    const CONCURRENCY = 9;
+
+    const jobs = cells.map((c) => ({ row: Number(c.dataset.row), col: Number(c.dataset.col) }));
+    await mapLimit(jobs, CONCURRENCY, async (job) => {
+      const { row, col } = job;
+      try{
+        const { holder, reg } = await fetchCellDetail(row, col);
+        // 表示：レギュレーション + ホルダー
+        setLayerCellText(row, col, `${reg}\n${holder}`);
+      }catch(_e){
+        setLayerCellText(row, col, `ERR\n(${row},${col})`);
+      }
+      return true;
+    });
+
+    if(btn){
+      btn.disabled = false;
+      btn.dataset.dbaBusy = '0';
+      btn.textContent = '戦況情報';
+    }
+  }
+
+  // =========================
+  // 戦況情報（クリック：差分だけ更新）
+  //  - 長押し：全セル巡回（scanAllCellsAndRender）
+  //  - クリック：最新マップの const 群を取得し、差分セルだけ詳細ページを取りにいってレイヤー表示を更新
+  // =========================
+  function parseJsValueLiteral(lit){
+    // 同一オリジンのページ内スクリプトから抽出する前提（安全性より堅牢性を優先）
+    // eslint-disable-next-line no-new-func
+    return Function('"use strict"; return (' + lit + ');')();
+  }
+
+  function pickScriptText(doc, mustInclude){
+    const scripts = Array.from(doc.querySelectorAll('script'));
+    for(const sc of scripts){
+      const t = sc.textContent || '';
+      if(!t) continue;
+      let ok = true;
+      for(const kw of mustInclude){
+        if(!t.includes(kw)){ ok = false; break; }
+      }
+      if(ok) return t;
+    }
+    return '';
+  }
+
+  function extractConstLiteral(scriptText, constName){
+    // 例: const cellColors = { ... };
+    const re1 = new RegExp(`const\\s+${constName}\\s*=\\s*([\\s\\S]*?);\\s*(?:\\n|$)`);
+    const m = scriptText.match(re1);
+    if(!m) return null;
+    return (m[1] || '').trim();
+  }
+
+  function normalizeCellColors(obj){
+    const out = Object.create(null);
+    if(!obj || typeof obj !== 'object') return out;
+    for(const [k,v] of Object.entries(obj)){
+      const key = String(k).trim();
+      if(!key) continue;
+      out[key] = (v == null) ? null : String(v).trim();
+    }
+    return out;
+  }
+
+  function normalizeCapitalSet(list){
+    const set = new Set();
+    if(!Array.isArray(list)) return set;
+    for(const rc of list){
+      if(!Array.isArray(rc) || rc.length < 2) continue;
+      const r = Number(rc[0]);
+      const c = Number(rc[1]);
+      if(!Number.isFinite(r) || !Number.isFinite(c)) continue;
+      set.add(`${r}-${c}`);
+    }
+    return set;
+  }
+
+  function normalizeTerrainsPayload(payload){
+    // RB専用：terrainsPayload.terrains の中身だけを正規化して比較
+    try{
+      const arr = payload && payload.terrains;
+      if(!Array.isArray(arr)) return '';
+      const rows = [];
+      for(const cell of arr){
+        if(!cell) continue;
+        const r = Number(cell.r ?? cell.row ?? cell.x);
+        const c = Number(cell.c ?? cell.col ?? cell.y);
+        const t = String(cell.t ?? cell.terrain ?? '').trim();
+        if(!Number.isFinite(r) || !Number.isFinite(c)) continue;
+        rows.push({ r, c, t });
+      }
+      rows.sort((a,b) => (a.r - b.r) || (a.c - b.c) || (a.t < b.t ? -1 : (a.t > b.t ? 1 : 0)));
+      return JSON.stringify(rows);
+    }catch(_e){
+      return '';
+    }
+  }
+
+  function getHcLGridSpecFromDoc(doc){
+    const grid = doc.querySelector('.grid');
+    if(!grid) return { rows:0, cols:0 };
+    // fetched doc では computedStyle が使えないことがあるので style から読む
+    const style = grid.getAttribute('style') || '';
+    const m1 = style.match(/grid-template-columns:\s*repeat\(\s*(\d+)\s*,/);
+    const m2 = style.match(/grid-template-rows:\s*repeat\(\s*(\d+)\s*,/);
+    const cols = m1 ? Number(m1[1]) : 0;
+    const rows = m2 ? Number(m2[1]) : 0;
+    return { rows, cols };
+  }
+
+  function getCurrentHcLGridSize(){
+    const grid = document.querySelector('.grid');
+    if(!grid) return { rows:0, cols:0 };
+    const spec = getHcLGridSpec(grid);
+    return { rows: spec.rows, cols: spec.cols };
+  }
+
+  function getBattlemapSnapshotFromDoc(doc){
+    const out = {
+      mode,
+      rows: 0,
+      cols: 0,
+      cellColors: Object.create(null),
+      capitalSet: new Set(),
+      terrainsKey: '' // RBのみ
+    };
+
+    if(mode === 'rb'){
+      const t = pickScriptText(doc, ['const GRID_SIZE', 'const cellColors', 'terrainsPayload']);
+      const litSize = extractConstLiteral(t, 'GRID_SIZE');
+      const litColors = extractConstLiteral(t, 'cellColors');
+      const litCap = extractConstLiteral(t, 'capitalList') || extractConstLiteral(t, 'capitalMap');
+      const litTerr = extractConstLiteral(t, 'terrainsPayload');
+
+      let size = 0;
+      try{ size = Number(parseJsValueLiteral(litSize)); }catch(_e){ size = 0; }
+      if(!Number.isFinite(size) || size <= 0) size = 16;
+      out.rows = size;
+      out.cols = size;
+
+      try{ out.cellColors = normalizeCellColors(parseJsValueLiteral(litColors)); }catch(_e){ out.cellColors = Object.create(null); }
+      try{ out.capitalSet = normalizeCapitalSet(parseJsValueLiteral(litCap)); }catch(_e){ out.capitalSet = new Set(); }
+      try{ out.terrainsKey = normalizeTerrainsPayload(parseJsValueLiteral(litTerr)); }catch(_e){ out.terrainsKey = ''; }
+      return out;
+    }
+
+    // hc / l
+    const t = pickScriptText(doc, ['const cellColors', 'const capitalMap', 'createGrid']);
+    const litColors = extractConstLiteral(t, 'cellColors');
+    const litCap = extractConstLiteral(t, 'capitalMap') || extractConstLiteral(t, 'capitalList');
+
+    if(doc === document){
+      const sz = getCurrentHcLGridSize();
+      out.rows = sz.rows;
+      out.cols = sz.cols;
+    }else{
+      const sz = getHcLGridSpecFromDoc(doc);
+      out.rows = sz.rows;
+      out.cols = sz.cols;
+    }
+
+    try{ out.cellColors = normalizeCellColors(parseJsValueLiteral(litColors)); }catch(_e){ out.cellColors = Object.create(null); }
+    try{ out.capitalSet = normalizeCapitalSet(parseJsValueLiteral(litCap)); }catch(_e){ out.capitalSet = new Set(); }
+    return out;
+  }
+
+  function diffChangedCells(curSnap, newSnap){
+    const changed = [];
+    const keys = new Set();
+
+    // 全セルキー（サイズ範囲）を対象にする：色/首都の変化検出を漏らさない
+    for(let r=0;r<curSnap.rows;r++){
+      for(let c=0;c<curSnap.cols;c++){
+        keys.add(`${r}-${c}`);
+      }
+    }
+    for(let r=0;r<newSnap.rows;r++){
+      for(let c=0;c<newSnap.cols;c++){
+        keys.add(`${r}-${c}`);
+      }
+    }
+    // cellColors にだけ存在するキーも対象（念のため）
+    for(const k of Object.keys(curSnap.cellColors||{})) keys.add(k);
+    for(const k of Object.keys(newSnap.cellColors||{})) keys.add(k);
+
+    for(const k of keys){
+      const c1 = (curSnap.cellColors && (k in curSnap.cellColors)) ? curSnap.cellColors[k] : null;
+      const c2 = (newSnap.cellColors && (k in newSnap.cellColors)) ? newSnap.cellColors[k] : null;
+      const cap1 = curSnap.capitalSet ? curSnap.capitalSet.has(k) : false;
+      const cap2 = newSnap.capitalSet ? newSnap.capitalSet.has(k) : false;
+      if(c1 !== c2 || cap1 !== cap2){
+        const m = k.match(/^(\d+)-(\d+)$/);
+        if(!m) continue;
+        changed.push({ row: Number(m[1]), col: Number(m[2]) });
+      }
+    }
+    // 走査順を安定化
+    changed.sort((a,b) => (a.row - b.row) || (a.col - b.col));
+    return changed;
+  }
+
+  async function updateOnlyChangedCellsFromTopPage(){
+    const btn = document.getElementById('dba-btn-battleinfo');
+    if(btn){
+      btn.disabled = true;
+      btn.dataset.dbaBusy = '1';
+      btn.textContent = '差分確認中…';
+    }
+
+    const topUrl = `https://donguri.5ch.net/teambattle?m=${mode}`;
+    try{
+      // (1) 最新ページを取得
+      const res = await fetch(topUrl, { method:'GET', credentials:'include', cache:'no-store' });
+      if(!res.ok) throw new Error(`HTTP ${res.status}`);
+      const html = await res.text();
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+
+      // (2) 現在と最新を比較
+      const curSnap = getBattlemapSnapshotFromDoc(document);
+      const newSnap = getBattlemapSnapshotFromDoc(doc);
+
+      // (2-1) サイズ違い → 長押しと同じ
+      if(curSnap.rows !== newSnap.rows || curSnap.cols !== newSnap.cols){
+        if(btn) btn.textContent = '全更新（サイズ差）…';
+        await scanAllCellsAndRender();
+        return;
+      }
+
+      // (2-2) RBのみ terrainsPayload が違う → 長押しと同じ
+      if(mode === 'rb'){
+        if((curSnap.terrainsKey || '') !== (newSnap.terrainsKey || '')){
+          if(btn) btn.textContent = '全更新（地形差）…';
+          await scanAllCellsAndRender();
+          return;
+        }
+      }
+
+      // (2-3) 差分セルだけ詳細取得
+      const changed = diffChangedCells(curSnap, newSnap);
+
+      // ★追加要件： (2-3) に該当する場合は、差分セルの詳細取得に加えて
+      // 「バトルマップの最新版への差し替え（最新データを使っての再描画）」も実施する
+      // - ここでは既に取得済みの doc を再利用し、余計な再fetchを避ける
+      // - 差分が0の時は差し替え不要（軽量化）
+      if(changed.length > 0){
+        if(btn) btn.textContent = 'マップ差し替え中…';
+        const refreshed = await refreshBattlemapFromFetchedDoc(doc, { topUrl });
+        if(btn){
+          btn.textContent = refreshed
+            ? `差分更新中…(${changed.length})`
+            : `差分更新中…(${changed.length}) (マップ更新失敗)`;
+        }
+      }
+
+      // レイヤーが未生成なら生成＆同期
+      initBattlemapLayer();
+      scheduleBattlemapLayerSync();
+      await raf2();
+
+      if(changed.length === 0){
+        if(btn){
+          btn.textContent = '差分なし';
+          setTimeout(() => {
+            btn.disabled = false;
+            btn.dataset.dbaBusy = '0';
+            btn.textContent = '戦況情報';
+          }, 600);
+        }
+        return;
+      }
+
+      // 上でマップ差し替えが走った場合も、ここで改めて表示を揃える
+      if(btn && btn.textContent.indexOf('差分更新中…') !== 0)
+        btn.textContent = `差分更新中…(${changed.length})`;
+
+      const CONCURRENCY = 9;
+      await mapLimit(changed, CONCURRENCY, async (job, idx) => {
+        const { row, col } = job;
+        try{
+          const { holder, reg } = await fetchCellDetail(row, col);
+          setLayerCellText(row, col, `${reg}\n${holder}`);
+        }catch(_e){
+          setLayerCellText(row, col, `ERR\n(${row},${col})`);
+        }
+        if(btn && (idx % 10 === 0)){
+          const done = idx + 1;
+          btn.textContent = `差分更新中…(${done}/${changed.length})`;
+        }
+        return true;
+      });
+
+      if(btn){
+        btn.disabled = false;
+        btn.dataset.dbaBusy = '0';
+        btn.textContent = '戦況情報';
+      }
+    }catch(e){
+      dbgLog('battleInfo', 'warn', 'CLICK update failed', { mode, error: String(e && e.message ? e.message : e) });
+      if(btn){
+        btn.disabled = false;
+        btn.dataset.dbaBusy = '0';
+        btn.textContent = '戦況情報';
+      }
+      alert('戦況情報の取得に失敗しました。');
+    }
+  }
+
+  function waitAndApplyScale(){
+    const tryApply = () => {
+      if(mode === 'rb'){
+        if(applyScaleToCanvasWrap(loadSettings().scale.rb)){
+          ensureRbPointerFix();
+          scheduleBattlemapLayerSync();
+          return true;
+        }
+      }else{
+        if(applyScaleToGrid(loadSettings().scale[mode])){
+          scheduleBattlemapLayerSync();
+          return true;
+        }
+      }
+      return false;
+    };
+
+    if(tryApply()) return;
+
+    const mo = new MutationObserver(() => {
+      if(tryApply()){
+        mo.disconnect();
+      }
+    });
+    mo.observe(document.documentElement, { childList: true, subtree: true });
+  }
+
+  // =========================
+  // 設定モーダル（UI）
+  // =========================
+  function buildSettingsModal(){
+    if(document.getElementById('dba-m-settings')) return;
+
+    const dlg = document.createElement('dialog');
+    dlg.id = 'dba-m-settings';
+    dlg.className = 'dba-m-std';
+
+    // Top
+    const top = document.createElement('div');
+    top.className = 'dba-modal__top';
+
+    const title = document.createElement('div');
+    title.className = 'dba-modal__title';
+    title.textContent = '設定';
+
+    const btnX = document.createElement('button');
+    btnX.type = 'button';
+    btnX.className = 'dba-btn-x';
+    btnX.textContent = '×';
+
+    top.appendChild(title);
+    top.appendChild(btnX);
+
+    // Mid
+    const mid = document.createElement('div');
+    mid.className = 'dba-modal__mid';
+
+    const hint = document.createElement('div');
+    hint.style.textAlign = 'left';
+    hint.style.marginBottom = '10px';
+    hint.style.fontSize = '0.95em';
+    hint.textContent = '各モードのバトルマップのセルサイズ（%）を設定できます（100〜200、範囲外は100に補正）。';
+    mid.appendChild(hint);
+
+    const settings = loadSettings();
+
+    function mkRow(modeKey){
+      const row = document.createElement('div');
+      row.className = 'dba-setting-row';
+
+      const lab = document.createElement('label');
+      lab.textContent = getModeLabel(modeKey);
+
+      const input = document.createElement('input');
+      input.type = 'number';
+      input.min = '100';
+      input.max = '200';
+      input.step = '1';
+      input.value = String(sanitizeScale(settings.scale[modeKey]));
+      input.dataset.modeKey = modeKey;
+
+      row.appendChild(lab);
+      row.appendChild(input);
+      return row;
+    }
+
+    mid.appendChild(mkRow('rb'));
+    mid.appendChild(mkRow('hc'));
+    mid.appendChild(mkRow('l'));
+
+    // レイヤー文字濃度（将来のテキスト/絵文字表示のための事前準備）
+    (function mkOpacityRow(){
+      const row = document.createElement('div');
+      row.className = 'dba-setting-row';
+
+      const lab = document.createElement('label');
+      lab.textContent = 'レイヤー文字濃度（0〜100）';
+
+      const wrap = document.createElement('div');
+      wrap.style.display = 'grid';
+      wrap.style.gridTemplateColumns = '1fr 52px';
+      wrap.style.gap = '8px';
+      wrap.style.alignItems = 'center';
+
+      const input = document.createElement('input');
+      input.type = 'range';
+      input.min = '0';
+      input.max = '100';
+      input.step = '1';
+      input.value = String(sanitizeOpacity(settings.layer.textOpacity));
+      input.dataset.layerOpacity = '1';
+
+      const out = document.createElement('div');
+      out.textContent = input.value;
+      out.style.textAlign = 'right';
+      out.style.fontWeight = '700';
+
+      input.addEventListener('input', () => {
+        out.textContent = input.value;
+        // 即時反映（保存は Apply/OK）
+        applyLayerTextOpacity(input.value);
+      }, { passive: true });
+
+      wrap.appendChild(input);
+      wrap.appendChild(out);
+
+      row.appendChild(lab);
+      row.appendChild(wrap);
+      mid.appendChild(row);
+    })();
+
+    // Bot
+    const bot = document.createElement('div');
+    bot.className = 'dba-modal__bot';
+
+    const btnOK = document.createElement('button');
+    btnOK.type = 'button';
+    btnOK.className = 'dba-btn-ok';
+    btnOK.textContent = 'OK';
+
+    const btnApply = document.createElement('button');
+    btnApply.type = 'button';
+    btnApply.className = 'dba-btn-apply';
+    btnApply.textContent = 'Apply';
+
+    const btnClose = document.createElement('button');
+    btnClose.type = 'button';
+    btnClose.className = 'dba-btn-close';
+    btnClose.textContent = 'Close';
+
+    bot.appendChild(btnOK);
+    bot.appendChild(btnApply);
+    bot.appendChild(btnClose);
+
+    dlg.appendChild(top);
+    dlg.appendChild(mid);
+    dlg.appendChild(bot);
+
+    document.body.appendChild(dlg);
+
+    // Alert modal
+    const adlg = document.createElement('dialog');
+    adlg.id = 'dba-m-alert';
+    adlg.className = 'dba-m-alert';
+
+    const amid = document.createElement('div');
+    amid.className = 'dba-alert__mid';
+    amid.textContent = '変更を保存せずに閉じますか？';
+
+    const abot = document.createElement('div');
+    abot.className = 'dba-alert__bot';
+
+    const aYes = document.createElement('button');
+    aYes.type = 'button';
+    aYes.className = 'dba-btn-ok';
+    aYes.textContent = 'はい';
+
+    const aBack = document.createElement('button');
+    aBack.type = 'button';
+    aBack.className = 'dba-btn-close';
+    aBack.textContent = '戻る';
+
+    abot.appendChild(aYes);
+    abot.appendChild(aBack);
+
+    adlg.appendChild(amid);
+    adlg.appendChild(abot);
+    document.body.appendChild(adlg);
+
+    // dirty tracking
+    let initial = JSON.stringify(readModalValues());
+    let dirty = false;
+
+    function readModalValues(){
+      const out = { rb: 100, hc: 100, l: 100, layerTextOpacity: 100 };
+      for(const inp of dlg.querySelectorAll('input[type="number"][data-mode-key]')){
+        const k = inp.dataset.modeKey;
+        out[k] = Number.parseInt(inp.value, 10);
+      }
+      const op = dlg.querySelector('input[type="range"][data-layer-opacity="1"]');
+      if(op) out.layerTextOpacity = Number.parseInt(op.value, 10);
+      return out;
+    }
+
+    function setInputsFromSettings(s){
+      for(const inp of dlg.querySelectorAll('input[type="number"][data-mode-key]')){
+        const k = inp.dataset.modeKey;
+        inp.value = String(sanitizeScale(s.scale[k]));
+      }
+      const op = dlg.querySelector('input[type="range"][data-layer-opacity="1"]');
+      if(op){
+        op.value = String(sanitizeOpacity(s.layer.textOpacity));
+        // 表示側の数値も更新
+        const disp = op.parentElement && op.parentElement.children ? op.parentElement.children[1] : null;
+        if(disp && disp.textContent != null) disp.textContent = op.value;
+      }
+    }
+
+    function refreshInitial(){
+      initial = JSON.stringify(readModalValues());
+      dirty = false;
+    }
+
+    function isDirty(){
+      return JSON.stringify(readModalValues()) !== initial;
+    }
+
+    function commitFromModal(){
+      const cur = loadSettings();
+      const v = readModalValues();
+      cur.scale.rb = sanitizeScale(v.rb);
+      cur.scale.hc = sanitizeScale(v.hc);
+      cur.scale.l  = sanitizeScale(v.l);
+      cur.layer.textOpacity = sanitizeOpacity(v.layerTextOpacity);
+
+      // 範囲外入力はここで 100 に補正し、UIにも反映
+      saveSettings(cur);
+      setInputsFromSettings(cur);
+
+      // 反映
+      applyCurrentModeScale();
+      scheduleBattlemapLayerSync();
+
+      refreshInitial();
+    }
+
+    function closeDirect(){
+      try{ dlg.close(); }catch(_e){ dlg.removeAttribute('open'); }
+    }
+
+    function askCloseIfDirty(){
+      if(!isDirty()){
+        closeDirect();
+        return;
+      }
+      try{ adlg.showModal(); }catch(_e){ adlg.setAttribute('open',''); }
+    }
+
+    // input change -> mark dirty
+    dlg.addEventListener('input', () => { dirty = true; }, true);
+
+    // Buttons
+    btnApply.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      commitFromModal();
+    });
+
+    btnOK.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      commitFromModal();
+      closeDirect();
+    });
+
+    btnClose.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      askCloseIfDirty();
+    });
+
+    btnX.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      askCloseIfDirty();
+    });
+
+    // Alert buttons
+    aYes.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      // 破棄して閉じる：設定値は保存しない、UIも復元
+      setInputsFromSettings(loadSettings());
+      refreshInitial();
+      try{ adlg.close(); }catch(_e){ adlg.removeAttribute('open'); }
+      closeDirect();
+    });
+
+    aBack.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      try{ adlg.close(); }catch(_e){ adlg.removeAttribute('open'); }
+      // 元の設定モーダルに戻る（既に開いている）
+      try{
+        // noop
+      }catch(_e){}
+    });
+
+    // ESC で閉じる時も同じ挙動にする（ダイアログの cancel を抑止）
+    dlg.addEventListener('cancel', (e) => {
+      e.preventDefault();
+      askCloseIfDirty();
+    });
+
+    // アラート側 ESC は戻る扱い
+    adlg.addEventListener('cancel', (e) => {
+      e.preventDefault();
+      try{ adlg.close(); }catch(_e){ adlg.removeAttribute('open'); }
+    });
+  }
+
+  function openSettingsModal(){
+    // body が無い可能性があるので待つ
+    const openNow = () => {
+      buildSettingsModal();
+      const dlg = document.getElementById('dba-m-settings');
+      if(!dlg) return;
+      try{ dlg.showModal(); }catch(_e){ dlg.setAttribute('open',''); }
+    };
+
+    if(document.body) openNow();
+    else document.addEventListener('DOMContentLoaded', openNow, { once: true });
+  }
+
+  function buildFunctionSection() {
+    const bar = document.createElement('section');
+    bar.id = 'dba-function-section';
+
+    const btnSettings = document.createElement('button');
+    btnSettings.type = 'button';
+    btnSettings.className = 'dba-btn-fn';
+    btnSettings.textContent = '設定';
+    btnSettings.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openSettingsModal();
+    });
+
+    const btnBattleInfo = document.createElement('button');
+    btnBattleInfo.type = 'button';
+    btnBattleInfo.className = 'dba-btn-fn';
+    btnBattleInfo.textContent = '戦況情報';
+    btnBattleInfo.id = 'dba-btn-battleinfo';
+
+    // 長押し（1.6秒）で全セル巡回してレイヤーに表示
+    let lpTimer = 0;
+    let lpFired = false;
+    const LP_MS = 1600;
+
+    function clearLP(){
+      if(lpTimer){
+        clearTimeout(lpTimer);
+        lpTimer = 0;
+      }
+    }
+
+    btnBattleInfo.addEventListener('pointerdown', (e) => {
+      if(btnBattleInfo.disabled) return;
+      e.preventDefault();
+      e.stopPropagation();
+      lpFired = false;
+      clearLP();
+      lpTimer = setTimeout(async () => {
+        lpFired = true;
+        try{
+          await scanAllCellsAndRender();
+        }catch(_e){
+          // 何かあれば控えめに
+          alert('戦況情報の取得に失敗しました。');
+        }
+      }, LP_MS);
+    });
+    btnBattleInfo.addEventListener('pointerup', clearLP);
+    btnBattleInfo.addEventListener('pointercancel', clearLP);
+    btnBattleInfo.addEventListener('pointerleave', clearLP);
+
+    // 通常クリック（短押し）：差分更新（必要なセルだけ詳細ページを取りに行って更新）
+    btnBattleInfo.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if(lpFired) return;
+      if(btnBattleInfo.disabled) return;
+      await updateOnlyChangedCellsFromTopPage();
+    });
+
+    bar.appendChild(btnSettings);
+    bar.appendChild(btnBattleInfo);
+    return bar;
+  }
+
+  function injectWhenReady() {
+    addStyle(CSS);
+
+    const doInsert = () => {
+      // 二重挿入防止
+      if (document.getElementById('dba-function-section')) return;
+
+      document.documentElement.classList.add('dba-has-fnbar');
+
+      const bar = buildFunctionSection();
+
+      const header = document.querySelector('header');
+      if (header && header.parentNode) {
+        header.parentNode.insertBefore(bar, header);
+      } else {
+        // header が見つからない場合は body 先頭に
+        (document.body || document.documentElement).insertBefore(bar, (document.body || document.documentElement).firstChild);
+      }
+      // バトルマップのセルスケール（保存値）を適用
+      waitAndApplyScale();
+      // 透明レイヤーを初期化（バトルマップ追従）
+      initBattlemapLayer();
+      // セルクリックで詳細モーダル（遷移抑止）
+      initBattlemapCellClickIntercept();
+    };
+
+    // document-start なので body がまだ無いことがある：DOM 構築を待つ
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', doInsert, { once: true });
+    } else {
+      doInsert();
+    }
+  }
+
+  injectWhenReady();
+})();
