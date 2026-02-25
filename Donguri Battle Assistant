@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Donguri Battle Assistant
 // @namespace    https://donguri.5ch.net/
-// @version      0.0.10.1
+// @version      0.0.11.5
 // @description  5ちゃんねるのどんぐりシステムから派生したゲームの操作性を改善するためのユーザースクリプト
 // @author       福呼び草
 // @match        https://donguri.5ch.net/teambattle?m=*
@@ -725,6 +725,188 @@
       font-size: 0.95em;
       line-height: 1.25em;
     }
+      /* ===== オート装備（候補ポップアップ / 設定） ===== */
+    #dba-auto-equip-pop{
+      position: fixed;
+      z-index: 999998; /* fnbar(999999)より下 */
+      display: none;
+      min-width: 180px;
+      max-width: min(360px, 92vw);
+      max-height: min(60vh, 520px);
+      overflow: auto;
+      border: 2px solid #000;
+      border-radius: 12px;
+      background: #fff;
+      box-shadow: 0 10px 28px rgba(0,0,0,0.25);
+      padding: 8px;
+      box-sizing: border-box;
+    }
+    #dba-auto-equip-pop[data-open="1"]{ display: block; }
+    .dba-ae-pop-title{
+      font-weight: 900;
+      margin: 0 0 6px 0;
+      text-align: left;
+    }
+    .dba-ae-pop-btn{
+      width: 100%;
+      text-align: left;
+      appearance: none;
+      border: 2px solid #000;
+      border-radius: 10px;
+      padding: 8px 10px;
+      margin: 6px 0;
+      font-size: 0.98em;
+      font-weight: 800;
+      cursor: pointer;
+      background: #eee;
+      color: #000;
+    }
+    .dba-ae-pop-btn:hover{ filter: brightness(0.97); }
+    .dba-ae-pop-btn:active{ transform: translateY(1px); }
+
+    #dba-m-auto-equip.dba-m-std{
+      width: min(980px, calc(100vw - 24px));
+      max-height: min(88vh, calc(100vh - 24px));
+      overflow: hidden;
+    }
+    #dba-m-auto-equip.dba-m-std .dba-modal__mid{
+      max-height: calc(min(88vh, calc(100vh - 24px)) - 110px);
+      /* ★ここが重要：mid全体スクロールを抑止して、内部（左右ゾーン）でスクロールさせる */
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .dba-ae-topbtns{
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: flex-start;
+      margin: 0 0 10px 0;
+    }
+    .dba-ae-autoclose{
+      margin-left: auto; /* 右寄せ */
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 900;
+      user-select: none;
+      white-space: nowrap;
+      padding: 4px 8px;
+      border-radius: 10px;
+      border: 1px solid #00000022;
+      background: #fafafa;
+    }
+    .dba-ae-autoclose input[type="checkbox"]{
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+      accent-color: #ea0000;
+    }
+    .dba-ae-autoclose input[type="number"]{
+      width: 72px;
+      box-sizing: border-box;
+      padding: 6px 8px;
+      border: 1px solid #00000055;
+      border-radius: 10px;
+      font-size: 1em;
+      font-weight: 800;
+    }
+    .dba-ae-tabs{
+      display: flex;
+      gap: 8px;
+      align-items: stretch;
+      justify-content: flex-start;
+      margin: 10px 0 8px 0;
+    }
+    .dba-ae-tab{
+      flex: 1 1 0;
+      appearance: none;
+      border: 2px solid #000;
+      border-radius: 12px;
+      padding: 8px 10px;
+      margin: 0;
+      font-size: 1em;
+      font-weight: 900;
+      cursor: pointer;
+      background: #e8e8e8;
+      color: #000;
+    }
+    .dba-ae-tab[data-active="1"]{
+      outline: 3px solid #ea0000;
+      outline-offset: 0px;
+      background: #fff2f2;
+    }
+    .dba-ae-wrap{
+      display: grid;
+      grid-template-columns: 100px 1fr;
+      gap: 10px;
+      /* ★grid item が縮められるようにする（min-height:auto を避ける） */
+      align-items: stretch;
+      flex: 1 1 auto;  /* #dba-m-auto-equip .dba-modal__mid（flex）配下で残り領域を占有 */
+      min-height: 0;   /* これが無いと子が溢れて mid がスクロールしやすい */
+    }
+    .dba-ae-leftpane{
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: stretch;
+      /* ★左ペインも高さが親より大きくならないようにし、溢れは左ペイン内でスクロール */
+      overflow: auto;
+      min-height: 0;
+      max-height: 100%;
+      scrollbar-gutter: stable both-edges;
+    }
+    .dba-ae-rpane{
+      display: grid;
+      grid-template-columns: 1fr 100px 1fr;
+      gap: 10px;
+      align-items: stretch;
+      min-height: 0; /* ★子（左右box）が親高さ以内に収まれるように */
+    }
+    .dba-ae-box{
+      border: 1px solid #000;
+      border-radius: 12px;
+      background: #fff;
+      padding: 8px;
+      /* 左右ゾーンは内容が溢れたらゾーン内スクロール */
+      overflow: auto;
+      /* ★min-height 固定だと親より大きくなって mid がスクロールするので解除 */
+      min-height: 0;
+      max-height: 100%;
+      scrollbar-gutter: stable both-edges;
+    }
+    .dba-ae-box-title{
+      font-weight: 900;
+      margin: 0 0 8px 0;
+      text-align: left;
+    }
+    .dba-ae-item{
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid #00000022;
+      margin: 6px 0;
+      cursor: pointer;
+      user-select: none;
+      font-weight: 800;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .dba-ae-item:hover{ background:#f7f7f7; }
+    .dba-ae-item[data-selected="1"]{
+      outline: 3px solid #ea0000;
+      outline-offset: 0px;
+      background: #fff2f2;
+    }
+    .dba-ae-midbtns{
+      display: flex;
+      flex-direction: column;
+      /* 中央ゾーン：ボタン間隔 30px */
+      gap: 30px;
+      align-items: stretch;
+      justify-content: center;
+      padding: 10px 6px;
+    }
   `;
   // ============================================================
   // △ここまで△ CSS 定義ゾーン（集中管理）
@@ -745,6 +927,11 @@
   // =========================
   const LS_KEY = 'dba.settings.v1';
   const LS_RAPID_KEY = 'dba.rapidAttack.v1'; // ラピッド攻撃 ON/OFF
+  const LS_AUTO_EQUIP_KEY = 'dba.autoEquip.enabled.v1'; // オート装備 ON/OFF
+  const LS_AUTO_EQUIP_CAND_KEY = 'dba.autoEquip.candidates.v1'; // レギュレーション→装備候補（プリセット名配列）
+  const LS_AUTO_EQUIP_LAST_KEY = 'dba.autoEquip.lastPreset.v1'; // 最後にオート装備で適用したプリセット名
+  const LS_AUTO_EQUIP_NOTIFY_AUTOCLOSE_KEY = 'dba.autoEquip.notifyAutoClose.enabled.v1'; // 0/1
+  const LS_AUTO_EQUIP_NOTIFY_AUTOCLOSE_SEC_KEY = 'dba.autoEquip.notifyAutoClose.sec.v1'; // number
   const LS_BR_TAIL2_KEY = 'dba.battleResult.tail2.v1'; // 戦闘結果「末尾2行のみ表示」ON/OFF
   const LS_BR_ALIGN_KEY = 'dba.battleResult.align.v1'; // left / center / right
   const LS_BR_PASS_KEY  = 'dba.battleResult.passThrough.v1'; // 0/1 クリック透過
@@ -835,6 +1022,84 @@
     try{
       localStorage.setItem(LS_RAPID_KEY, on ? '1' : '0');
     }catch(_e){}
+  }
+
+  function loadAutoEquipEnabled(){
+    try{
+      const raw = localStorage.getItem(LS_AUTO_EQUIP_KEY);
+      if(raw == null) return false; // デフォルトOFF
+      return raw === '1';
+    }catch(_e){
+      return false;
+    }
+  }
+
+  function saveAutoEquipEnabled(on){
+    try{ localStorage.setItem(LS_AUTO_EQUIP_KEY, on ? '1' : '0'); }catch(_e){}
+  }
+
+  function loadAutoEquipCandidates(){
+    try{
+      const raw = localStorage.getItem(LS_AUTO_EQUIP_CAND_KEY);
+      if(!raw) return {};
+      const obj = JSON.parse(raw);
+      if(!obj || typeof obj !== 'object') return {};
+      return obj;
+    }catch(_e){
+      return {};
+    }
+  }
+
+  function saveAutoEquipCandidates(obj){
+    try{
+      localStorage.setItem(LS_AUTO_EQUIP_CAND_KEY, JSON.stringify(obj || {}));
+    }catch(_e){}
+  }
+
+  function loadAutoEquipLastPreset(){
+    try{
+      const raw = localStorage.getItem(LS_AUTO_EQUIP_LAST_KEY);
+      return raw ? String(raw) : '';
+    }catch(_e){
+      return '';
+    }
+  }
+
+  function saveAutoEquipLastPreset(name){
+    try{
+      localStorage.setItem(LS_AUTO_EQUIP_LAST_KEY, String(name || ''));
+    }catch(_e){}
+  }
+
+  function loadAutoEquipNotifyAutoCloseEnabled(){
+    try{
+      const raw = localStorage.getItem(LS_AUTO_EQUIP_NOTIFY_AUTOCLOSE_KEY);
+      if(raw == null) return false; // デフォルトOFF
+      return raw === '1';
+    }catch(_e){
+      return false;
+    }
+  }
+
+  function saveAutoEquipNotifyAutoCloseEnabled(on){
+    try{ localStorage.setItem(LS_AUTO_EQUIP_NOTIFY_AUTOCLOSE_KEY, on ? '1' : '0'); }catch(_e){}
+  }
+
+  function loadAutoEquipNotifyAutoCloseSec(){
+    try{
+      const raw = localStorage.getItem(LS_AUTO_EQUIP_NOTIFY_AUTOCLOSE_SEC_KEY);
+      if(raw == null) return 2; // デフォルト 2 秒
+      const n = Number.parseInt(raw, 10);
+      if(!Number.isFinite(n)) return 2;
+      return clampInt(n, 1, 60);
+    }catch(_e){
+      return 2;
+    }
+  }
+
+  function saveAutoEquipNotifyAutoCloseSec(sec){
+    const n = clampInt(sec, 1, 60);
+    try{ localStorage.setItem(LS_AUTO_EQUIP_NOTIFY_AUTOCLOSE_SEC_KEY, String(n)); }catch(_e){}
   }
 
   function getTeamChallengeUrl(){
@@ -1011,6 +1276,7 @@
 
   function ensureRbPointerFix(){
     // gridOverlay の既存クリックを潰し、スケール後も正しく座標→r,c を解釈する
+    // さらに、オート装備のクリック/長押し（0.4s）にも対応する
     const overlay = document.getElementById('gridOverlay');
     if(!overlay) return false;
 
@@ -1019,38 +1285,96 @@
 
     function clientXY(evt){
       if(evt.touches && evt.touches[0]) return {x: evt.touches[0].clientX, y: evt.touches[0].clientY};
+      if(evt.changedTouches && evt.changedTouches[0]) return {x: evt.changedTouches[0].clientX, y: evt.changedTouches[0].clientY};
       return {x: evt.clientX, y: evt.clientY};
     }
 
-    function onPointerCapture(evt){
+    function calcRC(evt){
       const GRID_SIZE = getRbGridSizeFromPageScript() || 16;
-
-      // 既存ハンドラを無効化
-      evt.preventDefault();
-      evt.stopImmediatePropagation();
-
       const rect = overlay.getBoundingClientRect();
       const {x,y} = clientXY(evt);
       const rx = x - rect.left;
       const ry = y - rect.top;
-      if(rx < 0 || ry < 0 || rx >= rect.width || ry >= rect.height) return;
-
+      if(rx < 0 || ry < 0 || rx >= rect.width || ry >= rect.height) return null;
       const cellCss = rect.width / GRID_SIZE; // 見た目上のセルサイズ
       const c = Math.floor(rx / cellCss);
       const r = Math.floor(ry / cellCss);
-      if(r<0||c<0||r>=GRID_SIZE||c>=GRID_SIZE) return;
-      // 遷移を抑止し、セル詳細 or ラピッド攻撃
-      if(loadRapidAttackEnabled()){
-        rapidAttackAt(r, c).catch(() => {
-          alert('ラピッド攻撃に失敗しました。');
-        });
-      }else{
-        openCellDetailModal(r, c);
+      if(r<0||c<0||r>=GRID_SIZE||c>=GRID_SIZE) return null;
+      return { r, c, x, y };
+    }
+
+    // 長押し（0.4秒）
+    const LP_MS = 400;
+    let lpTimer = 0;
+    let lpFired = false;
+    let lpCtx = null;
+
+    function clearLP(){
+      if(lpTimer){
+        clearTimeout(lpTimer);
+        lpTimer = 0;
       }
     }
 
-    overlay.addEventListener('click', onPointerCapture, true);
-    overlay.addEventListener('touchstart', onPointerCapture, { capture: true, passive: false });
+    function onPointerDown(evt){
+      // 既存ハンドラを無効化
+      evt.preventDefault();
+      evt.stopImmediatePropagation();
+
+      lpFired = false;
+      clearLP();
+      lpCtx = calcRC(evt);
+      if(!lpCtx) return;
+
+      lpTimer = setTimeout(async () => {
+        lpFired = true;
+        try{
+          if(loadAutoEquipEnabled()){
+            await handleAutoEquipLongPress(lpCtx.r, lpCtx.c, lpCtx.x, lpCtx.y);
+          }
+        }catch(_e){
+          // noop
+        }
+      }, LP_MS);
+    }
+
+    function onPointerUp(evt){
+      evt.preventDefault();
+      evt.stopImmediatePropagation();
+
+      clearLP();
+      const ctx = lpCtx || calcRC(evt);
+      lpCtx = null;
+      if(!ctx) return;
+      if(lpFired) return;
+
+      // 通常クリック
+      (async () => {
+        try{
+          if(loadAutoEquipEnabled()){
+            await handleAutoEquipClick(ctx.r, ctx.c);
+            return;
+          }
+          if(loadRapidAttackEnabled()){
+            await rapidAttackAt(ctx.r, ctx.c);
+          }else{
+            await openCellDetailModal(ctx.r, ctx.c);
+          }
+        }catch(_e){
+          alert('操作に失敗しました。');
+        }
+      })();
+    }
+
+    overlay.addEventListener('pointerdown', onPointerDown, true);
+    overlay.addEventListener('pointerup', onPointerUp, true);
+    overlay.addEventListener('pointercancel', (e)=>{ clearLP(); }, true);
+    // ★重要：一部環境で pointer で止めても click が別途発火してページ側ハンドラが動く事があるため、
+    //        click を capture で確実に遮断する（遷移/既存処理の暴発を防ぐ）
+    overlay.addEventListener('click', (evt) => {
+      evt.preventDefault();
+      evt.stopImmediatePropagation();
+    }, true);
     return true;
   }
 
@@ -1828,6 +2152,14 @@
     if(!dlg || !box) return;
     if(title) title.textContent = titleText || '装備変更結果';
 
+    // 既存の自動クローズ予約があれば解除
+    try{
+      const tid = Number(dlg.dataset.dbaAutoCloseTimer || '0');
+      if(tid) clearTimeout(tid);
+    }catch(_e){}
+    dlg.dataset.dbaAutoCloseTimer = '0';
+
+
     box.textContent = '';
     if(typeof nodeOrText === 'string'){
       const pre = document.createElement('div');
@@ -1844,6 +2176,23 @@
     }
 
     try{ dlg.showModal(); }catch(_e){ dlg.setAttribute('open',''); }
+
+    // ★オート装備の「装備切替完了」通知だけ、設定に応じて自動クローズ
+    try{
+      const isAutoEquip = sanitizeText(titleText || '') === 'オート装備';
+      const isDoneMsg = (typeof nodeOrText === 'string') && String(nodeOrText).includes('装備切替完了');
+      if(isAutoEquip && isDoneMsg && loadAutoEquipNotifyAutoCloseEnabled()){
+        const sec = loadAutoEquipNotifyAutoCloseSec();
+        const ms = Math.max(1, Number(sec) * 1000);
+        const tid = setTimeout(() => {
+          // 既に閉じていたら何もしない
+          const d = document.getElementById('dba-m-roster-result');
+          if(!d) return;
+          try{ d.close(); }catch(_e2){ d.removeAttribute('open'); }
+        }, ms);
+        dlg.dataset.dbaAutoCloseTimer = String(tid);
+      }
+    }catch(_e){}
   }
 
   function extractBattleResultBlock(doc){
@@ -2019,19 +2368,28 @@
     if(document.documentElement.dataset.dbaCellIntercept === '1') return;
     document.documentElement.dataset.dbaCellIntercept = '1';
 
-    document.addEventListener('click', (evt) => {
-      if(mode === 'rb') return; // RB は gridOverlay 側で捕捉済み
+    const LP_MS = 400;
+    let lpTimer = 0;
+    let lpFired = false;
+    let lpCtx = null;
 
+    function clearLP(){
+      if(lpTimer){
+        clearTimeout(lpTimer);
+        lpTimer = 0;
+      }
+    }
+
+    function getRCFromEvent(evt){
       const grid = document.querySelector('.grid');
-      if(!grid) return;
-      if(!evt.target) return;
+      if(!grid) return null;
+      if(!evt.target) return null;
 
-      // grid 内だけ対象
       const t = evt.target;
       const inGrid = (t instanceof Element) ? !!t.closest('.grid') : false;
-      if(!inGrid) return;
+      if(!inGrid) return null;
 
-      // 1) まずリンク遷移を狙っている場合（href から r,c を抽出）
+      // 1) リンクから読む
       const a = (t instanceof Element) ? t.closest('a[href]') : null;
       if(a && a.getAttribute('href')){
         const href = a.getAttribute('href');
@@ -2041,44 +2399,113 @@
             const r = Number(u.searchParams.get('r'));
             const c = Number(u.searchParams.get('c'));
             if(Number.isFinite(r) && Number.isFinite(c)){
-              evt.preventDefault();
-              evt.stopImmediatePropagation();
-              if(loadRapidAttackEnabled()){
-                rapidAttackAt(r, c).catch(() => {
-                  alert('ラピッド攻撃に失敗しました。');
-                });
-              }else{
-                openCellDetailModal(r, c);
-              }
-              return;
+              return { r, c };
             }
           }catch(_e){}
         }
       }
 
-      // 2) リンクが無い/取れない場合：.cell の index から推定
+      // 2) .cell の index から推定
       const cell = (t instanceof Element) ? t.closest('.cell') : null;
-      if(!cell) return;
+      if(!cell) return null;
       const cells = Array.from(grid.querySelectorAll('.cell'));
       const idx = cells.indexOf(cell);
-      if(idx < 0) return;
+      if(idx < 0) return null;
 
       const spec = getHcLGridSpec(grid);
       const cols = spec.cols || 0;
-      if(cols <= 0) return;
+      if(cols <= 0) return null;
       const r = Math.floor(idx / cols);
       const c = idx % cols;
+      return { r, c };
+    }
+
+    function clientXY(evt){
+      if(evt.touches && evt.touches[0]) return {x: evt.touches[0].clientX, y: evt.touches[0].clientY};
+      if(evt.changedTouches && evt.changedTouches[0]) return {x: evt.changedTouches[0].clientX, y: evt.changedTouches[0].clientY};
+      return {x: evt.clientX, y: evt.clientY};
+    }
+
+    document.addEventListener('pointerdown', (evt) => {
+      if(mode === 'rb') return;
+
+      const rc = getRCFromEvent(evt);
+      if(!rc) return;
+
+      // grid 内の操作なので既存遷移より先に止める
+      evt.preventDefault();
+      evt.stopImmediatePropagation();
+
+      lpFired = false;
+      clearLP();
+      const {x,y} = clientXY(evt);
+      // ★重要：rc を確実に保持（spreading 記法や誤記で壊れないよう明示）
+      lpCtx = { r: rc.r, c: rc.c, x, y };
+
+      lpTimer = setTimeout(async () => {
+        lpFired = true;
+        try{
+          if(loadAutoEquipEnabled()){
+            await handleAutoEquipLongPress(lpCtx.r, lpCtx.c, lpCtx.x, lpCtx.y);
+          }
+        }catch(_e){
+          // noop
+        }
+      }, LP_MS);
+    }, true);
+
+    document.addEventListener('pointerup', (evt) => {
+      if(mode === 'rb') return;
+
+      const rc = lpCtx ? { r: lpCtx.r, c: lpCtx.c } : getRCFromEvent(evt);
+      if(!rc) return;
 
       evt.preventDefault();
       evt.stopImmediatePropagation();
-      if(loadRapidAttackEnabled()){
-        rapidAttackAt(r, c).catch(() => {
-          alert('ラピッド攻撃に失敗しました。');
-        });
-      }else{
-        openCellDetailModal(r, c);
-      }
-    }, true); // capture：既存遷移より先に止める
+
+      clearLP();
+      const fired = lpFired;
+      lpFired = false;
+
+      if(fired) return;
+
+      (async () => {
+        try{
+          if(loadAutoEquipEnabled()){
+            await handleAutoEquipClick(rc.r, rc.c);
+            return;
+          }
+          if(loadRapidAttackEnabled()){
+            await rapidAttackAt(rc.r, rc.c);
+          }else{
+            await openCellDetailModal(rc.r, rc.c);
+          }
+        }catch(_e){
+          alert('操作に失敗しました。');
+        }
+      })();
+    }, true);
+
+    document.addEventListener('pointercancel', () => {
+      clearLP();
+      lpFired = false;
+      lpCtx = null;
+    }, true);
+
+    // ★重要：一部環境で pointer 系で preventDefault しても click が発火し、
+    //        a[href] のデフォルト遷移が走る事があるため、grid内の click を capture で確実に潰す
+    document.addEventListener('click', (evt) => {
+      if(mode === 'rb') return;
+      const grid = document.querySelector('.grid');
+      if(!grid || !evt.target) return;
+      const t = evt.target;
+      const inGrid = (t instanceof Element) ? !!t.closest('.grid') : false;
+      if(!inGrid) return;
+      // DBA側のセル操作が有効な時のみ “遷移” を潰す（通常時のページ既定挙動は残す）
+      if(!loadAutoEquipEnabled() && !loadRapidAttackEnabled()) return;
+      evt.preventDefault();
+      evt.stopImmediatePropagation();
+    }, true);
   }
 
   // =========================
@@ -2322,6 +2749,249 @@
     return src0;
   }
 
+  // =========================
+  // オート装備（レギュレーション → 候補キー）
+  //  - simplifyRegulationText() の出力（例：N / --SSR / R-UR.警エ）を受け取る前提
+  //  - 上限レアリティ + 特殊サフィックス（.エ / .警 / .警エ）で候補キーを決める
+  // =========================
+  function mapRegToAutoEquipKey(reg){
+    const s0 = sanitizeText(reg || '');
+    if(!s0 || s0 === '---') return '';
+    let s = s0;
+
+    // 特殊サフィックス
+    let suffix = '';
+    if(s.includes('.警エ')){
+      suffix = '.警エ';
+      s = s.replace('.警エ','');
+    }else if(s.includes('.警')){
+      suffix = '.警';
+      s = s.replace('.警','');
+    }else if(s.includes('.エ')){
+      suffix = '.エ';
+      s = s.replace('.エ','');
+    }
+
+    // 上限レアリティ
+    // --R / R / N-R / R-SR など
+    let top = '';
+    if(s.startsWith('--')){
+      top = s.slice(2);
+    }else if(s.includes('-')){
+      const parts = s.split('-');
+      top = parts[parts.length - 1];
+    }else{
+      top = s;
+    }
+    top = sanitizeText(top).replace(/^\[/,'').replace(/\]$/,''); // 念のため
+
+    if(!top) return '';
+    // 期待するのは N/R/SR/SSR/UR
+    if(!['N','R','SR','SSR','UR'].includes(top)) return '';
+    return `${top}${suffix}`;
+  }
+
+  function getAutoEquipCandidatesForReg(reg){
+    const key = mapRegToAutoEquipKey(reg);
+    if(!key) return { key:'', list: [] };
+    const store = loadAutoEquipCandidates();
+    const list = Array.isArray(store[key]) ? store[key].map(x => sanitizeText(x)).filter(Boolean) : [];
+    // 重複除去（保存データの汚れ対策）
+    const seen = new Set();
+    const uniq = [];
+    for(const n of list){
+      if(seen.has(n)) continue;
+      seen.add(n);
+      uniq.push(n);
+    }
+    return { key, list: uniq };
+  }
+
+  // =========================
+  // オート装備：候補ポップアップ
+  // =========================
+  function ensureAutoEquipPopup(){
+    if(document.getElementById('dba-auto-equip-pop')) return;
+    const pop = document.createElement('div');
+    pop.id = 'dba-auto-equip-pop';
+    pop.dataset.open = '0';
+    document.body.appendChild(pop);
+
+    // 外側クリックで閉じる
+    document.addEventListener('pointerdown', (e) => {
+      if(pop.dataset.open !== '1') return;
+      const t = e.target;
+      if(t instanceof Node && pop.contains(t)) return;
+      closeAutoEquipPopup(true);
+    }, true);
+  }
+
+  function closeAutoEquipPopup(cancel){
+    const pop = document.getElementById('dba-auto-equip-pop');
+    if(!pop) return;
+    pop.dataset.open = '0';
+    pop.textContent = '';
+    if(cancel){
+      // 何もしない（キャンセル扱い）
+    }
+  }
+
+  function placePopupNearPoint(pop, x, y){
+    const vw = window.innerWidth || document.documentElement.clientWidth || 800;
+    const vh = window.innerHeight || document.documentElement.clientHeight || 600;
+
+    // まず仮位置
+    let left = x;
+    let top = y;
+
+    // “表示領域の中心に近い方向”へ出す
+    if(x < vw/2){
+      left = x + 12;
+    }else{
+      left = x - 12;
+    }
+    if(y < vh/2){
+      top = y + 12;
+    }else{
+      top = y - 12;
+    }
+
+    pop.style.left = left + 'px';
+    pop.style.top = top + 'px';
+    pop.style.right = 'auto';
+    pop.style.bottom = 'auto';
+
+    const rect = pop.getBoundingClientRect();
+    let nx = rect.left;
+    let ny = rect.top;
+
+    if(rect.right > vw - 8) nx -= (rect.right - (vw - 8));
+    if(rect.left < 8) nx = 8;
+    if(rect.bottom > vh - 8) ny -= (rect.bottom - (vh - 8));
+    if(rect.top < 8) ny = 8;
+
+    pop.style.left = nx + 'px';
+    pop.style.top = ny + 'px';
+  }
+
+  // =========================
+  // オート装備：装備完了後の「次の動作」をラピッド攻撃へ引き継ぐ
+  //  - ラピッド攻撃ON: rapidAttackAt
+  //  - ラピッド攻撃OFF: セル詳細モーダル
+  // =========================
+  async function proceedAfterAutoEquip(row, col){
+    if(loadRapidAttackEnabled()){
+      await rapidAttackAt(row, col);
+    }else{
+      await openCellDetailModal(row, col);
+    }
+  }
+
+  async function autoEquipThenAttack(row, col, presetName){
+    const nm = sanitizeText(presetName);
+    if(!nm) return false;
+
+    // 既に同じプリセットをオートで装備した直後ならスキップ（過剰なequip連打を防ぐ）
+    const last = loadAutoEquipLastPreset();
+    if(last && last === nm){
+      await proceedAfterAutoEquip(row, col);
+      return true;
+    }
+
+    openRosterResultModalWithNode(`装備切替中…\n${nm}`, 'オート装備');
+    try{
+      await equipPresetByName(nm);
+      saveAutoEquipLastPreset(nm);
+      openRosterResultModalWithNode(`装備切替完了\n${nm}`, 'オート装備');
+    }catch(_e){
+      openRosterResultModalWithNode(`装備切替に失敗しました\n${nm}`, 'オート装備');
+      // 装備に失敗しても攻撃はしない（誤装備のまま突撃を防ぐ）
+      return false;
+    }
+
+    // 装備変更完了後は、ラピッド攻撃機能へ引き継ぐ（ON/OFFに応じて分岐）
+    await proceedAfterAutoEquip(row, col);
+    return true;
+  }
+
+  async function handleAutoEquipClick(row, col){
+    // クリック：候補があれば先頭を装備して突撃、無ければ通常動作（ラピッド/セル詳細）
+    try{
+      const { reg } = await fetchCellDetail(row, col);
+      const { list } = getAutoEquipCandidatesForReg(reg);
+      if(list.length > 0){
+        await autoEquipThenAttack(row, col, list[0]);
+        return true;
+      }
+    }catch(_e){
+      // noop（通常動作へフォールバック）
+    }
+    // 候補無し or 取得失敗 → 既存動作へ
+    if(loadRapidAttackEnabled()){
+      await rapidAttackAt(row, col);
+    }else{
+      await openCellDetailModal(row, col);
+    }
+    return true;
+  }
+
+  async function handleAutoEquipLongPress(row, col, clientX, clientY){
+    ensureAutoEquipPopup();
+    const pop = document.getElementById('dba-auto-equip-pop');
+    if(!pop) return false;
+
+    // 取得中表示
+    pop.textContent = '';
+    pop.dataset.open = '1';
+    const ttl = document.createElement('div');
+    ttl.className = 'dba-ae-pop-title';
+    ttl.textContent = '装備候補（取得中…）';
+    pop.appendChild(ttl);
+    placePopupNearPoint(pop, clientX, clientY);
+
+    let reg = '';
+    try{
+      const d = await fetchCellDetail(row, col);
+      reg = d?.reg || '';
+    }catch(_e){
+      reg = '';
+    }
+    const { key, list } = getAutoEquipCandidatesForReg(reg);
+
+    pop.textContent = '';
+    const ttl2 = document.createElement('div');
+    ttl2.className = 'dba-ae-pop-title';
+    ttl2.textContent = key ? `装備候補：${key}` : '装備候補';
+    pop.appendChild(ttl2);
+
+    if(list.length === 0){
+      const empty = document.createElement('div');
+      empty.style.fontWeight = '800';
+      empty.style.padding = '6px 2px';
+      empty.style.textAlign = 'left';
+      empty.textContent = '候補が登録されていません。';
+      pop.appendChild(empty);
+      placePopupNearPoint(pop, clientX, clientY);
+      return true;
+    }
+
+    for(const nm of list){
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'dba-ae-pop-btn';
+      b.textContent = nm;
+      b.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        closeAutoEquipPopup(false);
+        await autoEquipThenAttack(row, col, nm);
+      });
+      pop.appendChild(b);
+    }
+
+    placePopupNearPoint(pop, clientX, clientY);
+    return true;
+  }
 
   // =========================
   // 装備ロスター（保存・UI）
@@ -2641,6 +3311,13 @@
     btnDel.disabled = !selectedPresetName;
 
     row2.appendChild(btnAdd);
+
+    const btnAuto = document.createElement('button');
+    btnAuto.type = 'button';
+    btnAuto.className = 'dba-btn-mini';
+    btnAuto.textContent = '自動候補登録';
+
+    row2.appendChild(btnAuto);
     row2.appendChild(btnDel);
     box.appendChild(row2);
 
@@ -2723,6 +3400,11 @@
       });
     });
 
+    btnAuto.addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      openAutoEquipSettingsModal();
+    });
+
     btnDel.addEventListener('click', (e) => {
       e.preventDefault(); e.stopPropagation();
       if(!selectedPresetName) return;
@@ -2743,6 +3425,442 @@
       if(!dlg) return;
       try{ dlg.showModal(); }catch(_e){ dlg.setAttribute('open',''); }
     };
+    if(document.body) openNow();
+    else document.addEventListener('DOMContentLoaded', openNow, { once:true });
+  }
+
+  // =========================
+  // オート装備設定モーダル（候補登録）
+  // =========================
+  const AE_KEYS_GENERAL = ['N','R','SR','SSR','UR','N.エ','R.エ','SR.エ','SSR.エ','UR.エ'];
+  const AE_KEYS_GUARD   = ['N.警','R.警','SR.警','SSR.警','UR.警','N.警エ','R.警エ','SR.警エ','SSR.警エ','UR.警エ'];
+
+  function buildAutoEquipSettingsModal(){
+    if(document.getElementById('dba-m-auto-equip')) return;
+
+    const dlg = document.createElement('dialog');
+    dlg.id = 'dba-m-auto-equip';
+    dlg.className = 'dba-m-std';
+
+    const top = document.createElement('div');
+    top.className = 'dba-modal__top';
+    const title = document.createElement('div');
+    title.className = 'dba-modal__title';
+    title.textContent = 'オート装備設定';
+    const btnX = document.createElement('button');
+    btnX.type = 'button';
+    btnX.className = 'dba-btn-x';
+    btnX.textContent = '×';
+    top.appendChild(title);
+    top.appendChild(btnX);
+
+    const mid = document.createElement('div');
+    mid.className = 'dba-modal__mid';
+
+    // mid上部：決定 / Cancel
+    const topBtns = document.createElement('div');
+    topBtns.className = 'dba-ae-topbtns';
+
+    const btnDecide = document.createElement('button');
+    btnDecide.type = 'button';
+    btnDecide.className = 'dba-btn-apply';
+    btnDecide.id = 'dba-ae-btn-decide';
+    btnDecide.textContent = '決定';
+
+    const btnCancel = document.createElement('button');
+    btnCancel.type = 'button';
+    btnCancel.className = 'dba-btn-close';
+    btnCancel.id = 'dba-ae-btn-cancel';
+    btnCancel.textContent = 'Cancel';
+
+    topBtns.appendChild(btnDecide);
+    topBtns.appendChild(btnCancel);
+
+    // 右寄せ：装備変更完了通知の自動クローズ設定
+    const ac = document.createElement('label');
+    ac.className = 'dba-ae-autoclose';
+    ac.id = 'dba-ae-autoclose-wrap';
+
+    const acChk = document.createElement('input');
+    acChk.type = 'checkbox';
+    acChk.id = 'dba-ae-autoclose-chk';
+
+    const acText1 = document.createElement('span');
+    acText1.textContent = '装備変更完了通知を';
+
+    const acSec = document.createElement('input');
+    acSec.type = 'number';
+    acSec.min = '1';
+    acSec.max = '60';
+    acSec.step = '1';
+    acSec.id = 'dba-ae-autoclose-sec';
+
+    const acText2 = document.createElement('span');
+    acText2.textContent = '秒で自動的に閉じる';
+
+    ac.appendChild(acChk);
+    ac.appendChild(acText1);
+    ac.appendChild(acSec);
+    ac.appendChild(acText2);
+    topBtns.appendChild(ac);
+
+    mid.appendChild(topBtns);
+
+    // tabs
+    const tabs = document.createElement('div');
+    tabs.className = 'dba-ae-tabs';
+
+    const tabGen = document.createElement('button');
+    tabGen.type = 'button';
+    tabGen.className = 'dba-ae-tab';
+    tabGen.id = 'dba-ae-tab-general';
+    tabGen.textContent = '一般';
+    tabGen.dataset.active = '1';
+
+    const tabGuard = document.createElement('button');
+    tabGuard.type = 'button';
+    tabGuard.className = 'dba-ae-tab';
+    tabGuard.id = 'dba-ae-tab-guard';
+    tabGuard.textContent = '警備員だけ';
+    tabGuard.dataset.active = '0';
+
+    tabs.appendChild(tabGen);
+    tabs.appendChild(tabGuard);
+    mid.appendChild(tabs);
+
+    // main wrap
+    const wrap = document.createElement('div');
+    wrap.className = 'dba-ae-wrap';
+    wrap.id = 'dba-ae-wrap';
+
+    // left pane (keys)
+    const lp = document.createElement('div');
+    lp.className = 'dba-ae-leftpane';
+    lp.id = 'dba-ae-leftpane';
+
+    // right pane (3 zones)
+    const rp = document.createElement('div');
+    rp.className = 'dba-ae-rpane';
+
+    const leftBox = document.createElement('div');
+    leftBox.className = 'dba-ae-box';
+    leftBox.id = 'dba-ae-leftbox';
+
+    const midBtns = document.createElement('div');
+    midBtns.className = 'dba-ae-midbtns';
+
+    const rightBox = document.createElement('div');
+    rightBox.className = 'dba-ae-box';
+    rightBox.id = 'dba-ae-rightbox';
+
+    rp.appendChild(leftBox);
+    rp.appendChild(midBtns);
+    rp.appendChild(rightBox);
+
+    wrap.appendChild(lp);
+    wrap.appendChild(rp);
+    mid.appendChild(wrap);
+
+    const bot = document.createElement('div');
+    bot.className = 'dba-modal__bot';
+    const btnClose = document.createElement('button');
+    btnClose.type = 'button';
+    btnClose.className = 'dba-btn-close';
+    btnClose.textContent = 'Close';
+    bot.appendChild(btnClose);
+
+    dlg.appendChild(top);
+    dlg.appendChild(mid);
+    dlg.appendChild(bot);
+    document.body.appendChild(dlg);
+
+    function closeDirect(){ try{ dlg.close(); }catch(_e){ dlg.removeAttribute('open'); } }
+
+    btnX.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeDirect(); });
+    btnClose.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeDirect(); });
+    btnCancel.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeDirect(); });
+    dlg.addEventListener('cancel', (e)=>{ e.preventDefault(); closeDirect(); });
+  }
+
+  function openAutoEquipSettingsModal(){
+    const openNow = () => {
+      buildAutoEquipSettingsModal();
+
+      const dlg = document.getElementById('dba-m-auto-equip');
+      const lp = document.getElementById('dba-ae-leftpane');
+      const leftBox = document.getElementById('dba-ae-leftbox');
+      const rightBox = document.getElementById('dba-ae-rightbox');
+      const tabGen = document.getElementById('dba-ae-tab-general');
+      const tabGuard = document.getElementById('dba-ae-tab-guard');
+      const btnDecide = document.getElementById('dba-ae-btn-decide');
+      const acChk = document.getElementById('dba-ae-autoclose-chk');
+      const acSec = document.getElementById('dba-ae-autoclose-sec');
+      if(!dlg || !lp || !leftBox || !rightBox || !tabGen || !tabGuard || !btnDecide) return;
+
+      // 自動クローズ設定の初期値反映 & 保存
+      if(acChk){
+        acChk.checked = loadAutoEquipNotifyAutoCloseEnabled();
+        acChk.addEventListener('change', (e) => {
+          e.stopPropagation();
+          saveAutoEquipNotifyAutoCloseEnabled(!!acChk.checked);
+        });
+      }
+      if(acSec){
+        acSec.value = String(loadAutoEquipNotifyAutoCloseSec());
+        acSec.addEventListener('change', (e) => {
+          e.stopPropagation();
+          saveAutoEquipNotifyAutoCloseSec(acSec.value);
+          // 表示もクランプ後の値に揃える
+          acSec.value = String(loadAutoEquipNotifyAutoCloseSec());
+        });
+      }
+
+      // 仮保持（モーダル内で維持）
+      const saved = loadAutoEquipCandidates();
+      const temp = JSON.parse(JSON.stringify(saved || {})); // deep-ish
+
+      // state
+      let activeTab = 'general';
+      let activeKey = AE_KEYS_GENERAL[0];
+      let selectedLeftPreset = '';
+      let selectedRightPreset = '';
+
+      function setTab(tab){
+        activeTab = tab;
+        tabGen.dataset.active = (tab === 'general') ? '1' : '0';
+        tabGuard.dataset.active = (tab === 'guard') ? '1' : '0';
+        const keys = (tab === 'general') ? AE_KEYS_GENERAL : AE_KEYS_GUARD;
+        // activeKeyがタブ外なら先頭へ
+        if(!keys.includes(activeKey)) activeKey = keys[0];
+        renderLeftPaneKeys();
+        renderThreeZones();
+      }
+
+      function renderLeftPaneKeys(){
+        const keys = (activeTab === 'general') ? AE_KEYS_GENERAL : AE_KEYS_GUARD;
+        lp.textContent = '';
+        for(const k of keys){
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'dba-btn-mini';
+          b.textContent = k;
+          b.dataset.key = k;
+          if(k === activeKey){
+            b.style.outline = '3px solid #ea0000';
+            b.style.outlineOffset = '0px';
+            b.style.background = '#fff2f2';
+          }
+          b.addEventListener('click', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            activeKey = k;
+            selectedLeftPreset = '';
+            selectedRightPreset = '';
+            renderLeftPaneKeys();
+            renderThreeZones();
+          });
+          lp.appendChild(b);
+        }
+      }
+
+      function getRosterPresetNames(){
+        const { roster } = getActiveRoster();
+        const presets = roster && roster.presets ? roster.presets : {};
+        const order = Array.isArray(roster && roster.presetOrder) ? roster.presetOrder : [];
+        const seen = new Set();
+        const names = [];
+        for(const nm of order){
+          if(!nm) continue;
+          if(seen.has(nm)) continue;
+          if(Object.prototype.hasOwnProperty.call(presets, nm)){
+            names.push(nm);
+            seen.add(nm);
+          }
+        }
+        for(const nm of Object.keys(presets)){
+          if(seen.has(nm)) continue;
+          names.push(nm);
+          seen.add(nm);
+        }
+        return names;
+      }
+
+      function ensureListForKey(k){
+        if(!Array.isArray(temp[k])) temp[k] = [];
+        // 重複除去
+        const seen = new Set();
+        temp[k] = temp[k].map(x => sanitizeText(x)).filter(Boolean).filter(x => (seen.has(x) ? false : (seen.add(x), true)));
+        return temp[k];
+      }
+
+      function renderThreeZones(){
+        // (A) 左ゾーン：activeKey の候補リスト
+        const list = ensureListForKey(activeKey);
+
+        leftBox.textContent = '';
+        const lt = document.createElement('div');
+        lt.className = 'dba-ae-box-title';
+        lt.textContent = `候補（${activeKey}）`;
+        leftBox.appendChild(lt);
+
+        if(list.length === 0){
+          const empty = document.createElement('div');
+          empty.style.fontWeight = '800';
+          empty.style.padding = '8px 2px';
+          empty.style.textAlign = 'left';
+          empty.textContent = '（未登録）';
+          leftBox.appendChild(empty);
+        }else{
+          for(const nm of list){
+            const it = document.createElement('div');
+            it.className = 'dba-ae-item';
+            it.dataset.name = nm;
+            it.dataset.selected = (nm === selectedLeftPreset) ? '1' : '0';
+            it.textContent = nm;
+            it.addEventListener('click', (e) => {
+              e.preventDefault(); e.stopPropagation();
+              selectedLeftPreset = nm;
+              renderThreeZones();
+            });
+            leftBox.appendChild(it);
+          }
+        }
+
+        // (B) 中央ゾーン：ボタン4つ
+        const midBtns = leftBox.nextElementSibling; // gridの2列目
+        if(midBtns){
+          midBtns.textContent = '';
+
+          const mkMid = (label, id, danger) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = danger ? 'dba-btn-mini dba-btn-mini--danger' : 'dba-btn-mini';
+            b.textContent = label;
+            b.id = id;
+            return b;
+          };
+          const bUp = mkMid('上げる','dba-ae-btn-up');
+          const bDown = mkMid('下げる','dba-ae-btn-down');
+          const bAdd = mkMid('←追加','dba-ae-btn-add', false);
+          const bRem = mkMid('外す→','dba-ae-btn-rem', true);
+
+          midBtns.appendChild(bUp);
+          midBtns.appendChild(bDown);
+          midBtns.appendChild(bAdd);
+          midBtns.appendChild(bRem);
+
+          bAdd.addEventListener('click', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            const nm = sanitizeText(selectedRightPreset);
+            if(!nm) return;
+            const arr = ensureListForKey(activeKey);
+            if(arr.includes(nm)) return;
+            arr.push(nm);
+            selectedLeftPreset = nm;
+            renderThreeZones();
+          });
+
+          bRem.addEventListener('click', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            const nm = sanitizeText(selectedLeftPreset);
+            if(!nm) return;
+            const arr = ensureListForKey(activeKey);
+            const idx = arr.indexOf(nm);
+            if(idx < 0) return;
+            arr.splice(idx, 1);
+            selectedLeftPreset = '';
+            renderThreeZones();
+          });
+
+          bUp.addEventListener('click', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            const nm = sanitizeText(selectedLeftPreset);
+            if(!nm) return;
+            const arr = ensureListForKey(activeKey);
+            const idx = arr.indexOf(nm);
+            if(idx <= 0) return;
+            const tmp = arr[idx-1];
+            arr[idx-1] = arr[idx];
+            arr[idx] = tmp;
+            renderThreeZones();
+          });
+
+          bDown.addEventListener('click', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            const nm = sanitizeText(selectedLeftPreset);
+            if(!nm) return;
+            const arr = ensureListForKey(activeKey);
+            const idx = arr.indexOf(nm);
+            if(idx < 0 || idx >= arr.length-1) return;
+            const tmp = arr[idx+1];
+            arr[idx+1] = arr[idx];
+            arr[idx] = tmp;
+            renderThreeZones();
+          });
+        }
+
+        // (C) 右ゾーン：ロスターのプリセット一覧（名前だけ）
+        const rnames = getRosterPresetNames();
+        rightBox.textContent = '';
+        const rt = document.createElement('div');
+        rt.className = 'dba-ae-box-title';
+        rt.textContent = 'プリセット（装備ロスター）';
+        rightBox.appendChild(rt);
+
+        if(rnames.length === 0){
+          const empty2 = document.createElement('div');
+          empty2.style.fontWeight = '800';
+          empty2.style.padding = '8px 2px';
+          empty2.style.textAlign = 'left';
+          empty2.textContent = 'プリセットがありません。';
+          rightBox.appendChild(empty2);
+        }else{
+          for(const nm of rnames){
+            const it = document.createElement('div');
+            it.className = 'dba-ae-item';
+            it.dataset.name = nm;
+            it.dataset.selected = (nm === selectedRightPreset) ? '1' : '0';
+            it.textContent = nm;
+            it.addEventListener('click', (e) => {
+              e.preventDefault(); e.stopPropagation();
+              selectedRightPreset = nm;
+              renderThreeZones();
+            });
+            rightBox.appendChild(it);
+          }
+        }
+      }
+
+      // Tabs
+      tabGen.onclick = (e) => { e.preventDefault(); e.stopPropagation(); setTab('general'); };
+      tabGuard.onclick = (e) => { e.preventDefault(); e.stopPropagation(); setTab('guard'); };
+
+      // 決定＝保存
+      btnDecide.onclick = (e) => {
+        e.preventDefault(); e.stopPropagation();
+        // 空配列は保存しても良いが、念のため整形
+        const out = {};
+        for(const k of [...AE_KEYS_GENERAL, ...AE_KEYS_GUARD]){
+          const arr = Array.isArray(temp[k]) ? temp[k].map(x => sanitizeText(x)).filter(Boolean) : [];
+          // 重複除去
+          const seen = new Set();
+          const uniq = [];
+          for(const nm of arr){
+            if(seen.has(nm)) continue;
+            seen.add(nm);
+            uniq.push(nm);
+          }
+          out[k] = uniq;
+        }
+        saveAutoEquipCandidates(out);
+        alert('保存しました。');
+      };
+
+      // 初期描画
+      setTab('general');
+
+      try{ dlg.showModal(); }catch(_e){ dlg.setAttribute('open',''); }
+    };
+
     if(document.body) openNow();
     else document.addEventListener('DOMContentLoaded', openNow, { once:true });
   }
@@ -4869,7 +5987,26 @@
       await updateOnlyChangedCellsFromTopPage();
     });
 
+    const btnAutoEquip = document.createElement('button');
+    btnAutoEquip.type = 'button';
+    btnAutoEquip.className = 'dba-btn-fn';
+    btnAutoEquip.id = 'dba-btn-auto-equip';
+    function syncAutoEquipBtn(){
+      const on = loadAutoEquipEnabled();
+      btnAutoEquip.dataset.on = on ? '1' : '0';
+      btnAutoEquip.textContent = on ? 'オート装備:ON' : 'オート装備:OFF';
+    }
+    syncAutoEquipBtn();
+    btnAutoEquip.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const next = !loadAutoEquipEnabled();
+      saveAutoEquipEnabled(next);
+      syncAutoEquipBtn();
+    });
+
     bar.appendChild(btnSettings);
+    bar.appendChild(btnAutoEquip);
     bar.appendChild(btnRapid);
     bar.appendChild(btnRoster);
     bar.appendChild(btnBattleInfo);
