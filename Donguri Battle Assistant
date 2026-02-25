@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Donguri Battle Assistant
 // @namespace    https://donguri.5ch.net/
-// @version      0.0.9.6
+// @version      0.0.10.1
 // @description  5ちゃんねるのどんぐりシステムから派生したゲームの操作性を改善するためのユーザースクリプト
 // @author       福呼び草
 // @match        https://donguri.5ch.net/teambattle?m=*
@@ -748,6 +748,7 @@
   const LS_BR_TAIL2_KEY = 'dba.battleResult.tail2.v1'; // 戦闘結果「末尾2行のみ表示」ON/OFF
   const LS_BR_ALIGN_KEY = 'dba.battleResult.align.v1'; // left / center / right
   const LS_BR_PASS_KEY  = 'dba.battleResult.passThrough.v1'; // 0/1 クリック透過
+  const LS_BR_TOP_KEY   = 'dba.battleResult.topOffsetPx.v1'; // number 上端からの距離(px)
 
 
   const DEFAULT_SETTINGS = {
@@ -799,6 +800,24 @@
 
   function saveBattleResultPassThrough(on){
     try{ localStorage.setItem(LS_BR_PASS_KEY, on ? '1' : '0'); }catch(_e){}
+  }
+
+  function loadBattleResultTopOffsetPx(){
+    try{
+      const raw = localStorage.getItem(LS_BR_TOP_KEY);
+      // 未設定は現状のフロート既定値(480px)に合わせる
+      if(raw == null) return 480;
+      const n = Number.parseInt(raw, 10);
+      if(!Number.isFinite(n)) return 480;
+      return clampInt(n, 0, 2000);
+    }catch(_e){
+      return 480;
+    }
+  }
+
+  function saveBattleResultTopOffsetPx(px){
+    const n = clampInt(px, 0, 2000);
+    try{ localStorage.setItem(LS_BR_TOP_KEY, String(n)); }catch(_e){}
   }
 
   function loadRapidAttackEnabled(){
@@ -1324,6 +1343,11 @@
   function applyBattleResultOptionsToFloat(){
     const root = document.getElementById('dba-br-float');
     if(!root) return;
+
+    // 上端からの距離（fnbar の下 + 指定px）
+    const topPx = loadBattleResultTopOffsetPx();
+    root.style.top = `calc(var(--dba-fn-height) + ${topPx}px)`;
+
     // ※「配置移動」機能は passThrough と独立（ここでは align のみ反映）
     const align = loadBattleResultAlign();
     if(align === 'left'){
@@ -1357,6 +1381,11 @@
       dlg.style.marginLeft = 'auto';
       dlg.style.marginRight = 'auto';
     }
+
+    // 上端からの距離（fnbar の下 + 指定px）
+    const topPx = loadBattleResultTopOffsetPx();
+    dlg.style.marginTop = `calc(var(--dba-fn-height) + ${topPx}px)`;
+    dlg.style.marginBottom = 'auto';
 
     // クリック透過（Close/Option以外は透過 + 半透明 + ×非表示はCSS側）
     const pass = loadBattleResultPassThrough();
@@ -1439,6 +1468,36 @@
     placeWrap.appendChild(mkRadio('left', '左寄り'));
     placeWrap.appendChild(mkRadio('center', '中央'));
     placeWrap.appendChild(mkRadio('right', '右寄り'));
+
+    // 上端からの距離（数値）
+    const topOffsetRow = document.createElement('div');
+    topOffsetRow.style.marginTop = '10px';
+    topOffsetRow.style.display = 'flex';
+    topOffsetRow.style.alignItems = 'center';
+    topOffsetRow.style.justifyContent = 'flex-start';
+    topOffsetRow.style.gap = '8px';
+    topOffsetRow.style.fontWeight = '800';
+    topOffsetRow.style.textAlign = 'left';
+
+    const topOffsetLab = document.createElement('span');
+    topOffsetLab.textContent = '上端からの距離';
+
+    const topOffsetInp = document.createElement('input');
+    topOffsetInp.type = 'number';
+    topOffsetInp.min = '0';
+    topOffsetInp.max = '2000';
+    topOffsetInp.step = '1';
+    topOffsetInp.id = 'dba-br-opt-top';
+    topOffsetInp.style.width = '92px';
+
+    const topOffsetUnit = document.createElement('span');
+    topOffsetUnit.textContent = 'px';
+
+    topOffsetRow.appendChild(topOffsetLab);
+    topOffsetRow.appendChild(topOffsetInp);
+    topOffsetRow.appendChild(topOffsetUnit);
+    placeWrap.appendChild(topOffsetRow);
+
     mid.appendChild(placeWrap);
 
     // (3) クリック透過
@@ -1484,6 +1543,8 @@
     for(const r of Array.from(dlg.querySelectorAll('input[type="radio"][name="dba-br-opt-align"]'))){
       r.checked = (r.value === align);
     }
+    const topInp = dlg.querySelector('#dba-br-opt-top');
+    if(topInp) topInp.value = String(loadBattleResultTopOffsetPx());
 
     // 変更イベント
     tail2Chk.addEventListener('change', (e) => {
@@ -1498,6 +1559,18 @@
       // 透過ON/OFFでモーダルの開き方が変わるため、開いてるなら表示形態を揃える
       normalizeBattleResultDialogOpenMode();
     });
+
+    // 上端からの距離
+    const topInp2 = dlg.querySelector('#dba-br-opt-top');
+    if(topInp2){
+      topInp2.addEventListener('change', (e) => {
+        e.stopPropagation();
+        saveBattleResultTopOffsetPx(topInp2.value);
+        applyBattleResultOptionsToModal();
+        applyBattleResultOptionsToFloat();
+      });
+    }
+
     dlg.addEventListener('change', (e) => {
       const t = e.target;
       if(!(t instanceof HTMLInputElement)) return;
@@ -1523,6 +1596,8 @@
     for(const r of Array.from(dlg.querySelectorAll('input[type="radio"][name="dba-br-opt-align"]'))){
       r.checked = (r.value === align);
     }
+    const topInp = dlg.querySelector('#dba-br-opt-top');
+    if(topInp) topInp.value = String(loadBattleResultTopOffsetPx());
 
     try{ dlg.showModal(); }catch(_e){ dlg.setAttribute('open',''); }
   }
@@ -3551,7 +3626,92 @@
   // バトルマップ差し替え（トップページから取得→マップ部分だけ再構成）
   //  - 目的：スクロールや更新時のちらつきを抑えつつ、最新マップへ更新してから詳細取得へ進む
   //  - 注意：DOMParser由来の <script> は inert（非実行）なので、差し替え後に再生成して実行する
+  // 
+  // header + チーム情報2テーブル差し替え（トップページHTMLから）
+  //  - 戦況情報ボタン（クリック/長押し）実行時に、ページ上部の表示も最新化する
+  //  - 対象：
+  //    (A) <header> ブロック
+  //    (B) <div style="display:inline-flex;"> で始まる「2つの<table>」ブロック
   // =========================
+  function tableHasThTexts(table, required){
+    if(!table) return false;
+    const ths = Array.from(table.querySelectorAll('thead th, th'))
+      .map(th => sanitizeText(th.textContent || ''))
+      .filter(Boolean);
+    if(ths.length === 0) return false;
+    return required.every(x => ths.some(t => t.includes(x)));
+  }
+
+  function isTeamTablesWrap(el){
+    if(!(el instanceof Element)) return false;
+    // style="display:inline-flex;" を優先しつつ、将来のstyle変更に備えて tables 構造でも判定
+    const style = (el.getAttribute('style') || '').toLowerCase().replace(/\s+/g,'');
+    const hasInlineFlex = style.includes('display:inline-flex') || style.includes('display:inline-flex;');
+    const tables = Array.from(el.querySelectorAll(':scope > table'));
+    if(tables.length < 2) return false;
+    const t1 = tables[0];
+    const t2 = tables[1];
+    // 1つ目：カラー/チーム/保有地域数
+    const ok1 =
+      tableHasThTexts(t1, ['カラー', 'チーム']) &&
+      (tableHasThTexts(t1, ['保有地域数']) || tableHasThTexts(t1, ['保有']));
+    // 2つ目：名前/戦闘強度
+    const ok2 =
+      tableHasThTexts(t2, ['名前']) &&
+      (tableHasThTexts(t2, ['戦闘強度']) || tableHasThTexts(t2, ['強度']));
+    // style が inline-flex なら優先的にOK、無くても構造が一致すればOK
+    return (ok1 && ok2) && (hasInlineFlex || true);
+  }
+
+  function findTeamTablesWrap(root){
+    const base = (root && root.querySelector) ? root : document;
+    // まず "style に inline-flex を含む div" を優先
+    const cands = Array.from(base.querySelectorAll('div[style*="inline-flex"], div[style*="inline-flex"] *'))
+      .map(x => (x instanceof Element) ? x.closest('div') : null)
+      .filter((x, i, a) => x && a.indexOf(x) === i);
+    for(const el of cands){
+      if(isTeamTablesWrap(el)) return el;
+    }
+    // fallback：全divから形で探す
+    for(const el of Array.from(base.querySelectorAll('div'))){
+      if(isTeamTablesWrap(el)) return el;
+    }
+    return null;
+  }
+
+  function refreshHeaderAndTeamTablesFromFetchedDoc(doc, meta){
+    const topUrl = meta?.topUrl || `https://donguri.5ch.net/teambattle?m=${mode}`;
+    const sx = window.scrollX;
+    const sy = window.scrollY;
+
+    try{
+      // (A) header 差し替え
+      const curHeader = document.querySelector('header');
+      const newHeader = doc ? doc.querySelector('header') : null;
+      if(curHeader && newHeader && curHeader.parentNode){
+        const importedHeader = document.importNode(newHeader, true);
+        curHeader.parentNode.replaceChild(importedHeader, curHeader);
+      }
+
+      // (B) チーム情報2テーブル差し替え
+      const curWrap = findTeamTablesWrap(document);
+      const newWrap = doc ? findTeamTablesWrap(doc) : null;
+      if(curWrap && newWrap && curWrap.parentNode){
+        const importedWrap = document.importNode(newWrap, true);
+        curWrap.parentNode.replaceChild(importedWrap, curWrap);
+      }
+
+      // 差し替えで微妙にレイアウトが動いても、スクロールは維持
+      try{ window.scrollTo(sx, sy); }catch(_e){}
+      dbgLog('battlemapRefresh', 'info', 'REFRESH header/team-tables done', { mode, topUrl });
+      return true;
+    }catch(e){
+      dbgLog('battlemapRefresh', 'warn', 'REFRESH header/team-tables failed', { mode, topUrl, error: String(e && e.message ? e.message : e) });
+      try{ window.scrollTo(sx, sy); }catch(_e){}
+      return false;
+    }
+  }
+
   function findCurrentBattlemapRoot(){
     if(mode === 'rb'){
       return document.querySelector('.gridCanvasOuter') || document.getElementById('gridWrap');
@@ -3643,6 +3803,10 @@
         return false;
       }
 
+      // ★追加：header + チーム情報2テーブル も最新ページ情報で差し替え
+      // （マップ差し替え前後どちらでも良いが、ここでは同じ doc を使って先に更新）
+      refreshHeaderAndTeamTablesFromFetchedDoc(doc, { topUrl });
+
       const imported = document.importNode(fetchedRoot, true);
       parent.replaceChild(imported, curRoot);
 
@@ -3693,6 +3857,10 @@
       }
       const html = await res.text();
       const doc = new DOMParser().parseFromString(html, 'text/html');
+
+      // ★追加：戦況情報実行時は header + チーム情報2テーブル も最新版へ差し替え
+      refreshHeaderAndTeamTablesFromFetchedDoc(doc, { topUrl });
+
       const fetchedRoot = findFetchedBattlemapRoot(doc);
       if(!fetchedRoot){
         dbgLog('battlemapRefresh', 'warn', 'REFRESH failed: fetched battlemap root not found', { mode, topUrl, htmlLen: html?.length || 0 });
@@ -4182,6 +4350,10 @@
       if(!res.ok) throw new Error(`HTTP ${res.status}`);
       const html = await res.text();
       const doc = new DOMParser().parseFromString(html, 'text/html');
+
+      // ★追加：クリック（短押し）でも header + チーム情報2テーブル を最新化
+      // （差分セルが0でも、上部の情報は更新したい）
+      refreshHeaderAndTeamTablesFromFetchedDoc(doc, { topUrl });
 
       // (2) 現在と最新を比較
       const curSnap = getBattlemapSnapshotFromDoc(document);
