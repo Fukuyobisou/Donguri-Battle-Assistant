@@ -1,10 +1,11 @@
 // ==UserScript==
 // @name         Donguri Battle Assistant
 // @namespace    https://donguri.5ch.net/
-// @version      0.0.11.5
+// @version      0.0.14.2
 // @description  5ちゃんねるのどんぐりシステムから派生したゲームの操作性を改善するためのユーザースクリプト
 // @author       福呼び草
 // @match        https://donguri.5ch.net/teambattle?m=*
+// @match        https://donguri.5ch.net/
 // @run-at       document-start
 // @grant        GM_addStyle
 // ==/UserScript==
@@ -12,8 +13,25 @@
 (function() {
   'use strict';
 
-  // 対象モード（hc / l / rb）以外では動かさない
-  const mode = new URL(location.href).searchParams.get('m');
+  // URL判定
+  const urlObj = new URL(location.href);
+  const mode = urlObj.searchParams.get('m');
+  const isTopPage = (urlObj.origin === 'https://donguri.5ch.net' && urlObj.pathname === '/' && !mode);
+
+  // トップページ（どんぐり基地）は「経過時間」プログレス取得だけ行う
+  if(isTopPage){
+    const run = () => {
+      try{ captureTopPageElapsedProgress(); }catch(_e){}
+    };
+    if(document.readyState === 'loading'){
+      document.addEventListener('DOMContentLoaded', run, { once:true });
+    }else{
+      run();
+    }
+    return;
+  }
+
+  // teambattle 対象モード（hc / l / rb）以外では動かさない
   if (!['hc', 'l', 'rb'].includes(mode)) return;
 
   // ============================================================
@@ -25,7 +43,7 @@
       --dba-fn-fg: #111;
       --dba-fn-border: #000;
       --dba-fn-shadow: rgba(0,0,0,0.15);
-      --dba-fn-height: 50px; /* ファンクションセクションの高さ */
+      --dba-fn-height: 50px; /* ファンクションセクションの高さ（JSで実測値に更新） */
       --dba-layer-text-opacity: 1; /* 0.0 - 1.0（レイヤー上の文字濃度） */
     }
 
@@ -35,24 +53,210 @@
       top: 0;
       left: 0;
       right: 0;
-      height: var(--dba-fn-height);
+      height: auto;                 /* ★2段構造になるので固定高をやめる（高さはJSで追従） */
       display: flex;
-      align-items: center;
+      flex-direction: column;       /* ★縦積み（上=progress / 下=ボタン群） */
+      align-items: stretch;
       justify-content: flex-start;
-      gap: 8px;
+      gap: 6px;
       margin: 0;
-      padding: 0;
+      padding: 6px 8px;             /* ★内側余白を少し確保 */
       box-sizing: border-box;
       background: var(--dba-fn-bg);
       color: var(--dba-fn-fg);
       border-bottom: 1px solid var(--dba-fn-border);
       box-shadow: 0 2px 8px var(--dba-fn-shadow);
       z-index: 999999;
+      max-height: min(60vh, calc(100vh - 8px)); /* ★大きくなりすぎたらfnbar内で収める */
+      overflow: auto;                              /* ★あふれはfnbar内でスクロール */
+      scrollbar-gutter: stable both-edges;
+    }
+
+    /* fnbar：上段（progress）/下段（ボタン群） */
+    #dba-fn-progress-host{
+      width: 100%;
+      min-width: 0;
+    }
+    #dba-fn-buttons-row{
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 8px;
+      flex-wrap: wrap;   /* ボタンが多い場合は折り返し */
+      min-width: 0;
     }
 
     /* 既存ページを隠さないため、上に余白を確保 */
     html.dba-has-fnbar body{
       padding-top: calc(var(--dba-fn-height) + 4px) !important;
+    }
+
+    /* ===== トップページ「経過時間」プログレス表示（teambattle側へ移植） ===== */
+    #dba-top-progress{
+      margin: 0;                /* ★fnbar内に入るので外側マージンは0 */
+      padding: 6px 8px;         /* ★fnbar内向けに少し圧縮 */
+      border: 2px solid #000;
+      border-radius: 12px;
+      background: #fff;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      width: 100%;
+      box-sizing: border-box;
+    }
+    /* 3ペイン（左：進捗 / 中央：ボタン / 右：同期情報） */
+    #dba-top-progress .dba-top-progress__panes{
+      display: flex;
+      gap: 12px;
+      align-items: stretch;
+      justify-content: space-between;
+      min-width: 0; /* はみ出し抑止 */
+    }
+    #dba-top-progress .dba-top-progress__paneM{
+      flex: 0 0 auto;
+      min-width: 130px;
+      max-width: 180px;
+      border-left: 1px solid #00000022;
+      border-right: 1px solid #00000022;
+      padding: 0 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      justify-content: flex-start;
+      gap: 8px;
+    }
+    #dba-top-progress .dba-top-progress__paneL{
+      flex: 1 1 auto;
+      min-width: 0; /* はみ出し抑止 */
+    }
+    #dba-top-progress .dba-top-progress__paneR{
+      flex: 0 0 auto;
+      min-width: 240px;
+      max-width: 420px;
+      /* ★中央ペインが境界線を持つので、右ペインは余白だけにする */
+      border-left: none;
+      padding-left: 0;
+      display: none; /* 通常は非表示 */
+    }
+    /* 同期情報ONで右ペイン表示 */
+    #dba-top-progress[data-showinfo="1"] .dba-top-progress__paneR{
+      display: block;
+    }
+    /* ★中央ペイン：縦並びボタン（右のマージン系は無効化） */
+    #dba-top-progress .dba-top-progress__paneM #dba-top-progress-sync-info,
+    #dba-top-progress .dba-top-progress__paneM #dba-top-progress-sync-now{
+      margin-left: 0;
+      width: 100%;
+      border-radius: 10px;
+      padding: 6px 10px;
+    }
+    #dba-top-progress .dba-top-progress__paneM #dba-top-progress-sync-now[disabled]{
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    /* ★「第xx期」＋プログレスバー＋ボタンを1行にまとめる */
+    #dba-top-progress .dba-top-progress__termRow{
+      font-weight: 900;
+      margin: 0 0 6px 0;
+      text-align: left;
+      line-height: 1.2em;
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 10px;
+      min-width: 0; /* 子要素（term/bar）が縮められるように */
+    }
+    /* 「第xx期」テキストが長い時は省略（はみ出し抑止） */
+    #dba-top-progress-title{
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 12em; /* ★バー領域を確保 */
+      display: inline-block;
+    }
+    /* 「今すぐ同期」ボタン（第xx期の右） */
+    #dba-top-progress-sync-now{
+      margin-left: 1.2em; /* 1～2em 程度 */
+      padding: 4px 10px;
+      border-radius: 10px;
+    }
+    #dba-top-progress-sync-now[disabled]{
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    /* 「同期情報」ボタン（スイッチ） */
+    #dba-top-progress-sync-info{
+      margin-left: 0.6em;
+      padding: 4px 10px;
+      border-radius: 10px;
+    }
+    #dba-top-progress-sync-info[data-on="1"]{
+      background: #33a033;
+      color: #fff;
+    }
+    /* ★termRow内で横に伸びるバー */
+    #dba-top-progress .progress-bar{      height: 20px;
+      background: #ccc;
+      border-radius: 8px;
+      font-size: 16px;
+      overflow: hidden;
+      margin-top: 0;     /* ★同一行なので上マージン不要 */
+      flex: 1 1 auto;    /* ★横に伸びる */
+      min-width: 140px;  /* ★極端に潰れないよう最低幅 */
+    }
+    #dba-top-progress .progress-bar > div{
+      height: 100%;
+      background: #428bca;
+      width: 0%;
+      text-align: right;
+      padding-right: 5px;
+      box-sizing: border-box;
+      color: white;
+      font-weight: 800;
+    }
+    /* ===== 期の下：試合進捗（第n試合/総数 + 1試合内バー） ===== */
+    #dba-top-progress .dba-top-progress__matchRow{
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 1.2em; /* テキストと進捗バーの間隔 */
+      margin-top: 8px;
+      min-width: 0;
+    }
+    #dba-top-progress .dba-top-progress__matchLabel{
+      font-weight: 900;
+      white-space: nowrap;
+      flex: 0 0 auto;
+    }
+    #dba-top-progress .dba-top-progress__matchRight{
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    #dba-top-progress .dba-top-progress__matchTime{
+      font-weight: 900;
+      font-size: 0.95em;
+      opacity: 0.9;
+      text-align: left;
+      line-height: 1.1em;
+      white-space: nowrap;
+    }
+    /* 試合バー */
+    #dba-top-progress .progress-bar.dba-match-progress{
+      height: 20px;
+      font-size: 16px;
+      margin-top: 0;
+      border-radius: 8px;
+    }
+    /* 右ペイン：同期情報（縦に1行ずつ） */
+    #dba-top-progress .dba-top-progress__infoLine{
+      font-size: 0.92em;
+      font-weight: 800;
+      opacity: 0.88;
+      text-align: left;
+      line-height: 1.35em;
+      margin: 0 0 6px 0;
+      white-space: nowrap;
     }
 
     /* ===== バトルマップ透明レイヤー（将来の拡張用土台） ===== */
@@ -923,6 +1127,25 @@
   }
 
   // =========================
+  // fnbar（#dba-function-section）の高さを実測し、CSS変数へ反映
+  //  - body の padding-top が常に最新のfnbar高さに追従するための仕組み
+  // =========================
+  let DBA_FNBAR_HSYNC_RAF = 0;
+  function syncFnbarHeightVar(){
+    const bar = document.getElementById('dba-function-section');
+    if(!bar) return;
+    const h = Math.max(1, Math.round(bar.getBoundingClientRect().height));
+    document.documentElement.style.setProperty('--dba-fn-height', `${h}px`);
+  }
+  function scheduleFnbarHeightSync(){
+    if(DBA_FNBAR_HSYNC_RAF) return;
+    DBA_FNBAR_HSYNC_RAF = requestAnimationFrame(() => {
+      DBA_FNBAR_HSYNC_RAF = 0;
+      try{ syncFnbarHeightVar(); }catch(_e){}
+    });
+  }
+
+  // =========================
   // 設定（保存・適用）
   // =========================
   const LS_KEY = 'dba.settings.v1';
@@ -937,6 +1160,552 @@
   const LS_BR_PASS_KEY  = 'dba.battleResult.passThrough.v1'; // 0/1 クリック透過
   const LS_BR_TOP_KEY   = 'dba.battleResult.topOffsetPx.v1'; // number 上端からの距離(px)
 
+  // トップページ「経過時間」プログレス（同期用）
+  const LS_TOP_ELAPSED_PROGRESS_KEY = 'dba.topElapsedProgress.v1';
+  const DBA_TOP_PROGRESS_CYCLE_MS = 60 * 60 * 1000; // 1サイクル=約1時間（ユーザー説明に基づく）
+  const LS_TOP_SYNCINFO_SHOW_KEY = 'dba.topElapsedProgress.showInfo.v1'; // 0/1
+
+  function loadTopSyncInfoShow(){
+    try{
+      const raw = localStorage.getItem(LS_TOP_SYNCINFO_SHOW_KEY);
+      if(raw == null) return false; // デフォルトOFF（右ペイン非表示）
+      return raw === '1';
+    }catch(_e){
+      return false;
+    }
+  }
+
+  function saveTopSyncInfoShow(on){
+    try{
+      localStorage.setItem(LS_TOP_SYNCINFO_SHOW_KEY, on ? '1' : '0');
+    }catch(_e){}
+  }
+
+  function loadTopElapsedProgress(){
+    try{
+      const raw = localStorage.getItem(LS_TOP_ELAPSED_PROGRESS_KEY);
+      if(!raw) return null;
+      const obj = JSON.parse(raw);
+      if(!obj || typeof obj !== 'object') return null;
+      const pct = Number(obj.pct);
+      const fetchedAt = Number(obj.fetchedAt);
+      if(!Number.isFinite(pct) || !Number.isFinite(fetchedAt)) return null;
+      return {
+        pct: clampInt(pct, 0, 100),
+        fetchedAt,
+        cycleMs: Number.isFinite(Number(obj.cycleMs)) ? Number(obj.cycleMs) : DBA_TOP_PROGRESS_CYCLE_MS,
+        term: (obj.term != null) ? String(obj.term) : '' // 例: "第 15816 期"
+      };
+    }catch(_e){
+      return null;
+    }
+  }
+
+  function saveTopElapsedProgress(pct, term){
+    try{
+      const n = clampInt(pct, 0, 100);
+      const obj = {
+        pct: n,
+        fetchedAt: Date.now(),
+        cycleMs: DBA_TOP_PROGRESS_CYCLE_MS,
+        term: (term != null) ? String(term) : ''
+      };
+      localStorage.setItem(LS_TOP_ELAPSED_PROGRESS_KEY, JSON.stringify(obj));
+    }catch(_e){}
+  }
+
+  function estimateTopElapsedProgressPct(){
+    const data = loadTopElapsedProgress();
+    if(!data) return 0;
+    const now = Date.now();
+    const dt = Math.max(0, now - (data.fetchedAt || 0));
+    const cycle = Math.max(1, Number(data.cycleMs || DBA_TOP_PROGRESS_CYCLE_MS));
+    const adv = (dt / cycle) * 100;
+    // 0..100 の範囲で周回
+    const v = (Number(data.pct || 0) + adv) % 100;
+    return clampInt(Math.floor(v), 0, 100);
+  }
+
+  // 秒計算用：floorしない（0..100未満で周回）
+  function estimateTopElapsedProgressPctFloat(){
+    const data = loadTopElapsedProgress();
+    if(!data) return 0;
+    const now = Date.now();
+    const dt = Math.max(0, now - (data.fetchedAt || 0));
+    const cycle = Math.max(1, Number(data.cycleMs || DBA_TOP_PROGRESS_CYCLE_MS));
+    const adv = (dt / cycle) * 100;
+    const v = (Number(data.pct || 0) + adv) % 100;
+    // 0 <= v < 100（念のため丸め）
+    const x = Number.isFinite(v) ? v : 0;
+    return Math.max(0, Math.min(99.999999, x));
+  }
+
+  function getMatchSpecByMode(){
+    // 期=約60分。モード別に「1期あたり試合数」「1試合あたり分数」を決める
+    // - hc / l : 2試合（30分ずつ）
+    // - rb     : 6試合（10分ずつ）
+    if(mode === 'rb'){
+      return { totalMatches: 6, matchSec: 10 * 60 };
+    }
+    // hc / l
+    return { totalMatches: 2, matchSec: 30 * 60 };
+  }
+
+  function ensureTopProgressContainer(targetParent){
+    const existed = document.getElementById('dba-top-progress');
+    if(existed){
+      // 既に存在する場合：指定親があればそこへ移動
+      if(targetParent && existed.parentNode !== targetParent){
+        try{ targetParent.appendChild(existed); }catch(_e){}
+      }
+      return;
+    }
+    const header = document.querySelector('header');
+    const hostParent = header && header.parentNode ? header.parentNode : (document.body || document.documentElement);
+
+    const wrap = document.createElement('div');
+    wrap.id = 'dba-top-progress';
+    wrap.dataset.showinfo = loadTopSyncInfoShow() ? '1' : '0';
+
+    // --- panes root ---
+    const panes = document.createElement('div');
+    panes.className = 'dba-top-progress__panes';
+
+    // --- left pane ---
+    const paneL = document.createElement('div');
+    paneL.className = 'dba-top-progress__paneL';
+
+    // --- middle pane (buttons) ---
+    const paneM = document.createElement('div');
+    paneM.className = 'dba-top-progress__paneM';
+
+    // ★termRow（左=期 / 中=プログレスバー / 右=ボタン）
+    const termRow = document.createElement('div');
+    termRow.className = 'dba-top-progress__termRow';
+    const d0 = loadTopElapsedProgress();
+
+    // 「第 xx 期」表示（span）
+    const termSpan = document.createElement('span');
+    termSpan.id = 'dba-top-progress-title';
+    termSpan.textContent = (d0 && d0.term) ? d0.term : '第 ? 期';
+
+    // 「今すぐ同期」ボタン
+    const btnSync = document.createElement('button');
+    btnSync.type = 'button';
+    btnSync.id = 'dba-top-progress-sync-now';
+    btnSync.className = 'dba-btn-mini';
+    btnSync.textContent = '今すぐ同期';
+    btnSync.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if(DBA_TOP_PROGRESS_AUTOSYNC.inFlight) return;
+      fetchTopElapsedProgressFromTopPageOnce('manual').catch(()=>{});
+    });
+
+    // 「同期情報」ボタン（スイッチ）
+    const btnInfo = document.createElement('button');
+    btnInfo.type = 'button';
+    btnInfo.id = 'dba-top-progress-sync-info';
+    btnInfo.className = 'dba-btn-mini';
+    btnInfo.textContent = '同期情報';
+    btnInfo.dataset.on = (wrap.dataset.showinfo === '1') ? '1' : '0';
+    btnInfo.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const on = (wrap.dataset.showinfo === '1') ? false : true;
+      wrap.dataset.showinfo = on ? '1' : '0';
+      btnInfo.dataset.on = on ? '1' : '0';
+      saveTopSyncInfoShow(on);
+      renderTopProgress();
+    });
+
+    const bar = document.createElement('div');
+    bar.className = 'progress-bar';
+
+    const inner = document.createElement('div');
+    inner.id = 'dba-top-progress-inner';
+    inner.style.width = '0%';
+    inner.textContent = '0%';
+    bar.appendChild(inner);
+
+    // ★左ペイン：期 → バー（ボタンは中央ペインへ）
+    termRow.appendChild(termSpan);
+    termRow.appendChild(bar);
+
+    paneL.appendChild(termRow);
+
+    // ★中央ペイン：上から「同期情報」→「今すぐ同期」
+    paneM.appendChild(btnInfo);
+    paneM.appendChild(btnSync);
+
+    // --- match progress (under term progress) ---
+    const matchRow = document.createElement('div');
+    matchRow.className = 'dba-top-progress__matchRow';
+
+    const matchLabel = document.createElement('div');
+    matchLabel.className = 'dba-top-progress__matchLabel';
+    matchLabel.id = 'dba-top-progress-match-label';
+    matchLabel.textContent = '第 1 試合／?';
+
+    const matchRight = document.createElement('div');
+    matchRight.className = 'dba-top-progress__matchRight';
+
+    const matchTime = document.createElement('div');
+    matchTime.className = 'dba-top-progress__matchTime';
+    matchTime.id = 'dba-top-progress-match-time';
+    matchTime.textContent = '残り時間： --分--秒';
+
+    const matchBar = document.createElement('div');
+    matchBar.className = 'progress-bar dba-match-progress';
+
+    const matchInner = document.createElement('div');
+    matchInner.id = 'dba-top-progress-match-inner';
+    matchInner.style.width = '0%';
+    matchInner.textContent = '0%';
+    matchBar.appendChild(matchInner);
+
+    matchRight.appendChild(matchTime);
+    matchRight.appendChild(matchBar);
+
+    matchRow.appendChild(matchLabel);
+    matchRow.appendChild(matchRight);
+    paneL.appendChild(matchRow);
+
+    // --- right pane ---
+    const paneR = document.createElement('div');
+    paneR.className = 'dba-top-progress__paneR';
+
+    const line1 = document.createElement('div');
+    line1.className = 'dba-top-progress__infoLine';
+    line1.id = 'dba-top-progress-info-sync';
+    line1.textContent = '最終同期（手動＆自動）： --- 秒前';
+
+    const line2 = document.createElement('div');
+    line2.className = 'dba-top-progress__infoLine';
+    line2.id = 'dba-top-progress-info-pct';
+    line2.textContent = 'その時のプログレスバー： -- ％';
+
+    const line3 = document.createElement('div');
+    line3.className = 'dba-top-progress__infoLine';
+    line3.id = 'dba-top-progress-info-auto';
+    line3.textContent = '最終補正（自動）： --- 秒前';
+
+    paneR.appendChild(line1);
+    paneR.appendChild(line2);
+    paneR.appendChild(line3);
+
+    panes.appendChild(paneL);
+    panes.appendChild(paneM);
+    panes.appendChild(paneR);
+    wrap.appendChild(panes);
+
+    // ★設置先：targetParent が指定されていれば fnbar 内へ、無ければ従来通り header 直後
+    if(targetParent){
+      try{ targetParent.appendChild(wrap); }catch(_e){}
+    }else{
+      // 従来互換：<header> タグの直後に設置
+      if(header && header.parentNode){
+        const next = header.nextSibling;
+        if(next){
+          hostParent.insertBefore(wrap, next);
+        }else{
+          hostParent.appendChild(wrap);
+        }
+      }else{
+        hostParent.insertBefore(wrap, hostParent.firstChild);
+      }
+    }
+  }
+
+  function renderTopProgress(){
+    const inner = document.getElementById('dba-top-progress-inner');
+    const title = document.getElementById('dba-top-progress-title');
+    const btnSync = document.getElementById('dba-top-progress-sync-now');
+    const btnInfo = document.getElementById('dba-top-progress-sync-info');
+    const wrap = document.getElementById('dba-top-progress');
+    const infoSync = document.getElementById('dba-top-progress-info-sync');
+    const infoPct  = document.getElementById('dba-top-progress-info-pct');
+    const infoAuto = document.getElementById('dba-top-progress-info-auto');
+    const matchLabel = document.getElementById('dba-top-progress-match-label');
+    const matchTime  = document.getElementById('dba-top-progress-match-time');
+    const matchInner = document.getElementById('dba-top-progress-match-inner');
+
+    if(!inner) return;
+
+    const pct = estimateTopElapsedProgressPct();
+    inner.style.width = `${pct}%`;
+    inner.textContent = `${pct}%`;
+
+    // ===== 期内の「試合番号」&「1試合内進捗」 =====
+    try{
+      const spec = getMatchSpecByMode();
+      const totalMatches = spec.totalMatches;
+      const matchSec = spec.matchSec;
+
+      // 期(=3600s)の中の経過秒
+      const pctF = estimateTopElapsedProgressPctFloat(); // 0..100未満
+      const totalSec = (pctF / 100) * 60 * 60; // 0..3600
+
+      // 境界（ちょうどの時）を「前の試合の100%」として扱う
+      const eps = 0.001; // 1ms相当（十分小さく）
+      let t = totalSec;
+      let boundary = false;
+      if(t > 0){
+        const mod = t % matchSec;
+        if(mod < eps || (matchSec - mod) < eps){
+          boundary = true;
+        }
+      }
+
+      let matchNo = 1;
+      let inSec = 0;
+      if(pctF >= 99.999){ // 期末付近は最後の試合100%に寄せる
+        matchNo = totalMatches;
+        inSec = matchSec;
+      }else if(boundary){
+        const t2 = Math.max(0, t - eps);
+        matchNo = Math.floor(t2 / matchSec) + 1;
+        inSec = matchSec;
+      }else{
+        matchNo = Math.floor(t / matchSec) + 1;
+        inSec = t - (Math.floor(t / matchSec) * matchSec);
+      }
+
+      // clamp
+      matchNo = clampInt(matchNo, 1, totalMatches);
+      inSec = Math.max(0, Math.min(matchSec, inSec));
+
+      // 残り時間（試合終了まで）
+      const remainSec = Math.max(0, Math.min(matchSec, (matchSec - inSec)));
+      const m = Math.floor(remainSec / 60);
+      const s = Math.floor(remainSec % 60);
+      const matchPct = (matchSec <= 0) ? 0 : Math.max(0, Math.min(100, (inSec / matchSec) * 100));
+
+      if(matchLabel){
+        matchLabel.textContent = `第 ${matchNo} 試合／${totalMatches}`;
+      }
+      if(matchTime){
+        matchTime.textContent = `残り時間： ${m}分${s}秒 （およそ±20秒？の誤差あり）`;
+      }
+      if(matchInner){
+        const mp = Math.floor(matchPct);
+        matchInner.style.width = `${mp}%`;
+        matchInner.textContent = `${mp}%`;
+      }
+    }catch(_e){}
+
+    // 期（第 xxxx 期）表示を最新保存値で更新
+    if(title){
+      const d0 = loadTopElapsedProgress();
+      title.textContent = (d0 && d0.term) ? d0.term : '第 ? 期';
+    }
+
+    // 「今すぐ同期」ボタン状態
+    if(btnSync){
+      const inflight = !!DBA_TOP_PROGRESS_AUTOSYNC.inFlight;
+      btnSync.disabled = inflight;
+      btnSync.textContent = inflight ? '同期中…' : '今すぐ同期';
+    }
+
+    // 「同期情報」スイッチ状態（見た目だけ同期）
+    if(btnInfo && wrap){
+      const on = (wrap.dataset.showinfo === '1');
+      btnInfo.dataset.on = on ? '1' : '0';
+    }
+
+    // 右ペイン（同期情報）更新
+    const data = loadTopElapsedProgress();
+    const now = Date.now();
+    if(infoSync){
+      if(!data){
+        infoSync.textContent = '最終同期（手動＆自動）： --- 秒前';
+      }else{
+        const sec = Math.floor(Math.max(0, now - data.fetchedAt) / 1000);
+        infoSync.textContent = `最終同期（手動＆自動）： ${sec} 秒前`;
+      }
+    }
+    if(infoPct){
+      if(!data){
+        infoPct.textContent = 'その時のプログレスバー： -- ％';
+      }else{
+        infoPct.textContent = `その時のプログレスバー： ${clampInt(data.pct, 0, 100)} ％`;
+      }
+    }
+    if(infoAuto){
+      if(DBA_TOP_PROGRESS_AUTOSYNC.lastAutoAt > 0){
+        const sec = Math.floor(Math.max(0, now - DBA_TOP_PROGRESS_AUTOSYNC.lastAutoAt) / 1000);
+        infoAuto.textContent = `最終補正（自動）： ${sec} 秒前`;
+      }else{
+        infoAuto.textContent = '最終補正（自動）： --- 秒前';
+      }
+    }
+    // progress内容で高さが変わる可能性があるため、fnbar高さを再同期
+    try{ scheduleFnbarHeightSync(); }catch(_e){}
+  }
+
+  // =========================
+  // トップページ進捗：自動補正（裏でトップページを1回だけfetch）
+  // 条件：
+  //  - 未同期の場合：ページロード後に1回だけ自動fetch
+  //  - 進捗を 60分換算したときに 8/18/28/38/48/58 分のとき：その分境で1回だけ自動fetch
+  // =========================
+  const DBA_TOP_PROGRESS_TARGET_MINUTES = new Set([8, 18, 28, 38, 48, 58]);
+  const DBA_TOP_PROGRESS_AUTOSYNC = {
+    inFlight: false,
+    doneAt: 0,
+    lastMinute: -1,
+    lastAutoAt: 0 // 最終補正（自動）専用
+  };
+
+  function pctToMinute(pct){
+    // 0..100% -> 0..59分（floor）
+    const p = Math.max(0, Math.min(100, Number(pct)));
+    const m = Math.floor((p / 100) * 60);
+    return clampInt(m, 0, 59);
+  }
+
+  async function fetchTopElapsedProgressFromTopPageOnce(reason){
+    if(DBA_TOP_PROGRESS_AUTOSYNC.inFlight) return false;
+    DBA_TOP_PROGRESS_AUTOSYNC.inFlight = true;
+    try{
+      // メタ表示を更新（見た目だけ）
+      try{ renderTopProgress(); }catch(_e){}
+
+      const res = await fetch('https://donguri.5ch.net/', {
+        method: 'GET',
+        credentials: 'include',
+        cache: 'no-store'
+      });
+      if(!res.ok) return false;
+      const html = await res.text();
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const pct = parseElapsedProgressPctFromTopDoc(doc);
+      if(pct == null) return false;
+      const term = parseElapsedTermFromTopDoc(doc);
+
+      saveTopElapsedProgress(pct, term);
+      DBA_TOP_PROGRESS_AUTOSYNC.doneAt = Date.now();
+      // manual 以外は「自動補正」としても記録
+      if(String(reason || '') !== 'manual'){
+        DBA_TOP_PROGRESS_AUTOSYNC.lastAutoAt = DBA_TOP_PROGRESS_AUTOSYNC.doneAt;
+      }
+
+      // 反映
+      try{ renderTopProgress(); }catch(_e){}
+      return true;
+    }catch(_e){
+      return false;
+    }finally{
+      DBA_TOP_PROGRESS_AUTOSYNC.inFlight = false;
+      // reason はログ用途（必要なら dbgLog に流してもOK）
+      void reason;
+    }
+  }
+
+  function maybeAutoSyncTopProgress(){
+    // まだコンテナが無い/表示不要なら何もしない
+    if(!document.getElementById('dba-top-progress-inner')) return;
+
+    const data = loadTopElapsedProgress();
+    const pct = estimateTopElapsedProgressPct();
+    const minute = pctToMinute(pct);
+
+    // (A) 未同期：1回だけ自動補正
+    if(!data){
+      if(DBA_TOP_PROGRESS_AUTOSYNC.doneAt === 0 && !DBA_TOP_PROGRESS_AUTOSYNC.inFlight){
+        fetchTopElapsedProgressFromTopPageOnce('unsynced').catch(()=>{});
+      }
+      return;
+    }
+
+    // (B) 分境（8/18/…/58分）に来たら、その分境で1回だけ自動補正
+    //  - 同じ minute が続く間は繰り返さない
+    if(DBA_TOP_PROGRESS_TARGET_MINUTES.has(minute) && minute !== DBA_TOP_PROGRESS_AUTOSYNC.lastMinute){
+      DBA_TOP_PROGRESS_AUTOSYNC.lastMinute = minute;
+      fetchTopElapsedProgressFromTopPageOnce(`minute=${minute}`).catch(()=>{});
+    }
+  }
+
+  let DBA_TOP_PROGRESS_TID = 0;
+  function startTopProgressTicker(){
+    if(DBA_TOP_PROGRESS_TID) return;
+    // 初回描画
+    renderTopProgress();
+    // 軽めに 1s 更新（見た目の「進行感」用）
+    DBA_TOP_PROGRESS_TID = window.setInterval(() => {
+      try{
+        renderTopProgress();
+        maybeAutoSyncTopProgress();
+      }catch(_e){}
+    }, 1000);
+  }
+
+  function parseElapsedProgressPctFromTopDoc(doc){
+    if(!doc) return null;
+    // 例: 「経過時間: 第 xxxx 期」の直後に progress-bar が来る（添付HTML） :contentReference[oaicite:3]{index=3}
+    const candidates = Array.from(doc.querySelectorAll('.progress-bar'));
+    if(candidates.length === 0) return null;
+
+    // 優先：親テキストに「経過時間」を含むもの
+    let best = null;
+    for(const pb of candidates){
+      const parentText = sanitizeText(pb.parentElement ? pb.parentElement.textContent : '');
+      if(parentText.includes('経過時間')){
+        best = pb;
+        break;
+      }
+    }
+    if(!best) best = candidates[0];
+
+    const inner = best.querySelector('div');
+    if(!inner) return null;
+    // text "88%" か style width "width:88%" のどちらかから読む
+    const t = sanitizeText(inner.textContent || '');
+    const m1 = t.match(/(\d+)\s*%/);
+    if(m1) return clampInt(Number(m1[1]), 0, 100);
+
+    const st = String(inner.getAttribute('style') || '');
+    const m2 = st.match(/width\s*:\s*(\d+)\s*%/i);
+    if(m2) return clampInt(Number(m2[1]), 0, 100);
+
+    return null;
+  }
+
+  function parseElapsedTermFromTopDoc(doc){
+    // 例: "経過時間: 第 15816 期"（添付HTML） :contentReference[oaicite:7]{index=7}
+    if(!doc) return '';
+    const candidates = Array.from(doc.querySelectorAll('.progress-bar'));
+    if(candidates.length === 0) return '';
+
+    // 優先：親テキストに「経過時間」を含むもの
+    let best = null;
+    for(const pb of candidates){
+      const parentText = sanitizeText(pb.parentElement ? pb.parentElement.textContent : '');
+      if(parentText.includes('経過時間')){
+        best = pb;
+        break;
+      }
+    }
+    if(!best) best = candidates[0];
+
+    const parentText = sanitizeText(best.parentElement ? best.parentElement.textContent : '');
+    // parentText には "経過時間: 第 15816 期 88%" のように混ざるので、"第 n 期" 部分だけ抜く
+    const m = parentText.match(/(第\s*\d+\s*期)/);
+    return m ? sanitizeText(m[1]) : '';
+  }
+
+  function captureTopPageElapsedProgress(){
+    try{
+      const pct = parseElapsedProgressPctFromTopDoc(document);
+      if(pct == null) return false;
+      const term = parseElapsedTermFromTopDoc(document);
+      // 保存（＝teambattle側の表示を補正する基準）
+      saveTopElapsedProgress(pct, term);
+      return true;
+    }catch(_e){
+      return false;
+    }
+  }
 
   const DEFAULT_SETTINGS = {
     scale: { rb: 100, hc: 100, l: 100 },
@@ -1384,6 +2153,15 @@
   //  - <header> の次にある <table> を抽出して表示
   //  - table内の form（「エリアに挑む」「アリーナを強化する」「アリーナを弱体化する」等）はそのまま機能
   // =========================
+  // セル詳細：多重open防止（同一セルの二重起動・close直後の再ポップ抑止）
+  const DBA_CELL_DETAIL_GUARD = {
+    inFlight: false,    // openCellDetailModal の fetch〜show 中
+    isOpen: false,      // dialog が open 状態
+    lastKey: '',        // `${mode}:${row},${col}`
+    lastCloseAt: 0      // Date.now()
+  };
+
+
   function buildCellDetailModal(){
     if(document.getElementById('dba-m-cell-detail')) return;
 
@@ -1433,6 +2211,9 @@
     document.body.appendChild(dlg);
 
     function closeDirect(){
+      // close直後に同一セルの open 要求が残っていると再ポップするため、ここで状態を確定させる
+      DBA_CELL_DETAIL_GUARD.isOpen = false;
+      DBA_CELL_DETAIL_GUARD.lastCloseAt = Date.now();
       try{ dlg.close(); }catch(_e){ dlg.removeAttribute('open'); }
     }
 
@@ -2332,6 +3113,18 @@
       const title = dlg ? dlg.querySelector('.dba-modal__title') : null;
       if(!dlg || !box) return;
 
+      // ===== 多重open防止（同一セルの連続openを抑止）=====
+      const key = `${mode}:${row},${col}`;
+      const now = Date.now();
+      // 同一セルについて、(A) open中 (B) open済 (C) close直後の短時間 なら無視
+      if(DBA_CELL_DETAIL_GUARD.lastKey === key){
+        if(DBA_CELL_DETAIL_GUARD.inFlight) return;
+        if(DBA_CELL_DETAIL_GUARD.isOpen) return;
+        if((now - (DBA_CELL_DETAIL_GUARD.lastCloseAt || 0)) < 450) return;
+      }
+      DBA_CELL_DETAIL_GUARD.lastKey = key;
+      DBA_CELL_DETAIL_GUARD.inFlight = true;
+
       if(title) title.textContent = `セル詳細 (${row},${col})`;
       box.textContent = '読み込み中…';
 
@@ -2355,6 +3148,8 @@
       }
 
       try{ dlg.showModal(); }catch(_e){ dlg.setAttribute('open',''); }
+      DBA_CELL_DETAIL_GUARD.inFlight = false;
+      DBA_CELL_DETAIL_GUARD.isOpen = true;
     };
 
     if(document.body) await openNow();
@@ -5901,6 +6696,12 @@
     const bar = document.createElement('section');
     bar.id = 'dba-function-section';
 
+    // 2段構造：上=progress / 下=ボタン群
+    const progressHost = document.createElement('div');
+    progressHost.id = 'dba-fn-progress-host';
+    const buttonsRow = document.createElement('div');
+    buttonsRow.id = 'dba-fn-buttons-row';
+
     const btnSettings = document.createElement('button');
     btnSettings.type = 'button';
     btnSettings.className = 'dba-btn-fn';
@@ -6005,11 +6806,14 @@
       syncAutoEquipBtn();
     });
 
-    bar.appendChild(btnSettings);
-    bar.appendChild(btnAutoEquip);
-    bar.appendChild(btnRapid);
-    bar.appendChild(btnRoster);
-    bar.appendChild(btnBattleInfo);
++    buttonsRow.appendChild(btnSettings);
++    buttonsRow.appendChild(btnAutoEquip);
++    buttonsRow.appendChild(btnRapid);
++    buttonsRow.appendChild(btnRoster);
++    buttonsRow.appendChild(btnBattleInfo);
++
++    bar.appendChild(progressHost);
++    bar.appendChild(buttonsRow);
     return bar;
   }
 
@@ -6031,6 +6835,17 @@
         // header が見つからない場合は body 先頭に
         (document.body || document.documentElement).insertBefore(bar, (document.body || document.documentElement).firstChild);
       }
+
+      // fnbar 内（上段）に、トップページ同期の「経過時間」プログレスバーを設置
+      const ph = bar.querySelector('#dba-fn-progress-host');
+      ensureTopProgressContainer(ph || null);
+      startTopProgressTicker();
+
+      // fnbar高さを実測して反映（初回 + 画面変化に追従）
+      scheduleFnbarHeightSync();
+      window.addEventListener('resize', scheduleFnbarHeightSync, { passive: true });
+      window.addEventListener('orientationchange', scheduleFnbarHeightSync, { passive: true });
+
       // バトルマップのセルスケール（保存値）を適用
       waitAndApplyScale();
       // 透明レイヤーを初期化（バトルマップ追従）
