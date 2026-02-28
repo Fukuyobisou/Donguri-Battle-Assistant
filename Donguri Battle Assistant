@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Donguri Battle Assistant
 // @namespace    https://donguri.5ch.net/
-// @version      0.0.14.2
+// @version      0.0.18.0
 // @description  5ちゃんねるのどんぐりシステムから派生したゲームの操作性を改善するためのユーザースクリプト
 // @author       福呼び草
 // @match        https://donguri.5ch.net/teambattle?m=*
@@ -1111,6 +1111,110 @@
       justify-content: center;
       padding: 10px 6px;
     }
+
+    /* ===== オート装備：オプションモーダル ===== */
+    .dba-ae-opt-row{
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 10px;
+      padding: 10px 10px;
+      border: 1px solid #00000022;
+      border-radius: 12px;
+      background: #fff;
+      margin: 10px 0;
+      font-weight: 800;
+      text-align: left;
+    }
+    .dba-ae-opt-row input[type="number"]{
+      width: 84px;
+      box-sizing: border-box;
+      padding: 6px 8px;
+      border: 1px solid #00000055;
+      border-radius: 10px;
+      font-size: 1em;
+      font-weight: 800;
+    }
+
+    /* ===== 装備ロスター：ロスター切替ポップアップ（ボタン近く） ===== */
+    #dba-roster-switch-pop{
+      position: fixed;
+      z-index: 999998; /* fnbar(999999)より下 */
+      display: none;
+      min-width: 220px;
+      max-width: min(420px, 92vw);
+      max-height: min(60vh, 520px);
+      overflow: auto;
+      border: 2px solid #000;
+      border-radius: 12px;
+      background: #fff;
+      box-shadow: 0 10px 28px rgba(0,0,0,0.25);
+      padding: 8px;
+      box-sizing: border-box;
+    }
+    #dba-roster-switch-pop[data-open="1"]{ display: block; }
+    .dba-rs-pop-title{
+      font-weight: 900;
+      margin: 0 0 6px 0;
+      text-align: left;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .dba-rs-pop-btn{
+      width: 100%;
+      text-align: left;
+      appearance: none;
+      border: 2px solid #000;
+      border-radius: 10px;
+      padding: 8px 10px;
+      margin: 6px 0;
+      font-size: 0.98em;
+      font-weight: 800;
+      cursor: pointer;
+      background: #eee;
+      color: #000;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .dba-rs-pop-btn:hover{ filter: brightness(0.97); }
+    .dba-rs-pop-btn:active{ transform: translateY(1px); }
+    .dba-rs-pop-btn[data-active="1"]{
+      outline: 3px solid #ea0000;
+      outline-offset: 0px;
+      background: #fff2f2;
+    }
+    .dba-rs-pop-btn--new{
+      background: #cfe3ff;
+    }
+
+    /* ===== 長押しゲージ（クリック/長押しで機能分岐する時の視覚フィードバック） ===== */
+    #dba-lp-gauge{
+      position: fixed;
+      left: 0;
+      top: 0;
+      width: 56px;
+      height: 56px;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 1000000; /* fnbar(999999)より上に出す */
+      opacity: 0;
+      transition: opacity 0.12s ease;
+    }
+    #dba-lp-gauge[data-on="1"]{ opacity: 1; }
+
+    #dba-lp-gauge .dba-lp-gauge__ring{
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      /* 初期は薄いグレー（JSで上書きして進捗描画） */
+      background: conic-gradient(from -90deg, #c8c8c8 0deg 360deg);
+      /* リング化（中央を抜く） */
+      -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 9px), #000 calc(100% - 9px));
+      mask: radial-gradient(farthest-side, transparent calc(100% - 9px), #000 calc(100% - 9px));
+      filter: drop-shadow(0 2px 6px rgba(0,0,0,0.25));
+    }
   `;
   // ============================================================
   // △ここまで△ CSS 定義ゾーン（集中管理）
@@ -1124,6 +1228,133 @@
     const style = document.createElement('style');
     style.textContent = cssText;
     document.documentElement.appendChild(style);
+  }
+
+  // =========================
+  // 長押しゲージ（クリック/長押しで機能が分岐する場合の視覚フィードバック）
+  //  - pointerdown で開始（押下座標中心）
+  //  - 0時→時計回りで進捗（黄→赤）
+  //  - 完了で全周グリーンにして短時間で消す
+  //  - pointerup/cancel/leave で即キャンセル
+  // =========================
+  const DBA_LP_GAUGE = {
+    raf: 0,
+    t0: 0,
+    dur: 0,
+    on: false,
+    hideTimer: 0,
+    lastXY: { x: 0, y: 0 }
+  };
+
+  function ensureLongPressGauge(){
+    if(document.getElementById('dba-lp-gauge')) return;
+    const el = document.createElement('div');
+    el.id = 'dba-lp-gauge';
+    el.dataset.on = '0';
+    const ring = document.createElement('div');
+    ring.className = 'dba-lp-gauge__ring';
+    el.appendChild(ring);
+    (document.body || document.documentElement).appendChild(el);
+  }
+
+  function setLongPressGaugePos(x, y){
+    ensureLongPressGauge();
+    const el = document.getElementById('dba-lp-gauge');
+    if(!el) return;
+    el.style.left = `${Math.round(x)}px`;
+    el.style.top  = `${Math.round(y)}px`;
+  }
+
+  function drawLongPressGaugeProgress(pct01){
+    ensureLongPressGauge();
+    const el = document.getElementById('dba-lp-gauge');
+    if(!el) return;
+    const ring = el.querySelector('.dba-lp-gauge__ring');
+    if(!(ring instanceof HTMLElement)) return;
+
+    const p = Math.max(0, Math.min(1, Number(pct01 || 0)));
+    const ang = 360 * p;
+    const mid = ang * 0.70; // 黄→赤の中間点
+
+    // 灰ベース + 進捗（黄→赤）
+    ring.style.background =
+      `conic-gradient(from -90deg, ` +
+      `#ffd400 0deg, ` +
+      `#ffd400 ${mid}deg, ` +
+      `#ff0000 ${ang}deg, ` +
+      `#c8c8c8 ${ang}deg 360deg)`;
+  }
+
+  function drawLongPressGaugeComplete(){
+    ensureLongPressGauge();
+    const el = document.getElementById('dba-lp-gauge');
+    if(!el) return;
+    const ring = el.querySelector('.dba-lp-gauge__ring');
+    if(!(ring instanceof HTMLElement)) return;
+    ring.style.background = 'conic-gradient(from -90deg, #33a033 0deg 360deg)';
+  }
+
+  function longPressGaugeCancel(){
+    if(DBA_LP_GAUGE.raf){
+      cancelAnimationFrame(DBA_LP_GAUGE.raf);
+      DBA_LP_GAUGE.raf = 0;
+    }
+    if(DBA_LP_GAUGE.hideTimer){
+      clearTimeout(DBA_LP_GAUGE.hideTimer);
+      DBA_LP_GAUGE.hideTimer = 0;
+    }
+    DBA_LP_GAUGE.on = false;
+    const el = document.getElementById('dba-lp-gauge');
+    if(el) el.dataset.on = '0';
+  }
+
+  function longPressGaugeStart(x, y, durationMs){
+    ensureLongPressGauge();
+    const el = document.getElementById('dba-lp-gauge');
+    if(!el) return;
+
+    // 既存を強制リセット
+    longPressGaugeCancel();
+
+    DBA_LP_GAUGE.on = true;
+    DBA_LP_GAUGE.t0 = performance.now();
+    DBA_LP_GAUGE.dur = Math.max(1, Number(durationMs || 1));
+    DBA_LP_GAUGE.lastXY = { x: Number(x || 0), y: Number(y || 0) };
+
+    setLongPressGaugePos(DBA_LP_GAUGE.lastXY.x, DBA_LP_GAUGE.lastXY.y);
+    el.dataset.on = '1';
+    drawLongPressGaugeProgress(0);
+
+    const tick = () => {
+      if(!DBA_LP_GAUGE.on) return;
+      const now = performance.now();
+      const p = (now - DBA_LP_GAUGE.t0) / DBA_LP_GAUGE.dur;
+      drawLongPressGaugeProgress(p);
+      if(p >= 1){
+        // 完了は呼び出し側の「長押し成立」と一致させるため、ここでは止めるだけ
+        return;
+      }
+      DBA_LP_GAUGE.raf = requestAnimationFrame(tick);
+    };
+    DBA_LP_GAUGE.raf = requestAnimationFrame(tick);
+  }
+
+  function longPressGaugeComplete(){
+    // 長押し成立：全周グリーン → すぐ消える
+    if(DBA_LP_GAUGE.raf){
+      cancelAnimationFrame(DBA_LP_GAUGE.raf);
+      DBA_LP_GAUGE.raf = 0;
+    }
+    if(!DBA_LP_GAUGE.on) return;
+    DBA_LP_GAUGE.on = false;
+    drawLongPressGaugeComplete();
+    const el = document.getElementById('dba-lp-gauge');
+    if(el) el.dataset.on = '1';
+    DBA_LP_GAUGE.hideTimer = setTimeout(() => {
+      const el2 = document.getElementById('dba-lp-gauge');
+      if(el2) el2.dataset.on = '0';
+      DBA_LP_GAUGE.hideTimer = 0;
+    }, 220);
   }
 
   // =========================
@@ -1155,6 +1386,8 @@
   const LS_AUTO_EQUIP_LAST_KEY = 'dba.autoEquip.lastPreset.v1'; // 最後にオート装備で適用したプリセット名
   const LS_AUTO_EQUIP_NOTIFY_AUTOCLOSE_KEY = 'dba.autoEquip.notifyAutoClose.enabled.v1'; // 0/1
   const LS_AUTO_EQUIP_NOTIFY_AUTOCLOSE_SEC_KEY = 'dba.autoEquip.notifyAutoClose.sec.v1'; // number
+  const LS_AUTO_EQUIP_PREFER_TOP_KEY = 'dba.autoEquip.preferTop.enabled.v1'; // 0/1 「一番上の装備候補を常に優先する」
+  const LS_CURRENT_PRESET_NAME_KEY = 'dba.roster.currentPresetName.v1'; // string 現在装備中として扱うプリセット名
   const LS_BR_TAIL2_KEY = 'dba.battleResult.tail2.v1'; // 戦闘結果「末尾2行のみ表示」ON/OFF
   const LS_BR_ALIGN_KEY = 'dba.battleResult.align.v1'; // left / center / right
   const LS_BR_PASS_KEY  = 'dba.battleResult.passThrough.v1'; // 0/1 クリック透過
@@ -1807,12 +2040,71 @@
     try{ localStorage.setItem(LS_AUTO_EQUIP_KEY, on ? '1' : '0'); }catch(_e){}
   }
 
-  function loadAutoEquipCandidates(){
+  // =========================
+  // オート装備（候補/lastPreset）は「装備ロスター」内に保存する
+  //  - roster.autoEquip = { candidates: { [AE_KEY]: [presetName...] }, lastPreset: string }
+  //  - 旧LS（LS_AUTO_EQUIP_CAND_KEY / LS_AUTO_EQUIP_LAST_KEY）からの移行もここで行う
+  // =========================
+  function ensureRosterAutoEquipBlock(roster){
+    if(!roster || typeof roster !== 'object') return { candidates:{}, lastPreset:'' };
+    if(!roster.autoEquip || typeof roster.autoEquip !== 'object'){
+      roster.autoEquip = { candidates:{}, lastPreset:'' };
+    }
+    if(!roster.autoEquip.candidates || typeof roster.autoEquip.candidates !== 'object'){
+      roster.autoEquip.candidates = {};
+    }
+    if(typeof roster.autoEquip.lastPreset !== 'string'){
+      roster.autoEquip.lastPreset = '';
+    }
+    return roster.autoEquip;
+  }
+
+  // 旧LS→ロスターへ1回だけ移行（ロスターにautoEquipが空のときだけ）
+  function migrateLegacyAutoEquipToRosterIfNeeded(){
+    const { store, roster } = getActiveRoster();
+    if(!roster) return;
+    const ae = ensureRosterAutoEquipBlock(roster);
+
+    // 既にロスター側に何か入っているなら移行しない
+    const hasAny =
+      (ae && ae.candidates && Object.keys(ae.candidates).length > 0) ||
+      (ae && sanitizeText(ae.lastPreset || '') !== '');
+    if(hasAny) return;
+
+    let cand = null;
+    let last = '';
     try{
       const raw = localStorage.getItem(LS_AUTO_EQUIP_CAND_KEY);
-      if(!raw) return {};
-      const obj = JSON.parse(raw);
-      if(!obj || typeof obj !== 'object') return {};
+      if(raw){
+        const obj = JSON.parse(raw);
+        if(obj && typeof obj === 'object') cand = obj;
+      }
+    }catch(_e){}
+    try{
+      const raw2 = localStorage.getItem(LS_AUTO_EQUIP_LAST_KEY);
+      last = raw2 ? String(raw2) : '';
+    }catch(_e2){}
+
+    if(cand && typeof cand === 'object'){
+      ae.candidates = cand;
+    }
+    if(last){
+      ae.lastPreset = last;
+    }
+
+    // 反映（ロスター更新）
+    roster.autoEquip = ae;
+    roster.updatedAt = nowIso();
+    store.rosters[store.activeId] = roster;
+    saveRosterStore(store);
+  }
+
+  function loadAutoEquipCandidates(){
+    try{
+      migrateLegacyAutoEquipToRosterIfNeeded();
+      const { roster } = getActiveRoster();
+      const ae = ensureRosterAutoEquipBlock(roster);
+      const obj = ae && ae.candidates && typeof ae.candidates === 'object' ? ae.candidates : {};
       return obj;
     }catch(_e){
       return {};
@@ -1821,14 +2113,22 @@
 
   function saveAutoEquipCandidates(obj){
     try{
-      localStorage.setItem(LS_AUTO_EQUIP_CAND_KEY, JSON.stringify(obj || {}));
+      const { store, roster } = getActiveRoster();
+      const ae = ensureRosterAutoEquipBlock(roster);
+      ae.candidates = (obj && typeof obj === 'object') ? obj : {};
+      roster.autoEquip = ae;
+      roster.updatedAt = nowIso();
+      store.rosters[store.activeId] = roster;
+      saveRosterStore(store);
     }catch(_e){}
   }
 
   function loadAutoEquipLastPreset(){
     try{
-      const raw = localStorage.getItem(LS_AUTO_EQUIP_LAST_KEY);
-      return raw ? String(raw) : '';
+      migrateLegacyAutoEquipToRosterIfNeeded();
+      const { roster } = getActiveRoster();
+      const ae = ensureRosterAutoEquipBlock(roster);
+      return ae && typeof ae.lastPreset === 'string' ? ae.lastPreset : '';
     }catch(_e){
       return '';
     }
@@ -1836,8 +2136,69 @@
 
   function saveAutoEquipLastPreset(name){
     try{
-      localStorage.setItem(LS_AUTO_EQUIP_LAST_KEY, String(name || ''));
+      const { store, roster } = getActiveRoster();
+      const ae = ensureRosterAutoEquipBlock(roster);
+      ae.lastPreset = String(name || '');
+      roster.autoEquip = ae;
+      roster.updatedAt = nowIso();
+      store.rosters[store.activeId] = roster;
+      saveRosterStore(store);
     }catch(_e){}
+  }
+
+  // =========================
+  // オート装備：候補リストから「プリセット名」を除去
+  //  - 装備ロスター側でプリセット削除された時に参照整合性を保つ
+  //  - 全キー（N/R/SR/.../UR.警エ etc）を横断して該当名を削除する
+  // =========================
+  function removePresetFromAutoEquipCandidates(presetName){
+    const nm = sanitizeText(presetName);
+    if(!nm) return false;
+
+    let changed = false;
+    const store = loadAutoEquipCandidates();
+    if(store && typeof store === 'object'){
+      for(const k of Object.keys(store)){
+        const arr0 = store[k];
+        if(!Array.isArray(arr0)) continue;
+        const before = arr0.length;
+        const cleaned = arr0
+          .map(x => sanitizeText(x))
+          .filter(Boolean)
+          .filter(x => x !== nm);
+        if(cleaned.length !== before){
+          store[k] = cleaned;
+          changed = true;
+        }else{
+          // ついでに正規化（空白などで汚れていた場合の掃除）
+          store[k] = cleaned;
+        }
+      }
+    }
+
+    // 「最後にオート装備で適用したプリセット」が消えた場合はクリア
+    try{
+      const last = loadAutoEquipLastPreset();
+      if(last && last === nm){
+        saveAutoEquipLastPreset('');
+        changed = true;
+      }
+    }catch(_e){}
+
+    if(changed){
+      saveAutoEquipCandidates(store);
+    }
+    return changed;
+  }
+
+  function removePresetNamesFromAutoEquipCandidates(names){
+    const list = Array.isArray(names) ? names.map(x => sanitizeText(x)).filter(Boolean) : [];
+    if(list.length === 0) return false;
+    let changed = false;
+    for(const nm of list){
+      if(removePresetFromAutoEquipCandidates(nm)) changed = true;
+    }
+    return changed;
   }
 
   function loadAutoEquipNotifyAutoCloseEnabled(){
@@ -1869,6 +2230,35 @@
   function saveAutoEquipNotifyAutoCloseSec(sec){
     const n = clampInt(sec, 1, 60);
     try{ localStorage.setItem(LS_AUTO_EQUIP_NOTIFY_AUTOCLOSE_SEC_KEY, String(n)); }catch(_e){}
+  }
+
+  function loadAutoEquipPreferTopEnabled(){
+    try{
+      const raw = localStorage.getItem(LS_AUTO_EQUIP_PREFER_TOP_KEY);
+      if(raw == null) return false; // デフォルトOFF
+      return raw === '1';
+    }catch(_e){
+      return false;
+    }
+  }
+
+  function saveAutoEquipPreferTopEnabled(on){
+    try{ localStorage.setItem(LS_AUTO_EQUIP_PREFER_TOP_KEY, on ? '1' : '0'); }catch(_e){}
+  }
+
+  function loadCurrentPresetName(){
+    try{
+      const raw = localStorage.getItem(LS_CURRENT_PRESET_NAME_KEY);
+      return raw ? String(raw) : '';
+    }catch(_e){
+      return '';
+    }
+  }
+
+  function saveCurrentPresetName(name){
+    try{
+      localStorage.setItem(LS_CURRENT_PRESET_NAME_KEY, String(name || ''));
+    }catch(_e){}
   }
 
   function getTeamChallengeUrl(){
@@ -2083,6 +2473,7 @@
         clearTimeout(lpTimer);
         lpTimer = 0;
       }
+      longPressGaugeCancel();
     }
 
     function onPointerDown(evt){
@@ -2095,10 +2486,15 @@
       lpCtx = calcRC(evt);
       if(!lpCtx) return;
 
+      // 「クリック/長押し」分岐はオート装備ONの時だけ意味があるので、その時だけ表示
+      if(loadAutoEquipEnabled()){
+        longPressGaugeStart(lpCtx.x, lpCtx.y, LP_MS);
+      }
       lpTimer = setTimeout(async () => {
         lpFired = true;
         try{
           if(loadAutoEquipEnabled()){
+            longPressGaugeComplete();
             await handleAutoEquipLongPress(lpCtx.r, lpCtx.c, lpCtx.x, lpCtx.y);
           }
         }catch(_e){
@@ -3173,6 +3569,7 @@
         clearTimeout(lpTimer);
         lpTimer = 0;
       }
+      longPressGaugeCancel();
     }
 
     function getRCFromEvent(evt){
@@ -3237,10 +3634,15 @@
       // ★重要：rc を確実に保持（spreading 記法や誤記で壊れないよう明示）
       lpCtx = { r: rc.r, c: rc.c, x, y };
 
+      // 「クリック/長押し」分岐はオート装備ONの時だけ意味があるので、その時だけ表示
+      if(loadAutoEquipEnabled()){
+        longPressGaugeStart(lpCtx.x, lpCtx.y, LP_MS);
+      }
       lpTimer = setTimeout(async () => {
         lpFired = true;
         try{
           if(loadAutoEquipEnabled()){
+            longPressGaugeComplete();
             await handleAutoEquipLongPress(lpCtx.r, lpCtx.c, lpCtx.x, lpCtx.y);
           }
         }catch(_e){
@@ -3715,6 +4117,29 @@
       const { reg } = await fetchCellDetail(row, col);
       const { list } = getAutoEquipCandidatesForReg(reg);
       if(list.length > 0){
+        // ★現在装備中（として扱う）プリセット名
+        const cur = sanitizeText(loadCurrentPresetName());
+        const hasCurMatch = !!(cur && list.includes(cur));
+
+        // OFF（デフォルト）：レギュレーションと現在プリセットが合致しているなら変更せず突撃
+        // ON：合致していても「先頭」以外なら先頭へ変更してから突撃
+        if(hasCurMatch){
+          const preferTop = loadAutoEquipPreferTopEnabled();
+          if(preferTop){
+            if(cur !== list[0]){
+              await autoEquipThenAttack(row, col, list[0]);
+              return true;
+            }
+            // 既に先頭ならそのまま
+            await proceedAfterAutoEquip(row, col);
+            return true;
+          }
+          // preferTop OFF：合致していれば変更しない
+          await proceedAfterAutoEquip(row, col);
+          return true;
+        }
+
+        // 現在プリセットが候補に無い：従来通り先頭を適用して突撃
         await autoEquipThenAttack(row, col, list[0]);
         return true;
       }
@@ -3793,6 +4218,308 @@
   // =========================
   const ROSTER_LS_KEY = 'dba.roster.v1';
 
+  // =========================
+  // 保存データ世代（Gen1/Gen2）
+  //  - Gen1: ロスター保存とオート装備保存を別管理
+  //  - Gen2: ロスター内に autoEquip を内包して統合保存
+  // =========================
+  const DBA_SAVE_GEN_CURRENT = 2; // 現行フォーマット（Gen2）
+
+  function normalizeGenValue(v){
+    const n = Number.parseInt(v, 10);
+    if(!Number.isFinite(n)) return 1;
+    if(n <= 1) return 1;
+    return 2;
+  }
+
+  function detectStoreGen(store){
+    // gen が明示されていればそれを採用
+    if(store && typeof store === 'object' && ('gen' in store)){
+      return normalizeGenValue(store.gen);
+    }
+    // 明示が無い場合は内容から推定：
+    // roster に autoEquip が1つでもあれば Gen2 とみなす
+    try{
+      const rosters = store && store.rosters ? store.rosters : {};
+      for(const id of Object.keys(rosters || {})){
+        const r = rosters[id];
+        if(r && typeof r === 'object' && r.autoEquip && typeof r.autoEquip === 'object'){
+          return 2;
+        }
+      }
+    }catch(_e){}
+    return 1;
+  }
+
+  // teambattle起動時に呼ぶ：Gen1→Gen2 自動移行
+  function migrateSaveDataToGen2IfNeeded(){
+    try{
+      const store = loadRosterStore();
+      const gen = detectStoreGen(store);
+      if(gen >= DBA_SAVE_GEN_CURRENT){
+        // genが未設定なら付与だけしておく（Gen判定の固定化）
+        if(!('gen' in store)){
+          store.gen = DBA_SAVE_GEN_CURRENT;
+          saveRosterStore(store);
+        }
+        return true;
+      }
+
+      // ---- Gen1 → Gen2 へ移行 ----
+      store.gen = DBA_SAVE_GEN_CURRENT;
+      store.rosters = (store.rosters && typeof store.rosters === 'object') ? store.rosters : {};
+
+      // 1) すべてのロスターに autoEquip ブロックを生やす
+      for(const id of Object.keys(store.rosters)){
+        const r = store.rosters[id];
+        if(!r || typeof r !== 'object') continue;
+        ensureRosterAutoEquipBlock(r);
+      }
+
+      // 2) 旧LSのオート装備（候補/last）を active roster に統合
+      //    （Gen1は “全ロスター共通” だったため、最小副作用で active に寄せる）
+      const activeId = store.activeId;
+      if(activeId && store.rosters[activeId]){
+        const rAct = store.rosters[activeId];
+        const ae = ensureRosterAutoEquipBlock(rAct);
+
+        // active側が空のときだけ、旧LSを取り込む
+        const hasAny =
+          (ae && ae.candidates && Object.keys(ae.candidates).length > 0) ||
+          (ae && sanitizeText(ae.lastPreset || '') !== '');
+        if(!hasAny){
+          let cand = null;
+          let last = '';
+          try{
+            const raw = localStorage.getItem(LS_AUTO_EQUIP_CAND_KEY);
+            if(raw){
+              const obj = JSON.parse(raw);
+              if(obj && typeof obj === 'object') cand = obj;
+            }
+          }catch(_e){}
+          try{
+            const raw2 = localStorage.getItem(LS_AUTO_EQUIP_LAST_KEY);
+            last = raw2 ? String(raw2) : '';
+          }catch(_e2){}
+
+          if(cand && typeof cand === 'object') ae.candidates = cand;
+          if(last) ae.lastPreset = last;
+
+          rAct.autoEquip = ae;
+          rAct.updatedAt = nowIso();
+          store.rosters[activeId] = rAct;
+        }
+      }
+
+      // 3) 移行が完了したら旧LSを削除（“古いGen”判定で再移行しないため）
+      try{ localStorage.removeItem(LS_AUTO_EQUIP_CAND_KEY); }catch(_e){}
+      try{ localStorage.removeItem(LS_AUTO_EQUIP_LAST_KEY); }catch(_e){}
+
+      saveRosterStore(store);
+      return true;
+    }catch(_e){
+      return false;
+    }
+  }
+
+  // =========================
+  // 装備ロスター：ロスター切替（長押しポップアップ）
+  // =========================
+  function ensureRosterSwitchPopup(){
+    if(document.getElementById('dba-roster-switch-pop')) return;
+    const pop = document.createElement('div');
+    pop.id = 'dba-roster-switch-pop';
+    pop.dataset.open = '0';
+    document.body.appendChild(pop);
+
+    // 外側クリックで閉じる
+    document.addEventListener('pointerdown', (e) => {
+      if(pop.dataset.open !== '1') return;
+      const t = e.target;
+      if(t instanceof Node && pop.contains(t)) return;
+      closeRosterSwitchPopup(true);
+    }, true);
+
+    // ESC で閉じる
+    document.addEventListener('keydown', (e) => {
+      if(pop.dataset.open !== '1') return;
+      if(e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      closeRosterSwitchPopup(true);
+    }, true);
+  }
+
+  function closeRosterSwitchPopup(_cancel){
+    const pop = document.getElementById('dba-roster-switch-pop');
+    if(!pop) return;
+    pop.dataset.open = '0';
+    pop.textContent = '';
+  }
+
+  function placePopupUnderButton(pop, btn){
+    const rect = btn.getBoundingClientRect();
+    const vw = window.innerWidth || document.documentElement.clientWidth || 800;
+    const vh = window.innerHeight || document.documentElement.clientHeight || 600;
+
+    // ボタンの“下”を基本
+    let x = rect.left;
+    let y = rect.bottom + 8;
+
+    pop.style.left = x + 'px';
+    pop.style.top = y + 'px';
+    pop.style.right = 'auto';
+    pop.style.bottom = 'auto';
+
+    // はみ出し補正（描画後にrect取得）
+    const r2 = pop.getBoundingClientRect();
+    let nx = r2.left;
+    let ny = r2.top;
+    if(r2.right > vw - 8) nx -= (r2.right - (vw - 8));
+    if(r2.left < 8) nx = 8;
+    if(r2.bottom > vh - 8) ny -= (r2.bottom - (vh - 8));
+    if(r2.top < 8) ny = 8;
+
+    pop.style.left = nx + 'px';
+    pop.style.top = ny + 'px';
+  }
+
+  function listRosterSummaries(){
+    const store = loadRosterStore();
+    const rosters = store && store.rosters ? store.rosters : {};
+    const out = [];
+    for(const id of Object.keys(rosters)){
+      const r = rosters[id];
+      if(!r) continue;
+      out.push({
+        id,
+        title: sanitizeText(r.title || '') || '(無題)',
+        updatedAt: sanitizeText(r.updatedAt || ''),
+        presetCount: (r.presets && typeof r.presets === 'object') ? Object.keys(r.presets).length : 0
+      });
+    }
+    // 並びは「更新が新しい順」へ（※ロスター“名一覧”の体験優先）
+    out.sort((a,b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+    return { store, list: out, activeId: store.activeId };
+  }
+
+  function switchActiveRosterById(nextId){
+    const { store } = listRosterSummaries();
+    if(!nextId || !store.rosters || !store.rosters[nextId]) return false;
+    // 念のため、現在の状態をもう一度保存（“展開中データ保存”の保険）
+    try{ saveRosterStore(loadRosterStore()); }catch(_e){}
+    store.activeId = nextId;
+    saveRosterStore(store);
+    // activeId 破損対策も兼ねて生成系を通す
+    createRosterIfNeeded();
+    return true;
+  }
+
+  function createNewRosterAndSwitch(){
+    const store = loadRosterStore();
+    store.rosters = store.rosters && typeof store.rosters === 'object' ? store.rosters : {};
+    const id = `r_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+
+    // 既存タイトルの重複を避ける（軽く連番）
+    const base = `装備ロスター_${yyyymmddLocal()}`;
+    const titles = new Set(Object.values(store.rosters).map(r => sanitizeText(r && r.title)));
+    let title = base;
+    let n = 2;
+    while(titles.has(title)){
+      title = `${base}_${n}`;
+      n++;
+      if(n > 99) break;
+    }
+
+    store.rosters[id] = {
+      id,
+      title,
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+      presets: {},
+      presetOrder: [],
+      autoEquip: { candidates: {}, lastPreset: '' } // ★ロスター内にオート装備データを内包
+    };
+    store.activeId = id;
+    saveRosterStore(store);
+    createRosterIfNeeded();
+    return id;
+  }
+
+  function openRosterSwitchPopupNearButton(btn){
+    if(!btn) return false;
+    ensureRosterSwitchPopup();
+    const pop = document.getElementById('dba-roster-switch-pop');
+    if(!pop) return false;
+
+    const { list, activeId } = listRosterSummaries();
+    pop.textContent = '';
+    pop.dataset.open = '1';
+
+    const ttl = document.createElement('div');
+    ttl.className = 'dba-rs-pop-title';
+    ttl.textContent = '装備ロスター：切替';
+    pop.appendChild(ttl);
+
+    if(list.length === 0){
+      const empty = document.createElement('div');
+      empty.style.fontWeight = '800';
+      empty.style.padding = '6px 2px';
+      empty.style.textAlign = 'left';
+      empty.textContent = 'ロスターがありません。';
+      pop.appendChild(empty);
+    }else{
+      for(const it of list){
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'dba-rs-pop-btn';
+        b.textContent = `${it.title}（${it.presetCount}）`;
+        b.dataset.active = (it.id === activeId) ? '1' : '0';
+        b.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          closeRosterSwitchPopup(false);
+          switchActiveRosterById(it.id);
+
+          // ロスターmodalが開いていれば再描画、無ければ開く
+          const dlg = document.getElementById('dba-m-roster');
+          const open = dlg && (dlg.open || dlg.hasAttribute('open'));
+          if(open){
+            renderRosterModalState(null);
+          }else{
+            openRosterModal();
+          }
+        });
+        pop.appendChild(b);
+      }
+    }
+
+    // 末尾：新規作成
+    const bNew = document.createElement('button');
+    bNew.type = 'button';
+    bNew.className = 'dba-rs-pop-btn dba-rs-pop-btn--new';
+    bNew.textContent = '新しい装備ロスターを作る';
+    bNew.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      closeRosterSwitchPopup(false);
+      // “作る”の時も、現ロスター状態を保存してから新規作成→即切替
+      try{ saveRosterStore(loadRosterStore()); }catch(_e){}
+      createNewRosterAndSwitch();
+      const dlg = document.getElementById('dba-m-roster');
+      const open = dlg && (dlg.open || dlg.hasAttribute('open'));
+      if(open){
+        renderRosterModalState(null);
+      }else{
+        openRosterModal();
+      }
+    });
+    pop.appendChild(bNew);
+
+    placePopupUnderButton(pop, btn);
+    return true;
+  }
+
   function pad2(n){ return String(n).padStart(2,'0'); }
   function yyyymmddLocal(){
     const d = new Date();
@@ -3804,15 +4531,21 @@
     try{
       const raw = localStorage.getItem(ROSTER_LS_KEY);
       if(!raw){
-        return { activeId: null, rosters: {} };
+        return { gen: DBA_SAVE_GEN_CURRENT, activeId: null, rosters: {} };
       }
       const obj = JSON.parse(raw);
-      if(!obj || typeof obj !== 'object') return { activeId: null, rosters: {} };
+      if(!obj || typeof obj !== 'object') return { gen: DBA_SAVE_GEN_CURRENT, activeId: null, rosters: {} };
       if(!obj.rosters || typeof obj.rosters !== 'object') obj.rosters = {};
       if(!('activeId' in obj)) obj.activeId = null;
+      // gen が無い/不正なら推定して入れておく（この時点では“書き戻し”はしない）
+      if(!('gen' in obj)){
+        obj.gen = detectStoreGen(obj);
+      }else{
+        obj.gen = normalizeGenValue(obj.gen);
+      }
       return obj;
     }catch(_e){
-      return { activeId: null, rosters: {} };
+      return { gen: DBA_SAVE_GEN_CURRENT, activeId: null, rosters: {} };
     }
   }
 
@@ -3824,6 +4557,8 @@
 
   function createRosterIfNeeded(){
     const store = loadRosterStore();
+    // teambattle 起動時の自動移行後であっても、保険で gen を正規化
+    store.gen = normalizeGenValue(store.gen);
     const ids = Object.keys(store.rosters || {});
     if(store.activeId && store.rosters[store.activeId]){
       return store;
@@ -3842,9 +4577,11 @@
       createdAt: nowIso(),
       updatedAt: nowIso(),
       presets: {}, // { "name": [weaponId, armorId, necklaceId] }
-      presetOrder: [] // 表示順を保持（追加順／バックアップJSON記述順）
+      presetOrder: [], // 表示順を保持（追加順／バックアップJSON記述順）
+      autoEquip: { candidates: {}, lastPreset: '' } // ★ロスター内にオート装備データを内包
     };
     store.activeId = id;
+    store.gen = DBA_SAVE_GEN_CURRENT;
     saveRosterStore(store);
     return store;
   }
@@ -3867,8 +4604,13 @@
     // バックアップ用：active roster の全体を上書き（最低限 title/presets を使用）
     const { store, roster } = getActiveRoster();
     if(!obj || typeof obj !== 'object') throw new Error('Invalid JSON object');
+    const inGen = ('gen' in obj) ? normalizeGenValue(obj.gen) : 1; // gen無しは Gen1 とみなす
     const title = sanitizeText(obj.title || roster.title);
     const presets = (obj.presets && typeof obj.presets === 'object') ? obj.presets : {};
+    // ★オート装備（任意）：無ければ既存維持
+    const aeIn = (obj.autoEquip && typeof obj.autoEquip === 'object') ? obj.autoEquip : null;
+    const aeCandidates = (aeIn && aeIn.candidates && typeof aeIn.candidates === 'object') ? aeIn.candidates : null;
+    const aeLast = (aeIn && typeof aeIn.lastPreset === 'string') ? aeIn.lastPreset : null;
     const cleaned = {};
     const order = [];
     for(const k of Object.keys(presets)){
@@ -3888,8 +4630,25 @@
     roster.presets = cleaned;
     // 表示順はバックアップの記述順にする（ここで並び替えない）
     roster.presetOrder = order;
+
+    // ★Gen2：autoEquip が入っていれば復元
+    // ★Gen1：autoEquip が無い想定。空の autoEquip を確保しつつ、旧LSが残っていれば統合する
+    try{
+      const ae = ensureRosterAutoEquipBlock(roster);
+      if(aeCandidates) ae.candidates = aeCandidates;
+      if(aeLast != null) ae.lastPreset = String(aeLast || '');
+      roster.autoEquip = ae;
+
+      if(inGen <= 1){
+        // 旧バックアップ（Gen1）で、かつ旧LSが残っている場合は active roster に統合
+        // （“保存データ世代”を上げる要件に合わせる）
+        migrateSaveDataToGen2IfNeeded();
+      }
+    }catch(_e){}
+
     roster.updatedAt = nowIso();
     store.rosters[store.activeId] = roster;
+    store.gen = DBA_SAVE_GEN_CURRENT;
     saveRosterStore(store);
   }
 
@@ -3946,6 +4705,8 @@
       roster.updatedAt = nowIso();
       store.rosters[store.activeId] = roster;
       saveRosterStore(store);
+      // ★オート装備候補（セル長押しリスト）からも同名を削除
+      try{ removePresetFromAutoEquipCandidates(n); }catch(_e){}
       return true;
     }
     return false;
@@ -3975,6 +4736,8 @@
     await equipById(triple[0]);
     await equipById(triple[1]);
     await equipById(triple[2]);
+    // ★「現在装備中として扱うプリセット名」を保存（オート装備の判定に使う）
+    saveCurrentPresetName(n);
     return true;
   }
 
@@ -4034,6 +4797,9 @@
     const { roster } = getActiveRoster();
     const title = roster ? roster.title : '装備ロスター';
     const presets = roster && roster.presets ? roster.presets : {};
+    // 削除モード（「削除」→対象選択 方式）
+    const rosterDlg = document.getElementById('dba-m-roster');
+    const delMode = !!(rosterDlg && rosterDlg.dataset.dbaDelMode === '1');
     // ★並び替え禁止：表示順は presetOrder（追加順／バックアップ記述順）を優先
     const order = Array.isArray(roster && roster.presetOrder) ? roster.presetOrder : [];
     const seen = new Set();
@@ -4102,8 +4868,9 @@
     const btnDel = document.createElement('button');
     btnDel.type = 'button';
     btnDel.className = 'dba-btn-mini dba-btn-mini--danger';
-    btnDel.textContent = '削除';
-    btnDel.disabled = !selectedPresetName;
+    btnDel.textContent = delMode ? '削除:選択してください' : '削除';
+    // 「削除」→「対象選択」方式なので、ボタン自体は常に押せる
+    btnDel.disabled = false;
 
     row2.appendChild(btnAdd);
 
@@ -4131,7 +4898,8 @@
         const item = document.createElement('div');
         item.className = 'dba-roster-item';
         item.dataset.name = nm;
-        item.dataset.selected = (nm === selectedPresetName) ? '1' : '0';
+        // 削除モード中は「選択＝装備適用」ではないため、選択強調はOFFにする
+        item.dataset.selected = (!delMode && (nm === selectedPresetName)) ? '1' : '0';
 
         const n = document.createElement('div');
         n.className = 'dba-roster-item__name';
@@ -4147,7 +4915,18 @@
         item.addEventListener('click', async (e) => {
           e.preventDefault();
           e.stopPropagation();
-          // クリック＝選択 + 装備適用
+          // 削除モード中：クリック＝削除対象の選択（装備はしない）
+          if(rosterDlg && rosterDlg.dataset.dbaDelMode === '1'){
+            const ok = confirm(`プリセット「${nm}」を削除しますか？`);
+            if(!ok) return;
+            deletePreset(nm);
+            // 削除が終わったら削除モード解除
+            rosterDlg.dataset.dbaDelMode = '0';
+            renderRosterModalState(null);
+            return;
+          }
+
+          // 通常：クリック＝選択 + 装備適用
           renderRosterModalState(nm);
           try{
             // 装備ロスター専用の結果モーダルで表示
@@ -4167,6 +4946,7 @@
     // --- handlers ---
     btnRename.addEventListener('click', (e) => {
       e.preventDefault(); e.stopPropagation();
+      if(rosterDlg) rosterDlg.dataset.dbaDelMode = '0';
       openRosterRenameModal(title, (newName) => {
         setRosterTitle(newName);
         renderRosterModalState(selectedPresetName || null);
@@ -4175,6 +4955,7 @@
 
     btnWipe.addEventListener('click', (e) => {
       e.preventDefault(); e.stopPropagation();
+      if(rosterDlg) rosterDlg.dataset.dbaDelMode = '0';
       openRosterWipeModal(() => {
         deleteActiveRosterAndSwitch();
         renderRosterModalState(null);
@@ -4183,6 +4964,7 @@
 
     btnBackup.addEventListener('click', (e) => {
       e.preventDefault(); e.stopPropagation();
+      if(rosterDlg) rosterDlg.dataset.dbaDelMode = '0';
       openRosterBackupModal(() => {
         renderRosterModalState(selectedPresetName || null);
       });
@@ -4190,6 +4972,7 @@
 
     btnAdd.addEventListener('click', (e) => {
       e.preventDefault(); e.stopPropagation();
+      if(rosterDlg) rosterDlg.dataset.dbaDelMode = '0';
       openRosterAddPresetModal(() => {
         renderRosterModalState(null);
       });
@@ -4197,17 +4980,22 @@
 
     btnAuto.addEventListener('click', (e) => {
       e.preventDefault(); e.stopPropagation();
+      if(rosterDlg) rosterDlg.dataset.dbaDelMode = '0';
       openAutoEquipSettingsModal();
     });
 
     btnDel.addEventListener('click', (e) => {
       e.preventDefault(); e.stopPropagation();
-      if(!selectedPresetName) return;
-      // 軽い確認（ここは要求に無いので標準 alert で簡易）
-      const ok = confirm(`プリセット「${selectedPresetName}」を削除しますか？`);
-      if(!ok) return;
-      deletePreset(selectedPresetName);
-      renderRosterModalState(null);
+      // 「削除」→「対象選択」へ切り替え
+      if(!rosterDlg) return;
+      const next = (rosterDlg.dataset.dbaDelMode === '1') ? '0' : '1';
+      rosterDlg.dataset.dbaDelMode = next;
+      // 削除モードON時は、誤操作防止のため選択状態をクリアして描画
+      if(next === '1'){
+        renderRosterModalState(null);
+      }else{
+        renderRosterModalState(selectedPresetName || null);
+      }
     });
   }
 
@@ -4262,6 +5050,12 @@
     btnDecide.id = 'dba-ae-btn-decide';
     btnDecide.textContent = '決定';
 
+    const btnOption = document.createElement('button');
+    btnOption.type = 'button';
+    btnOption.className = 'dba-btn-mini';
+    btnOption.id = 'dba-ae-btn-option';
+    btnOption.textContent = 'オプション';
+
     const btnCancel = document.createElement('button');
     btnCancel.type = 'button';
     btnCancel.className = 'dba-btn-close';
@@ -4269,35 +5063,8 @@
     btnCancel.textContent = 'Cancel';
 
     topBtns.appendChild(btnDecide);
+    topBtns.appendChild(btnOption);
     topBtns.appendChild(btnCancel);
-
-    // 右寄せ：装備変更完了通知の自動クローズ設定
-    const ac = document.createElement('label');
-    ac.className = 'dba-ae-autoclose';
-    ac.id = 'dba-ae-autoclose-wrap';
-
-    const acChk = document.createElement('input');
-    acChk.type = 'checkbox';
-    acChk.id = 'dba-ae-autoclose-chk';
-
-    const acText1 = document.createElement('span');
-    acText1.textContent = '装備変更完了通知を';
-
-    const acSec = document.createElement('input');
-    acSec.type = 'number';
-    acSec.min = '1';
-    acSec.max = '60';
-    acSec.step = '1';
-    acSec.id = 'dba-ae-autoclose-sec';
-
-    const acText2 = document.createElement('span');
-    acText2.textContent = '秒で自動的に閉じる';
-
-    ac.appendChild(acChk);
-    ac.appendChild(acText1);
-    ac.appendChild(acSec);
-    ac.appendChild(acText2);
-    topBtns.appendChild(ac);
 
     mid.appendChild(topBtns);
 
@@ -4377,6 +5144,136 @@
     dlg.addEventListener('cancel', (e)=>{ e.preventDefault(); closeDirect(); });
   }
 
+  // =========================
+  // オート装備：オプションモーダル
+  //  - 「装備変更完了通知を * 秒で自動的に閉じる」をこちらへ移設
+  //  - 「一番上の装備候補を常に優先する」チェックを追加
+  // =========================
+  function buildAutoEquipOptionsModal(){
+    if(document.getElementById('dba-m-auto-equip-opt')) return;
+
+    const dlg = document.createElement('dialog');
+    dlg.id = 'dba-m-auto-equip-opt';
+    dlg.className = 'dba-m-std';
+
+    const top = document.createElement('div');
+    top.className = 'dba-modal__top';
+
+    const title = document.createElement('div');
+    title.className = 'dba-modal__title';
+    title.textContent = 'オート装備：オプション';
+
+    const btnX = document.createElement('button');
+    btnX.type = 'button';
+    btnX.className = 'dba-btn-x';
+    btnX.textContent = '×';
+
+    top.appendChild(title);
+    top.appendChild(btnX);
+
+    const mid = document.createElement('div');
+    mid.className = 'dba-modal__mid';
+
+    // (1) 「一番上の装備候補を常に優先する」
+    const preferWrap = document.createElement('label');
+    preferWrap.className = 'dba-br-tail2-chk';
+    preferWrap.id = 'dba-ae-opt-preferTop-wrap';
+
+    const preferChk = document.createElement('input');
+    preferChk.type = 'checkbox';
+    preferChk.id = 'dba-ae-opt-preferTop';
+
+    const preferText = document.createElement('span');
+    preferText.textContent = '一番上の装備候補を常に優先する';
+
+    preferWrap.appendChild(preferChk);
+    preferWrap.appendChild(preferText);
+    mid.appendChild(preferWrap);
+
+    // (2) 装備変更完了通知の自動クローズ
+    const acRow = document.createElement('div');
+    acRow.className = 'dba-ae-opt-row';
+
+    const acChk = document.createElement('input');
+    acChk.type = 'checkbox';
+    acChk.id = 'dba-ae-opt-autoclose-chk';
+
+    const acText1 = document.createElement('span');
+    acText1.textContent = '装備変更完了通知を';
+
+    const acSec = document.createElement('input');
+    acSec.type = 'number';
+    acSec.min = '1';
+    acSec.max = '60';
+    acSec.step = '1';
+    acSec.id = 'dba-ae-opt-autoclose-sec';
+
+    const acText2 = document.createElement('span');
+    acText2.textContent = '秒で自動的に閉じる';
+
+    acRow.appendChild(acChk);
+    acRow.appendChild(acText1);
+    acRow.appendChild(acSec);
+    acRow.appendChild(acText2);
+    mid.appendChild(acRow);
+
+    const bot = document.createElement('div');
+    bot.className = 'dba-modal__bot';
+
+    const btnClose = document.createElement('button');
+    btnClose.type = 'button';
+    btnClose.className = 'dba-btn-close';
+    btnClose.textContent = 'Close';
+    bot.appendChild(btnClose);
+
+    dlg.appendChild(top);
+    dlg.appendChild(mid);
+    dlg.appendChild(bot);
+    document.body.appendChild(dlg);
+
+    function closeDirect(){ try{ dlg.close(); }catch(_e){ dlg.removeAttribute('open'); } }
+
+    btnX.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeDirect(); });
+    btnClose.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeDirect(); });
+    dlg.addEventListener('cancel', (e)=>{ e.preventDefault(); closeDirect(); });
+
+    // 初期値反映 & 保存（常時同期）
+    preferChk.checked = loadAutoEquipPreferTopEnabled();
+    preferChk.addEventListener('change', (e) => {
+      e.stopPropagation();
+      saveAutoEquipPreferTopEnabled(!!preferChk.checked);
+    });
+
+    acChk.checked = loadAutoEquipNotifyAutoCloseEnabled();
+    acChk.addEventListener('change', (e) => {
+      e.stopPropagation();
+      saveAutoEquipNotifyAutoCloseEnabled(!!acChk.checked);
+    });
+
+    acSec.value = String(loadAutoEquipNotifyAutoCloseSec());
+    acSec.addEventListener('change', (e) => {
+      e.stopPropagation();
+      saveAutoEquipNotifyAutoCloseSec(acSec.value);
+      acSec.value = String(loadAutoEquipNotifyAutoCloseSec());
+    });
+  }
+
+  function openAutoEquipOptionsModal(){
+    buildAutoEquipOptionsModal();
+    const dlg = document.getElementById('dba-m-auto-equip-opt');
+    if(!dlg) return;
+
+    // 開くたびに最新値を反映
+    const preferChk = dlg.querySelector('#dba-ae-opt-preferTop');
+    const acChk = dlg.querySelector('#dba-ae-opt-autoclose-chk');
+    const acSec = dlg.querySelector('#dba-ae-opt-autoclose-sec');
+    if(preferChk) preferChk.checked = loadAutoEquipPreferTopEnabled();
+    if(acChk) acChk.checked = loadAutoEquipNotifyAutoCloseEnabled();
+    if(acSec) acSec.value = String(loadAutoEquipNotifyAutoCloseSec());
+
+    try{ dlg.showModal(); }catch(_e){ dlg.setAttribute('open',''); }
+  }
+
   function openAutoEquipSettingsModal(){
     const openNow = () => {
       buildAutoEquipSettingsModal();
@@ -4388,26 +5285,15 @@
       const tabGen = document.getElementById('dba-ae-tab-general');
       const tabGuard = document.getElementById('dba-ae-tab-guard');
       const btnDecide = document.getElementById('dba-ae-btn-decide');
-      const acChk = document.getElementById('dba-ae-autoclose-chk');
-      const acSec = document.getElementById('dba-ae-autoclose-sec');
+      const btnOpt = document.getElementById('dba-ae-btn-option');
       if(!dlg || !lp || !leftBox || !rightBox || !tabGen || !tabGuard || !btnDecide) return;
 
-      // 自動クローズ設定の初期値反映 & 保存
-      if(acChk){
-        acChk.checked = loadAutoEquipNotifyAutoCloseEnabled();
-        acChk.addEventListener('change', (e) => {
-          e.stopPropagation();
-          saveAutoEquipNotifyAutoCloseEnabled(!!acChk.checked);
-        });
-      }
-      if(acSec){
-        acSec.value = String(loadAutoEquipNotifyAutoCloseSec());
-        acSec.addEventListener('change', (e) => {
-          e.stopPropagation();
-          saveAutoEquipNotifyAutoCloseSec(acSec.value);
-          // 表示もクランプ後の値に揃える
-          acSec.value = String(loadAutoEquipNotifyAutoCloseSec());
-        });
+      // オプションボタン：オート装備オプションmodalを開く
+      if(btnOpt){
+        btnOpt.onclick = (e) => {
+          e.preventDefault(); e.stopPropagation();
+          openAutoEquipOptionsModal();
+        };
       }
 
       // 仮保持（モーダル内で維持）
@@ -4875,8 +5761,12 @@
       ensure();
       const { roster } = getActiveRoster();
       const obj = {
+        gen: DBA_SAVE_GEN_CURRENT,
         title: roster.title,
-        presets: roster.presets || {}
+        presets: roster.presets || {},
+        autoEquip: (roster && roster.autoEquip && typeof roster.autoEquip === 'object')
+          ? roster.autoEquip
+          : { candidates: {}, lastPreset: '' }
       };
       const ta = document.getElementById('dba-roster-backup-ta');
       if(ta){
@@ -6735,9 +7625,43 @@
     btnRoster.className = 'dba-btn-fn';
     btnRoster.textContent = '装備ロスター';
     btnRoster.id = 'dba-btn-roster';
+    // 長押し（1.4秒）：ロスター名一覧ポップアップ（ボタン直下）
+    // 短押し：従来通りロスター本体modal
+    let rosterLpTimer = 0;
+    let rosterLpFired = false;
+    const ROSTER_LP_MS = 1400;
+    function clearRosterLP(){
+      if(rosterLpTimer){
+        clearTimeout(rosterLpTimer);
+        rosterLpTimer = 0;
+      }
+      // 長押しゲージを消す
+      longPressGaugeCancel();
+    }
+    btnRoster.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      rosterLpFired = false;
+      clearRosterLP();
+      // 長押し分岐があるので、ゲージ開始（押下位置）
+      longPressGaugeStart(e.clientX, e.clientY, ROSTER_LP_MS);
+      rosterLpTimer = setTimeout(() => {
+        rosterLpFired = true;
+        longPressGaugeComplete();
+        try{
+          openRosterSwitchPopupNearButton(btnRoster);
+        }catch(_e2){
+          // noop
+        }
+      }, ROSTER_LP_MS);
+    });
+    btnRoster.addEventListener('pointerup', clearRosterLP);
+    btnRoster.addEventListener('pointercancel', clearRosterLP);
+    btnRoster.addEventListener('pointerleave', clearRosterLP);
     btnRoster.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
+      if(rosterLpFired) return;
       openRosterModal();
     });
 
@@ -6747,16 +7671,17 @@
     btnBattleInfo.textContent = '戦況情報';
     btnBattleInfo.id = 'dba-btn-battleinfo';
 
-    // 長押し（1.6秒）で全セル巡回してレイヤーに表示
+    // 長押し（1.4秒）で全セル巡回してレイヤーに表示
     let lpTimer = 0;
     let lpFired = false;
-    const LP_MS = 1600;
+    const LP_MS = 1400;
 
     function clearLP(){
       if(lpTimer){
         clearTimeout(lpTimer);
         lpTimer = 0;
       }
+      longPressGaugeCancel();
     }
 
     btnBattleInfo.addEventListener('pointerdown', (e) => {
@@ -6765,8 +7690,10 @@
       e.stopPropagation();
       lpFired = false;
       clearLP();
+      longPressGaugeStart(e.clientX, e.clientY, LP_MS);
       lpTimer = setTimeout(async () => {
         lpFired = true;
+        longPressGaugeComplete();
         try{
           await scanAllCellsAndRender();
         }catch(_e){
@@ -6806,18 +7733,22 @@
       syncAutoEquipBtn();
     });
 
-+    buttonsRow.appendChild(btnSettings);
-+    buttonsRow.appendChild(btnAutoEquip);
-+    buttonsRow.appendChild(btnRapid);
-+    buttonsRow.appendChild(btnRoster);
-+    buttonsRow.appendChild(btnBattleInfo);
-+
-+    bar.appendChild(progressHost);
-+    bar.appendChild(buttonsRow);
+    buttonsRow.appendChild(btnSettings);
+    buttonsRow.appendChild(btnAutoEquip);
+    buttonsRow.appendChild(btnRapid);
+    buttonsRow.appendChild(btnRoster);
+    buttonsRow.appendChild(btnBattleInfo);
+
+    bar.appendChild(progressHost);
+    bar.appendChild(buttonsRow);
     return bar;
   }
 
   function injectWhenReady() {
+    // ★保存データの世代を確認し、Gen1ならGen2へ自動移行
+    //   （/teambattle?m=* を開いた時に行う要件）
+    try{ migrateSaveDataToGen2IfNeeded(); }catch(_e){}
+
     addStyle(CSS);
 
     const doInsert = () => {
