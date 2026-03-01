@@ -1,10 +1,11 @@
 // ==UserScript==
 // @name         Donguri Battle Assistant
 // @namespace    https://donguri.5ch.net/
-// @version      0.0.18.0
+// @version      0.0.19.4
 // @description  5ちゃんねるのどんぐりシステムから派生したゲームの操作性を改善するためのユーザースクリプト
 // @author       福呼び草
 // @match        https://donguri.5ch.net/teambattle?m=*
+// @match        https://donguri.5ch.net/bag
 // @match        https://donguri.5ch.net/
 // @run-at       document-start
 // @grant        GM_addStyle
@@ -759,6 +760,90 @@
       text-align: left;
     }
 
+    /* ===== プリセット並び替えモーダル ===== */
+    #dba-m-roster-sort.dba-m-std{
+      width: min(760px, calc(100vw - 24px));
+      max-height: min(88vh, calc(100vh - 24px));
+      overflow: hidden;
+    }
+    #dba-m-roster-sort.dba-m-std .dba-modal__mid{
+      max-height: calc(min(88vh, calc(100vh - 24px)) - 110px);
+      overflow: hidden; /* リスト側でスクロール */
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-height: 0;
+    }
+    .dba-sort-hint{
+      font-weight: 800;
+      text-align: left;
+      margin: 0;
+      padding: 0;
+    }
+    .dba-sort-list{
+      border: 1px solid #000;
+      border-radius: 12px;
+      background: #fff;
+      padding: 8px;
+      overflow: auto;
+      min-height: 120px;
+      max-height: 52vh; /* 画面が小さい時も暴れにくく */
+      scrollbar-gutter: stable both-edges;
+      position: relative; /* 挿入ラインの absolute 基準 */
+    }
+    /* 挿入予定位置の赤いライン */
+    .dba-sort-insert-line{
+      position: absolute;
+      left: 6px;
+      right: 6px;
+      height: 0;
+      border-top: 3px solid #ea0000;
+      border-radius: 999px;
+      pointer-events: none;
+      z-index: 5;
+      display: none;
+    }
+    .dba-sort-item{
+      display: grid;
+      grid-template-columns: 28px 1fr auto;
+      gap: 10px;
+      align-items: center;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid #00000022;
+      margin: 6px 0;
+      user-select: none;
+      background: #fff;
+    }
+    .dba-sort-handle{
+      font-weight: 900;
+      text-align: center;
+      cursor: grab;
+      opacity: 0.9;
+    }
+    .dba-sort-item[draggable="true"]{ cursor: grab; }
+    .dba-sort-item.dba-sort-dragging{
+      opacity: 0.55;
+      border-style: dashed;
+    }
+    .dba-sort-item.dba-sort-over{
+      outline: 3px solid #ea0000;
+      outline-offset: 0px;
+      background: #fff2f2;
+    }
+    .dba-sort-name{
+      font-weight: 900;
+      text-align: left;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .dba-sort-meta{
+      font-size: 0.9em;
+      font-weight: 800;
+      opacity: 0.85;
+      white-space: nowrap;
+    }
+
     /* ===== 装備プリセット追加モーダル ===== */
     #dba-m-roster-add.dba-m-std{
       width: min(760px, calc(100vw - 24px));
@@ -766,6 +851,16 @@
       overflow: hidden;
     }
     #dba-m-roster-add.dba-m-std .dba-modal__mid{
+      max-height: calc(min(88vh, calc(100vh - 24px)) - 110px);
+      overflow: auto;
+    }
+    /* ===== 装備プリセット再編集モーダル ===== */
+    #dba-m-roster-edit.dba-m-std{
+      width: min(760px, calc(100vw - 24px));
+      max-height: min(88vh, calc(100vh - 24px));
+      overflow: hidden;
+    }
+    #dba-m-roster-edit.dba-m-std .dba-modal__mid{
       max-height: calc(min(88vh, calc(100vh - 24px)) - 110px);
       overflow: auto;
     }
@@ -4800,6 +4895,8 @@
     // 削除モード（「削除」→対象選択 方式）
     const rosterDlg = document.getElementById('dba-m-roster');
     const delMode = !!(rosterDlg && rosterDlg.dataset.dbaDelMode === '1');
+    // 再編集モード（「再編集」→対象選択 方式）
+    const editMode = !!(rosterDlg && rosterDlg.dataset.dbaEditMode === '1');
     // ★並び替え禁止：表示順は presetOrder（追加順／バックアップ記述順）を優先
     const order = Array.isArray(roster && roster.presetOrder) ? roster.presetOrder : [];
     const seen = new Set();
@@ -4865,6 +4962,19 @@
     btnAdd.className = 'dba-btn-mini dba-btn-mini--ok';
     btnAdd.textContent = '追加';
 
+    const btnEdit = document.createElement('button');
+    btnEdit.type = 'button';
+    btnEdit.className = 'dba-btn-mini';
+    btnEdit.textContent = editMode ? '再編集:選択してください' : '再編集';
+    // 「再編集」→「対象選択」方式なので、ボタン自体は常に押せる
+    btnEdit.disabled = false;
+
+    const btnSort = document.createElement('button');
+    btnSort.type = 'button';
+    btnSort.className = 'dba-btn-mini';
+    btnSort.textContent = '並び替え';
+    btnSort.disabled = false;
+
     const btnDel = document.createElement('button');
     btnDel.type = 'button';
     btnDel.className = 'dba-btn-mini dba-btn-mini--danger';
@@ -4873,6 +4983,8 @@
     btnDel.disabled = false;
 
     row2.appendChild(btnAdd);
+    row2.appendChild(btnEdit);
+    row2.appendChild(btnSort);
 
     const btnAuto = document.createElement('button');
     btnAuto.type = 'button';
@@ -4926,6 +5038,17 @@
             return;
           }
 
+          // 再編集モード中：クリック＝再編集対象の選択（装備はしない）
+          if(rosterDlg && rosterDlg.dataset.dbaEditMode === '1'){
+            // 再編集モード解除（選択後は通常に戻す）
+            rosterDlg.dataset.dbaEditMode = '0';
+            renderRosterModalState(null);
+            openRosterEditPresetModal(nm, () => {
+              renderRosterModalState(nm);
+            });
+            return;
+          }
+
           // 通常：クリック＝選択 + 装備適用
           renderRosterModalState(nm);
           try{
@@ -4947,6 +5070,7 @@
     btnRename.addEventListener('click', (e) => {
       e.preventDefault(); e.stopPropagation();
       if(rosterDlg) rosterDlg.dataset.dbaDelMode = '0';
+      if(rosterDlg) rosterDlg.dataset.dbaEditMode = '0';
       openRosterRenameModal(title, (newName) => {
         setRosterTitle(newName);
         renderRosterModalState(selectedPresetName || null);
@@ -4956,6 +5080,7 @@
     btnWipe.addEventListener('click', (e) => {
       e.preventDefault(); e.stopPropagation();
       if(rosterDlg) rosterDlg.dataset.dbaDelMode = '0';
+      if(rosterDlg) rosterDlg.dataset.dbaEditMode = '0';
       openRosterWipeModal(() => {
         deleteActiveRosterAndSwitch();
         renderRosterModalState(null);
@@ -4965,6 +5090,7 @@
     btnBackup.addEventListener('click', (e) => {
       e.preventDefault(); e.stopPropagation();
       if(rosterDlg) rosterDlg.dataset.dbaDelMode = '0';
+      if(rosterDlg) rosterDlg.dataset.dbaEditMode = '0';
       openRosterBackupModal(() => {
         renderRosterModalState(selectedPresetName || null);
       });
@@ -4973,14 +5099,41 @@
     btnAdd.addEventListener('click', (e) => {
       e.preventDefault(); e.stopPropagation();
       if(rosterDlg) rosterDlg.dataset.dbaDelMode = '0';
+      if(rosterDlg) rosterDlg.dataset.dbaEditMode = '0';
       openRosterAddPresetModal(() => {
         renderRosterModalState(null);
+      });
+    });
+
+    btnEdit.addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      // 「再編集」→「対象選択」へ切り替え
+      if(!rosterDlg) return;
+      // 再編集モードに入るときは削除モードをOFF（誤操作防止）
+      rosterDlg.dataset.dbaDelMode = '0';
+      const next = (rosterDlg.dataset.dbaEditMode === '1') ? '0' : '1';
+      rosterDlg.dataset.dbaEditMode = next;
+      // 再編集モードON時は、誤操作防止のため選択状態をクリアして描画
+      if(next === '1'){
+        renderRosterModalState(null);
+      }else{
+        renderRosterModalState(selectedPresetName || null);
+      }
+    });
+
+    btnSort.addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      if(rosterDlg) rosterDlg.dataset.dbaDelMode = '0';
+      if(rosterDlg) rosterDlg.dataset.dbaEditMode = '0';
+      openRosterSortModal(() => {
+        renderRosterModalState(selectedPresetName || null);
       });
     });
 
     btnAuto.addEventListener('click', (e) => {
       e.preventDefault(); e.stopPropagation();
       if(rosterDlg) rosterDlg.dataset.dbaDelMode = '0';
+      if(rosterDlg) rosterDlg.dataset.dbaEditMode = '0';
       openAutoEquipSettingsModal();
     });
 
@@ -4988,6 +5141,8 @@
       e.preventDefault(); e.stopPropagation();
       // 「削除」→「対象選択」へ切り替え
       if(!rosterDlg) return;
+      // 削除モードに入るときは再編集モードをOFF（誤操作防止）
+      rosterDlg.dataset.dbaEditMode = '0';
       const next = (rosterDlg.dataset.dbaDelMode === '1') ? '0' : '1';
       rosterDlg.dataset.dbaDelMode = next;
       // 削除モードON時は、誤操作防止のため選択状態をクリアして描画
@@ -5916,6 +6071,126 @@
     dlg.addEventListener('cancel', (e)=>{ e.preventDefault(); closeDirect(); });
   }
 
+  // ---- プリセット再編集 modal ----
+  function buildRosterEditModal(){
+    if(document.getElementById('dba-m-roster-edit')) return;
+    const dlg = document.createElement('dialog');
+    dlg.id = 'dba-m-roster-edit';
+    dlg.className = 'dba-m-std';
+
+    const top = document.createElement('div');
+    top.className = 'dba-modal__top';
+    const t = document.createElement('div');
+    t.className = 'dba-modal__title';
+    t.textContent = 'プリセット再編集';
+    const x = document.createElement('button');
+    x.type = 'button';
+    x.className = 'dba-btn-x';
+    x.textContent = '×';
+    top.appendChild(t); top.appendChild(x);
+
+    const mid = document.createElement('div');
+    mid.className = 'dba-modal__mid';
+
+    const wrap = document.createElement('div');
+    wrap.className = 'dba-add-wrap';
+
+    const left = document.createElement('div');
+    left.className = 'dba-add-left';
+
+    const btnW = document.createElement('button');
+    btnW.type = 'button';
+    btnW.className = 'dba-btn-mini';
+    btnW.textContent = '武器';
+    btnW.id = 'dba-edit-btn-weapon';
+
+    const btnA = document.createElement('button');
+    btnA.type = 'button';
+    btnA.className = 'dba-btn-mini';
+    btnA.textContent = '防具';
+    btnA.id = 'dba-edit-btn-armor';
+
+    const btnN = document.createElement('button');
+    btnN.type = 'button';
+    btnN.className = 'dba-btn-mini';
+    btnN.textContent = 'ネックレス';
+    btnN.id = 'dba-edit-btn-necklace';
+
+    left.appendChild(btnW);
+    left.appendChild(btnA);
+    left.appendChild(btnN);
+
+    const right = document.createElement('div');
+    right.className = 'dba-add-right';
+
+    const selW = document.createElement('div');
+    selW.className = 'dba-add-sel';
+    selW.id = 'dba-edit-sel-weapon';
+    selW.textContent = '未選択（武器）';
+
+    const selA = document.createElement('div');
+    selA.className = 'dba-add-sel';
+    selA.id = 'dba-edit-sel-armor';
+    selA.textContent = '未選択（防具）';
+
+    const selN = document.createElement('div');
+    selN.className = 'dba-add-sel';
+    selN.id = 'dba-edit-sel-necklace';
+    selN.textContent = '未選択（ネックレス）';
+
+    right.appendChild(selW);
+    right.appendChild(selA);
+    right.appendChild(selN);
+
+    wrap.appendChild(left);
+    wrap.appendChild(right);
+    mid.appendChild(wrap);
+
+    const name = document.createElement('input');
+    name.type = 'text';
+    name.className = 'dba-add-name';
+    name.id = 'dba-edit-preset-name';
+    name.placeholder = 'プリセット名';
+    // 再編集では「選んだプリセット名」を固定（※名前変更はこのモーダルでは扱わない）
+    name.disabled = true;
+    mid.appendChild(name);
+
+    const botRow = document.createElement('div');
+    botRow.className = 'dba-add-bot';
+    const done = document.createElement('button');
+    done.type = 'button';
+    done.className = 'dba-btn-apply';
+    done.textContent = '再編集完了';
+    done.id = 'dba-edit-btn-done';
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'dba-btn-close';
+    cancel.textContent = '中止';
+    cancel.id = 'dba-edit-btn-cancel';
+    botRow.appendChild(done);
+    botRow.appendChild(cancel);
+    mid.appendChild(botRow);
+
+    const bot = document.createElement('div');
+    bot.className = 'dba-modal__bot';
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'dba-btn-close';
+    close.textContent = 'Close';
+    bot.appendChild(close);
+
+    dlg.appendChild(top);
+    dlg.appendChild(mid);
+    dlg.appendChild(bot);
+    document.body.appendChild(dlg);
+
+    function closeDirect(){ try{ dlg.close(); }catch(_e){ dlg.removeAttribute('open'); } }
+    x.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeDirect(); });
+    close.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeDirect(); });
+    cancel.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeDirect(); });
+    dlg.addEventListener('cancel', (e)=>{ e.preventDefault(); closeDirect(); });
+  }
+
   function openRosterAddPresetModal(onDone){
     const openNow = () => {
       buildRosterAddModal();
@@ -5997,6 +6272,502 @@
       if(dlg){
         try{ dlg.showModal(); }catch(_e){ dlg.setAttribute('open',''); }
       }
+    };
+    if(document.body) openNow(); else document.addEventListener('DOMContentLoaded', openNow, { once:true });
+  }
+
+  function openRosterEditPresetModal(presetName, onDone){
+    const openNow = () => {
+      buildRosterEditModal();
+
+      const nm = sanitizeText(presetName);
+      if(!nm){
+        alert('再編集対象のプリセット名が不正です。');
+        return;
+      }
+      const { roster } = getActiveRoster();
+      const presets = roster && roster.presets ? roster.presets : {};
+      const triple = presets[nm];
+      if(!triple){
+        alert(`プリセットが見つかりません: ${nm}`);
+        return;
+      }
+
+
+      // 状態初期化（既存値を反映）
+      const st = {
+        weaponId: (triple[0] == null ? null : Number(triple[0])),
+        armorId: (triple[1] == null ? null : Number(triple[1])),
+        necklaceId: (triple[2] == null ? null : Number(triple[2])),
+        weaponLabel: (triple[0] == null ? '未選択（武器）' : '復元中…（武器）'),
+        armorLabel: (triple[1] == null ? '未選択（防具）' : '復元中…（防具）'),
+        necklaceLabel: (triple[2] == null ? '未選択（ネックレス）' : '復元中…（ネックレス）')
+      };
+
+      const selW = document.getElementById('dba-edit-sel-weapon');
+      const selA = document.getElementById('dba-edit-sel-armor');
+      const selN = document.getElementById('dba-edit-sel-necklace');
+      const name = document.getElementById('dba-edit-preset-name');
+      if(selW) selW.textContent = st.weaponLabel;
+      if(selA) selA.textContent = st.armorLabel;
+      if(selN) selN.textContent = st.necklaceLabel;
+      if(name) name.value = nm;
+
+      const btnW = document.getElementById('dba-edit-btn-weapon');
+      const btnA = document.getElementById('dba-edit-btn-armor');
+      const btnN = document.getElementById('dba-edit-btn-necklace');
+      const btnDone = document.getElementById('dba-edit-btn-done');
+      const dlg = document.getElementById('dba-m-roster-edit');
+
+      function refreshLabels(){
+        if(selW) selW.textContent = st.weaponLabel;
+        if(selA) selA.textContent = st.armorLabel;
+        if(selN) selN.textContent = st.necklaceLabel;
+      }
+
+      // 既存IDが入っている場合、/bag から名称込みラベルを復元して上書き
+      // （openPickItemModal と同じ extractRowLabel() 形式）
+      (async () => {
+        const need =
+          (st.weaponId != null) ||
+          (st.armorId != null) ||
+          (st.necklaceId != null);
+        if(!need) return;
+        try{
+          const bagDoc = await fetchBagTableDoc();
+          if(st.weaponId != null)   st.weaponLabel   = makeLabelByIdFromDoc(bagDoc, 'weapon',   st.weaponId);
+          if(st.armorId != null)    st.armorLabel    = makeLabelByIdFromDoc(bagDoc, 'armor',    st.armorId);
+          if(st.necklaceId != null) st.necklaceLabel = makeLabelByIdFromDoc(bagDoc, 'necklace', st.necklaceId);
+          refreshLabels();
+        }catch(_e2){
+          // 復元失敗時は「復元中…」のままだと不親切なのでフォールバックを入れる
+          if(st.weaponId != null && String(st.weaponLabel).includes('復元中'))   st.weaponLabel   = `武器: (復元失敗) / ID:${Number(st.weaponId)}`;
+          if(st.armorId != null && String(st.armorLabel).includes('復元中'))    st.armorLabel    = `防具: (復元失敗) / ID:${Number(st.armorId)}`;
+          if(st.necklaceId != null && String(st.necklaceLabel).includes('復元中')) st.necklaceLabel = `ネックレス: (復元失敗) / ID:${Number(st.necklaceId)}`;
+          refreshLabels();
+        }
+      })();
+
+      if(btnW){
+        btnW.onclick = async (e) => {
+          e.preventDefault(); e.stopPropagation();
+          try{
+            const picked = await openPickItemModal('weapon');
+            st.weaponId = picked.id;
+            st.weaponLabel = picked.label;
+            refreshLabels();
+          }catch(_e2){}
+        };
+      }
+      if(btnA){
+        btnA.onclick = async (e) => {
+          e.preventDefault(); e.stopPropagation();
+          try{
+            const picked = await openPickItemModal('armor');
+            st.armorId = picked.id;
+            st.armorLabel = picked.label;
+            refreshLabels();
+          }catch(_e2){}
+        };
+      }
+      if(btnN){
+        btnN.onclick = async (e) => {
+          e.preventDefault(); e.stopPropagation();
+          try{
+            const picked = await openPickItemModal('necklace');
+            st.necklaceId = picked.id;
+            st.necklaceLabel = picked.label;
+            refreshLabels();
+          }catch(_e2){}
+        };
+      }
+
+      if(btnDone){
+        btnDone.onclick = (e) => {
+          e.preventDefault(); e.stopPropagation();
+          try{
+            // setPreset は「既存上書きなら順序維持」の実装なので、名前を変えずに上書きする
+            setPreset(nm, [st.weaponId, st.armorId, st.necklaceId]);
+            try{ onDone && onDone(); }catch(_e2){}
+            try{ dlg.close(); }catch(_e2){ dlg.removeAttribute('open'); }
+          }catch(_e2){
+            alert('再編集の反映に失敗しました。');
+          }
+        };
+      }
+
+      if(dlg){
+        try{ dlg.showModal(); }catch(_e){ dlg.setAttribute('open',''); }
+      }
+    };
+    if(document.body) openNow(); else document.addEventListener('DOMContentLoaded', openNow, { once:true });
+  }
+
+  // ---- プリセット並び替え modal ----
+  function buildRosterSortModal(){
+    if(document.getElementById('dba-m-roster-sort')) return;
+    const dlg = document.createElement('dialog');
+    dlg.id = 'dba-m-roster-sort';
+    dlg.className = 'dba-m-std';
+
+    const top = document.createElement('div');
+    top.className = 'dba-modal__top';
+    const t = document.createElement('div');
+    t.className = 'dba-modal__title';
+    t.textContent = 'プリセット並び替え';
+    const x = document.createElement('button');
+    x.type = 'button';
+    x.className = 'dba-btn-x';
+    x.textContent = '×';
+    top.appendChild(t);
+    top.appendChild(x);
+
+    const mid = document.createElement('div');
+    mid.className = 'dba-modal__mid';
+
+    const hint = document.createElement('div');
+    hint.className = 'dba-sort-hint';
+    hint.textContent = 'ドラッグ＆ドロップで並び替えできます（上下端に近づくとゆっくりスクロールします）。';
+    mid.appendChild(hint);
+
+    const list = document.createElement('div');
+    list.id = 'dba-roster-sort-list';
+    list.className = 'dba-sort-list';
+
+    // 挿入予定位置ライン（ドラッグ中のみ表示）
+    const ins = document.createElement('div');
+    ins.id = 'dba-roster-sort-insert-line';
+    ins.className = 'dba-sort-insert-line';
+    list.appendChild(ins);
+
+    mid.appendChild(list);
+
+    const bot = document.createElement('div');
+    bot.className = 'dba-modal__bot';
+    const btnDecide = document.createElement('button');
+    btnDecide.type = 'button';
+    btnDecide.className = 'dba-btn-apply';
+    btnDecide.id = 'dba-roster-sort-decide';
+    btnDecide.textContent = '決定';
+    const btnCancel = document.createElement('button');
+    btnCancel.type = 'button';
+    btnCancel.className = 'dba-btn-close';
+    btnCancel.id = 'dba-roster-sort-cancel';
+    btnCancel.textContent = 'Cancel';
+    bot.appendChild(btnDecide);
+    bot.appendChild(btnCancel);
+
+    dlg.appendChild(top);
+    dlg.appendChild(mid);
+    dlg.appendChild(bot);
+    document.body.appendChild(dlg);
+
+    function closeDirect(){ try{ dlg.close(); }catch(_e){ dlg.removeAttribute('open'); } }
+    x.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeDirect(); });
+    btnCancel.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeDirect(); });
+    dlg.addEventListener('cancel', (e)=>{ e.preventDefault(); closeDirect(); });
+  }
+
+  function openRosterSortModal(onDone){
+    const openNow = () => {
+      buildRosterSortModal();
+
+      const { store, roster } = getActiveRoster();
+      const presets = roster && roster.presets ? roster.presets : {};
+
+      // 現在の表示順（renderRosterModalState と同じルール）
+      const order = Array.isArray(roster && roster.presetOrder) ? roster.presetOrder : [];
+      const seen = new Set();
+      const names = [];
+      for(const nm of order){
+        if(!nm) continue;
+        if(seen.has(nm)) continue;
+        if(Object.prototype.hasOwnProperty.call(presets, nm)){
+          names.push(nm);
+          seen.add(nm);
+        }
+      }
+      for(const nm of Object.keys(presets)){
+        if(seen.has(nm)) continue;
+        names.push(nm);
+        seen.add(nm);
+      }
+
+      const dlg = document.getElementById('dba-m-roster-sort');
+      const list = document.getElementById('dba-roster-sort-list');
+      const btnDecide = document.getElementById('dba-roster-sort-decide');
+      const btnCancel = document.getElementById('dba-roster-sort-cancel');
+      if(!dlg || !list || !btnDecide || !btnCancel) return;
+
+      const insertLine = document.getElementById('dba-roster-sort-insert-line');
+
+      const hideInsertLine = () => {
+        if(!insertLine) return;
+        insertLine.style.display = 'none';
+      };
+      const showInsertLineAtIndex = (idx) => {
+        if(!insertLine) return;
+        const items = Array.from(list.querySelectorAll('.dba-sort-item'));
+        const listRect = list.getBoundingClientRect();
+
+        let y = 0;
+        if(items.length === 0){
+          y = 8; // ほぼ空の時
+        }else if(idx <= 0){
+          const r0 = items[0].getBoundingClientRect();
+          y = (r0.top - listRect.top) + list.scrollTop;
+        }else if(idx >= items.length){
+          const last = items[items.length - 1];
+          const rl = last.getBoundingClientRect();
+          // margin-bottom 分だけ少し下へ（見た目の“間”に合わせる）
+          const mb = parseFloat(getComputedStyle(last).marginBottom || '0') || 0;
+          y = (rl.bottom - listRect.top) + list.scrollTop + mb;
+        }else{
+          const rt = items[idx].getBoundingClientRect();
+          y = (rt.top - listRect.top) + list.scrollTop;
+        }
+
+        insertLine.style.top = `${Math.max(0, Math.floor(y))}px`;
+        insertLine.style.display = 'block';
+      };
+
+      // 使い回し時の多重bind対策：一旦クローンで差し替え
+      const btnDecide2 = btnDecide.cloneNode(true);
+      const btnCancel2 = btnCancel.cloneNode(true);
+      btnDecide.parentNode.replaceChild(btnDecide2, btnDecide);
+      btnCancel.parentNode.replaceChild(btnCancel2, btnCancel);
+
+      let draggingName = null;
+      let rafId = 0;
+      let scrollV = 0; // px/frame（符号あり）
+
+      const stopAutoScroll = () => {
+        scrollV = 0;
+        if(rafId){
+          cancelAnimationFrame(rafId);
+          rafId = 0;
+        }
+      };
+      const tickAutoScroll = () => {
+        if(!scrollV){ rafId = 0; return; }
+        // 速度キャップ済みの scrollV をそのまま使う
+        list.scrollTop += scrollV;
+        rafId = requestAnimationFrame(tickAutoScroll);
+      };
+      const setAutoScrollByPointerY = (clientY) => {
+        const rect = list.getBoundingClientRect();
+        const edge = 56;      // 端からこの距離でスクロール開始
+        const maxSpeed = 6;  // ★速度キャップ（px/frame）
+        const distTop = clientY - rect.top;
+        const distBot = rect.bottom - clientY;
+        let v = 0;
+        if(distTop < edge){
+          const p = Math.max(0, Math.min(1, (edge - distTop) / edge));
+          v = -Math.ceil(p * maxSpeed);
+        }else if(distBot < edge){
+          const p = Math.max(0, Math.min(1, (edge - distBot) / edge));
+          v = Math.ceil(p * maxSpeed);
+        }
+        scrollV = v;
+        if(scrollV && !rafId){
+          rafId = requestAnimationFrame(tickAutoScroll);
+        }
+        if(!scrollV){
+          stopAutoScroll();
+        }
+      };
+
+      const render = () => {
+        // ★挿入ラインは list 内に常駐させる（textContent='' で消えるため、毎回復帰させる）
+        list.textContent = '';
+        if(insertLine) list.appendChild(insertLine);
+        hideInsertLine();
+        if(names.length === 0){
+          const empty = document.createElement('div');
+          empty.style.padding = '10px';
+          empty.style.fontWeight = '800';
+          empty.textContent = 'プリセットがありません。';
+          list.appendChild(empty);
+          return;
+        }
+
+        for(const nm of names){
+          const triple = presets[nm];
+          const row = document.createElement('div');
+          row.className = 'dba-sort-item';
+          row.draggable = true;
+          row.dataset.name = nm;
+
+          const h = document.createElement('div');
+          h.className = 'dba-sort-handle';
+          h.textContent = '≡';
+          const n = document.createElement('div');
+          n.className = 'dba-sort-name';
+          n.textContent = nm;
+          const m = document.createElement('div');
+          m.className = 'dba-sort-meta';
+          m.textContent = presetMetaText(triple);
+
+          row.appendChild(h);
+          row.appendChild(n);
+          row.appendChild(m);
+
+          row.addEventListener('dragstart', (e) => {
+            draggingName = nm;
+            row.classList.add('dba-sort-dragging');
+            try{ e.dataTransfer.effectAllowed = 'move'; }catch(_e2){}
+
+            // ドラッグ開始時点の位置に“挿入予定ライン”を表示
+            try{
+              const i0 = names.indexOf(nm);
+              showInsertLineAtIndex((i0 < 0) ? 0 : i0);
+            }catch(_e3){}
+          });
+          row.addEventListener('dragend', () => {
+            draggingName = null;
+            row.classList.remove('dba-sort-dragging');
+            for(const el of list.querySelectorAll('.dba-sort-over')){
+              el.classList.remove('dba-sort-over');
+            }
+            stopAutoScroll();
+            hideInsertLine();
+          });
+
+          row.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          });
+
+          list.appendChild(row);
+        }
+      };
+
+      // drop時にだけ確定する（dragoverでは“予定位置”を計算して保持する）
+      let pendingDropIndex = null; // 0..names.length（挿入位置）
+
+      function calcDropIndex(clientY){
+        // 要件：
+        // - 放した位置が “他プリセットの上” → そのプリセットの直上に挿入
+        // - 放した位置が “プリセットとプリセットの間” → その間に挿入
+        //
+        // 実装方針：
+        // 1) まず「ポインタ直下のアイテム」があるなら、そのアイテムの index（=直上）を返す
+        // 2) 無い（=間/余白）なら、全アイテムの midY を走査して「最初に midY を超えた位置」を返す
+        //    （= “その間” の index になる。最後まで無ければ末尾）
+
+        const over = document.elementFromPoint( (window.innerWidth/2), clientY );
+        void over; // 使わない（互換用の抑止）
+
+        const hit = (eTargetForHit && eTargetForHit.closest) ? eTargetForHit.closest('.dba-sort-item') : null;
+        if(hit && hit.dataset && hit.dataset.name){
+          const toName = hit.dataset.name;
+          const idx = names.indexOf(toName);
+          if(idx >= 0) return idx; // ★直上
+        }
+
+        const items = Array.from(list.querySelectorAll('.dba-sort-item'));
+        for(const it of items){
+          const r = it.getBoundingClientRect();
+          const midY = r.top + r.height/2;
+          if(clientY < midY){
+            const nm = it.dataset ? it.dataset.name : '';
+            const idx = names.indexOf(nm);
+            if(idx >= 0) return idx;
+          }
+        }
+        return names.length; // 末尾
+      }
+
+      // ★スクロールしたら、現在の“挿入予定位置”に赤ラインを追従させる（登録は1回だけ）
+      list.addEventListener('scroll', () => {
+        try{
+          if(draggingName && typeof pendingDropIndex === 'number'){
+            showInsertLineAtIndex(pendingDropIndex);
+          }
+        }catch(_e){}
+      }, { passive:true });
+
+      // list上での dragover：予定位置を計算し、ハイライトだけ更新
+      list.addEventListener('dragover', (e) => {
+        if(!draggingName) return;
+        e.preventDefault();
+        e.stopPropagation();
+
+        setAutoScrollByPointerY(e.clientY);
+
+        // “直下の要素”を基準に、ドロップ予定indexを計算
+        // - calcDropIndex 内で参照するため、一時的に保持
+        eTargetForHit = e.target;
+        pendingDropIndex = (typeof e.clientY === 'number') ? calcDropIndex(e.clientY) : null;
+
+        // ★“今ドロップしたら挿入される予定位置”に赤ラインを表示
+        try{
+          if(typeof pendingDropIndex === 'number') showInsertLineAtIndex(pendingDropIndex);
+        }catch(_e2){}
+
+        // 見た目：ポインタ直下に item がある時だけ赤枠（.dba-sort-over）を付ける
+        for(const el of list.querySelectorAll('.dba-sort-over')){
+          el.classList.remove('dba-sort-over');
+        }
+        const overEl = (e.target && e.target.closest) ? e.target.closest('.dba-sort-item') : null;
+        if(overEl) overEl.classList.add('dba-sort-over');
+      }, { passive:false });
+
+      // drop：ここで並び替えを確定する
+      //  - “他プリセットの上” ならその直上（index=to）
+      //  - “間” ならその位置（midY走査で決定した index）
+      let eTargetForHit = null; // calcDropIndex 用（dragover/drop の e.target を渡す）
+      list.addEventListener('drop', (e) => {
+        if(!draggingName) return;
+        e.preventDefault();
+        e.stopPropagation();
+        stopAutoScroll();
+
+        eTargetForHit = e.target;
+        const idx0 = (typeof e.clientY === 'number') ? calcDropIndex(e.clientY) : pendingDropIndex;
+        pendingDropIndex = null;
+
+        const from = names.indexOf(draggingName);
+        if(from < 0) return;
+
+        let dst = (idx0 == null) ? from : Number(idx0);
+        if(!Number.isFinite(dst)) dst = from;
+
+        // remove → insert（同一要素移動なので、fromより後ろへ入れる時は1つズレる）
+        names.splice(from, 1);
+        if(dst > from) dst = dst - 1;
+        dst = Math.max(0, Math.min(names.length, dst));
+        names.splice(dst, 0, draggingName);
+
+        render();
+      });
+
+      // 初期描画
+      render();
+
+      btnCancel2.addEventListener('click', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        stopAutoScroll();
+        try{ dlg.close(); }catch(_e2){ dlg.removeAttribute('open'); }
+      });
+
+      btnDecide2.addEventListener('click', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        stopAutoScroll();
+        try{
+          // 上書き保存（表示順配列のみ更新）
+          roster.presetOrder = names.slice();
+          roster.updatedAt = nowIso();
+          store.rosters[store.activeId] = roster;
+          saveRosterStore(store);
+          try{ onDone && onDone(); }catch(_e2){}
+          try{ dlg.close(); }catch(_e2){ dlg.removeAttribute('open'); }
+        }catch(_e2){
+          alert('並び替えの保存に失敗しました。');
+        }
+      });
+
+      try{ dlg.showModal(); }catch(_e){ dlg.setAttribute('open',''); }
     };
     if(document.body) openNow(); else document.addEventListener('DOMContentLoaded', openNow, { once:true });
   }
@@ -6100,6 +6871,32 @@
       return `${k}: ${nm || '(名称不明)'} / ID:${id}`;
     }
     return `${k}: ${nm || '(未選択)'} / ID:-`;
+  }
+
+  function findEquipRowByIdFromDoc(doc, kind, equipId){
+    if(!doc || equipId == null) return null;
+    const idNum = Number(equipId);
+    if(!Number.isFinite(idNum)) return null;
+    const tableId = pickTableIdByKind(kind);
+    const table = doc.getElementById(tableId);
+    if(!table) return null;
+    // /equip/{id} へのリンクを含む行を探す
+    // ※href は "/equip/123" のような相対が基本だが、念のため部分一致でも拾う
+    const a = table.querySelector(`a[href*="/equip/${idNum}"]`);
+    if(!a) return null;
+    const tr = a.closest('tr');
+    return tr || null;
+  }
+
+  function makeLabelByIdFromDoc(doc, kind, equipId){
+    const k = (kind === 'weapon') ? '武器' : (kind === 'armor') ? '防具' : 'ネックレス';
+    if(equipId == null) return `未選択（${k}）`;
+    const tr = findEquipRowByIdFromDoc(doc, kind, equipId);
+    if(!tr){
+      // 見つからない場合はフォールバック（IDは保持されているので、最低限表示する）
+      return `${k}: (見つかりません) / ID:${Number(equipId)}`;
+    }
+    return extractRowLabel(tr, kind);
   }
 
   async function fetchBagTableDoc(){
