@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         Donguri Battle Assistant
 // @namespace    https://donguri.5ch.net/
-// @version      0.0.19.5
+// @version      0.0.20.0
 // @description  5ちゃんねるのどんぐりシステムから派生したゲームの操作性を改善するためのユーザースクリプト
 // @author       福呼び草
-// @match        https://donguri.5ch.net/teambattle?m=*
+// @match        https://donguri.5ch.net/teambattle*
 // @match        https://donguri.5ch.net/bag
 // @match        https://donguri.5ch.net/
 // @run-at       document-start
@@ -13,6 +13,8 @@
 
 (function() {
   'use strict';
+
+  console.log('[DBA] BOOT', 'ver=', (typeof DBA_VERSION !== 'undefined' ? DBA_VERSION : '(meta)'), 'href=', location.href);
 
   // URL判定
   const urlObj = new URL(location.href);
