@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Donguri Battle Assistant
 // @namespace    https://donguri.5ch.net/
-// @version      0.0.20.0
+// @version      0.0.20.1
 // @description  5ちゃんねるのどんぐりシステムから派生したゲームの操作性を改善するためのユーザースクリプト
 // @author       福呼び草
 // @match        https://donguri.5ch.net/teambattle*
@@ -2573,7 +2573,13 @@
       longPressGaugeCancel();
     }
 
+    // iOS Safari 対策：touch と pointer の二重発火を抑止
+    let lastTouchAt = 0;
+
     function onPointerDown(evt){
+      if(evt.type === 'touchstart') lastTouchAt = Date.now();
+      if(evt.type === 'pointerdown' && (Date.now() - lastTouchAt) < 800) return;
+
       // 既存ハンドラを無効化
       evt.preventDefault();
       evt.stopImmediatePropagation();
@@ -2601,6 +2607,9 @@
     }
 
     function onPointerUp(evt){
+      if(evt.type === 'touchend') lastTouchAt = Date.now();
+      if(evt.type === 'pointerup' && (Date.now() - lastTouchAt) < 800) return;
+
       evt.preventDefault();
       evt.stopImmediatePropagation();
 
@@ -2631,6 +2640,10 @@
     overlay.addEventListener('pointerdown', onPointerDown, true);
     overlay.addEventListener('pointerup', onPointerUp, true);
     overlay.addEventListener('pointercancel', (e)=>{ clearLP(); }, true);
+    // iOS Safari 用（passive:false が重要）
+    overlay.addEventListener('touchstart', onPointerDown, { capture:true, passive:false });
+    overlay.addEventListener('touchend', onPointerUp, { capture:true, passive:false });
+    overlay.addEventListener('touchcancel', (e)=>{ clearLP(); }, { capture:true, passive:false });
     // ★重要：一部環境で pointer で止めても click が別途発火してページ側ハンドラが動く事があるため、
     //        click を capture で確実に遮断する（遷移/既存処理の暴発を防ぐ）
     overlay.addEventListener('click', (evt) => {
@@ -3715,8 +3728,17 @@
       return {x: evt.clientX, y: evt.clientY};
     }
 
-    document.addEventListener('pointerdown', (evt) => {
+    // iOS Safari 対策：
+    // - PointerEvent が発火しない/ preventDefault が効かず click/遷移が走る事があるため、
+    //   touchstart/touchend を passive:false + capture で拾う
+    // - touch と pointer が両方来る環境では二重実行を抑止
+    let lastTouchAt = 0;
+
+    function onDown(evt){
       if(mode === 'rb') return;
+
+      if(evt.type === 'touchstart') lastTouchAt = Date.now();
+      if(evt.type === 'pointerdown' && (Date.now() - lastTouchAt) < 800) return;
 
       const rc = getRCFromEvent(evt);
       if(!rc) return;
@@ -3746,10 +3768,13 @@
           // noop
         }
       }, LP_MS);
-    }, true);
+    }
 
-    document.addEventListener('pointerup', (evt) => {
+    function onUp(evt){
       if(mode === 'rb') return;
+
+      if(evt.type === 'touchend') lastTouchAt = Date.now();
+      if(evt.type === 'pointerup' && (Date.now() - lastTouchAt) < 800) return;
 
       const rc = lpCtx ? { r: lpCtx.r, c: lpCtx.c } : getRCFromEvent(evt);
       if(!rc) return;
@@ -3778,13 +3803,21 @@
           alert('操作に失敗しました。');
         }
       })();
-    }, true);
+    }
 
-    document.addEventListener('pointercancel', () => {
+    function onCancel(){
       clearLP();
       lpFired = false;
       lpCtx = null;
-    }, true);
+    }
+
+    document.addEventListener('pointerdown', onDown, true);
+    document.addEventListener('pointerup', onUp, true);
+    document.addEventListener('pointercancel', onCancel, true);
+    // iOS Safari 用（passive:false が重要）
+    document.addEventListener('touchstart', onDown, { capture:true, passive:false });
+    document.addEventListener('touchend', onUp, { capture:true, passive:false });
+    document.addEventListener('touchcancel', onCancel, { capture:true, passive:false });
 
     // ★重要：一部環境で pointer 系で preventDefault しても click が発火し、
     //        a[href] のデフォルト遷移が走る事があるため、grid内の click を capture で確実に潰す
