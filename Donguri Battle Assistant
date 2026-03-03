@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Donguri Battle Assistant
 // @namespace    https://donguri.5ch.net/
-// @version      0.0.21.1
+// @version      0.0.22.2
 // @description  5ちゃんねるのどんぐりシステムから派生したゲームの操作性を改善するためのユーザースクリプト
 // @author       福呼び草
 // @match        https://donguri.5ch.net/teambattle*
@@ -7739,10 +7739,66 @@
     }
   }
 
-  async function scanAllCellsAndRender(opts){
-      const opt = (opts && typeof opts === 'object') ? opts : {};
-      const keySet = (opt.keySet instanceof Set) ? opt.keySet : null;
+  // =========================
+  // RB専用：トップページHTML内の window.__FOW から「既知領域」を抽出（visible + explored の union）
+  //  - explored / visible をそれぞれ配列としてJSON.parseし、座標を union する
+  //  - 返り値: [{row, col}, ...]
+  // =========================
+  function extractRbKnownCoordsFromDoc(doc){
+    try{
+      if(mode !== 'rb') return [];
+      if(!doc) return [];
 
+      // window.__FOW が含まれる <script> を探す
+      const scripts = Array.from(doc.querySelectorAll('script'));
+      let src = '';
+      for(const s of scripts){
+        const t = (s && s.textContent) ? String(s.textContent) : '';
+        if(t.includes('window.__FOW') && t.includes('"hasCapital"') && (t.includes('"explored"') || t.includes('"visible"'))){
+          src = t;
+          break;
+        }
+      }
+      if(!src) return [];
+
+      // explored / visible をそれぞれ抜く（両方ある想定だが、片方欠けても動く）
+      // - explored:  "explored":[ ... ],"hasCapital"
+      // - visible :  "visible":[ ... ]};  （末尾は }; でも }}; でもよいよう緩く拾う）
+      const mx = src.match(/"explored"\s*:\s*(\[[\s\S]*?\])\s*,\s*"hasCapital"/);
+      const mv = src.match(/"visible"\s*:\s*(\[[\s\S]*?\])\s*}\s*;?/);
+
+      const explored = (mx && mx[1]) ? JSON.parse(mx[1]) : [];
+      const visible  = (mv && mv[1]) ? JSON.parse(mv[1]) : [];
+      if(!Array.isArray(explored) || !Array.isArray(visible)) return [];
+
+      const out = [];
+      const seen = new Set();
+
+      // union: visible → explored の順に足す（順序に意味は無いが、安定化しやすい）
+      const addList = (arr) => {
+        for(const rc of arr){
+          if(!rc || rc.length < 2) continue;
+          const r = Number(rc[0]);
+          const c = Number(rc[1]);
+          if(!Number.isFinite(r) || !Number.isFinite(c)) continue;
+          const k = `${r}-${c}`;
+          if(seen.has(k)) continue;
+          seen.add(k);
+          out.push({ row: r, col: c });
+        }
+      };
+      addList(visible);
+      addList(explored);
+
+      // 安定化
+      out.sort((a,b) => (a.row - b.row) || (a.col - b.col));
+      return out;
+    }catch(_e){
+      return [];
+    }
+  }
+
+  async function scanAllCellsAndRender(){
     const btn = document.getElementById('dba-btn-battleinfo');
     if(btn){
       btn.disabled = true;
@@ -7750,9 +7806,37 @@
       btn.textContent = 'マップ更新中…';
     }
 
-    // 先にトップページからバトルマップだけ更新（スクロール/ちらつき抑制）
-    // 失敗しても戦況取得自体は続行（ただし debug ON 時に成否ログが出る）
-    const refreshed = await refreshBattlemapFromTopPage();
+    // まずローカルのバトルマップ表示データ（レイヤー文字）をクリア（初期化）
+    // ※要件：RB長押し時は「ローカルをクリア→サーバーHTMLの explored のみ対象」を徹底する
+    clearLayerTexts();
+
+    let refreshed = false;
+    let rbKnownJobs = null; // RB時のみ [{row,col}, ...]（visible + explored の union）
+
+    if(mode === 'rb'){
+      // RBは「サーバーから返ってきたHTML」を調べ、visible + explored（既知領域）だけを対象にする
+      const topUrl = `https://donguri.5ch.net/teambattle?m=${mode}`;
+      try{
+        const res = await fetch(topUrl, { method:'GET', credentials:'include', cache:'no-store' });
+        if(!res.ok) throw new Error(`HTTP ${res.status}`);
+        const html = await res.text();
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+
+        // 既知領域 座標抽出（visible + explored の union）
+        rbKnownJobs = extractRbKnownCoordsFromDoc(doc);
+
+        // マップ本体は「取得済み doc」を使って差し替え（余計な再fetchを避ける）
+        refreshed = await refreshBattlemapFromFetchedDoc(doc, { topUrl });
+      }catch(_e){
+        refreshed = false;
+        rbKnownJobs = rbKnownJobs || [];
+      }
+    }else{
+      // hc / l は従来通り：トップページからバトルマップだけ更新（スクロール/ちらつき抑制）
+      // 失敗しても戦況取得自体は続行（ただし debug ON 時に成否ログが出る）
+      refreshed = await refreshBattlemapFromTopPage();
+    }
+
     if(btn){
       btn.textContent = refreshed ? '戦況取得中…' : '戦況取得中…(マップ更新失敗)';
     }
@@ -7762,24 +7846,30 @@
     scheduleBattlemapLayerSync();
     await raf2(); // cells が rebuild されるのを待つ
 
-      // 対象セル（全セル or explored限定）
-      const allCells = Array.from(document.querySelectorAll('#dba-battlemap-layer-grid .dba-layer-cell'));
-      const targetCells = keySet
-        ? allCells.filter((c) => keySet.has(`${c.dataset.row}-${c.dataset.col}`))
-        : allCells;
-
-
-    // まず全セルにプレースホルダ
-    clearLayerTexts();
-      // 全セルに '…' を置くと explored 限定時にノイズになるので、対象セルのみプレースホルダを置く
-      for(const c of targetCells){
+    // まずプレースホルダ
+    // - RB: 既知領域（visible + explored）のセルだけ「…」を出す
+    // - hc/l: 従来通り全セル
+    const cells = Array.from(document.querySelectorAll('#dba-battlemap-layer-grid .dba-layer-cell'));
+    if(mode === 'rb'){
+      // rbKnownJobs が取れなかった時は “安全側” として全セルにフォールバック
+      const jobs = (rbKnownJobs && rbKnownJobs.length > 0)
+        ? rbKnownJobs
+        : cells.map((c) => ({ row: Number(c.dataset.row), col: Number(c.dataset.col) }));
+      for(const j of jobs){
+        setLayerCellText(j.row, j.col, '…');
+      }
+    }else{
+      for(const c of cells){
         setLayerCellText(c.dataset.row, c.dataset.col, '…');
       }
+    }
 
     // fetch の並列数（多すぎると重いので抑制）
     const CONCURRENCY = 9;
 
-    const jobs = targetCells.map((c) => ({ row: Number(c.dataset.row), col: Number(c.dataset.col) }));
+    const jobs = (mode === 'rb' && rbKnownJobs && rbKnownJobs.length > 0)
+      ? rbKnownJobs
+      : cells.map((c) => ({ row: Number(c.dataset.row), col: Number(c.dataset.col) }));
     await mapLimit(jobs, CONCURRENCY, async (job) => {
       const { row, col } = job;
       try{
@@ -7980,79 +8070,45 @@
     return changed;
   }
 
-    // =========================
-    // RB: window.__FOW の "explored" 解析＆比較
-    //  - explored の座標数/内容を比較し、短押し処理の対象セルを explored に限定するためのヘルパ
-    // =========================
-    function setEquals(a, b){
-      if(!(a instanceof Set) || !(b instanceof Set)) return false;
-      if(a.size !== b.size) return false;
-      for(const v of a){
-        if(!b.has(v)) return false;
+  // =========================
+  // RBクリック専用：指定座標（window.__FOW の visible+explored union 等）だけを差分判定対象にする
+  //  - coords: [{row, col}, ...]
+  // =========================
+  function diffChangedCellsWithinCoords(curSnap, newSnap, coords){
+    const changed = [];
+    const keys = new Set();
+
+    // coords 由来のキーだけを見る（＝既知領域だけ）
+    if(Array.isArray(coords)){
+      for(const rc of coords){
+        if(!rc) continue;
+        const r = Number(rc.row);
+        const c = Number(rc.col);
+        if(!Number.isFinite(r) || !Number.isFinite(c)) continue;
+        keys.add(`${r}-${c}`);
       }
-      return true;
     }
-  
-    function parseRbExploredSetFromDoc(doc){
-      // return: { ok:boolean, set:Set<string>, count:number }
-      const out = { ok:false, set:new Set(), count:0 };
-      try{
-        if(!doc) return out;
-        const scripts = Array.from(doc.querySelectorAll('script'));
-        for(const sc of scripts){
-          const t = sc.textContent || '';
-          if(!t) continue;
-          // window.__FOW = {"explored":[[r,c]...],"hasCapital":true,"visible":[...]}
-          if(!t.includes('window.__FOW') || !t.includes('explored')) continue;
-  
-          // "explored":[ ... ] を最短で抜く（hasCapital までを目印にする）
-          let m = t.match(/"explored"\s*:\s*(\[[\s\S]*?\])\s*,\s*"hasCapital"/);
-          if(!m){
-            // 予備：hasCapital が無い/順序が違う場合に備えて、次のカンマまで
-            m = t.match(/"explored"\s*:\s*(\[[\s\S]*?\])\s*,/);
-          }
-          if(!m) continue;
-  
-          const arr = JSON.parse(m[1]); // [[r,c], ...]
-          if(!Array.isArray(arr)) continue;
-  
-          const s = new Set();
-          for(const rc of arr){
-            if(!rc || rc.length < 2) continue;
-            const r = Number(rc[0]);
-            const c = Number(rc[1]);
-            if(!Number.isFinite(r) || !Number.isFinite(c)) continue;
-            s.add(`${r}-${c}`);
-          }
-          out.ok = true;
-          out.set = s;
-          out.count = s.size;
-          return out;
-        }
-      }catch(_e){
-        // noop
+
+    // coords が取れない/空の場合は「安全側」に全セル差分へフォールバック
+    if(keys.size === 0){
+      return diffChangedCells(curSnap, newSnap);
+    }
+
+    for(const k of keys){
+      const c1 = (curSnap.cellColors && (k in curSnap.cellColors)) ? curSnap.cellColors[k] : null;
+      const c2 = (newSnap.cellColors && (k in newSnap.cellColors)) ? newSnap.cellColors[k] : null;
+      const cap1 = curSnap.capitalSet ? curSnap.capitalSet.has(k) : false;
+      const cap2 = newSnap.capitalSet ? newSnap.capitalSet.has(k) : false;
+      if(c1 !== c2 || cap1 !== cap2){
+        const m = k.match(/^(\d+)-(\d+)$/);
+        if(!m) continue;
+        changed.push({ row: Number(m[1]), col: Number(m[2]) });
       }
-      return out;
     }
-  
-    // RB短押し用：キー集合（例: exploredSet）に限定して差分セルを検出
-    function diffChangedCellsInKeys(curSnap, newSnap, keySet){
-      const changed = [];
-      const keys = (keySet instanceof Set) ? keySet : new Set();
-      for(const k of keys){
-        const c1 = (curSnap.cellColors && (k in curSnap.cellColors)) ? curSnap.cellColors[k] : null;
-        const c2 = (newSnap.cellColors && (k in newSnap.cellColors)) ? newSnap.cellColors[k] : null;
-        const cap1 = curSnap.capitalSet ? curSnap.capitalSet.has(k) : false;
-        const cap2 = newSnap.capitalSet ? newSnap.capitalSet.has(k) : false;
-        if(c1 !== c2 || cap1 !== cap2){
-          const m = k.match(/^(\d+)-(\d+)$/);
-          if(!m) continue;
-          changed.push({ row: Number(m[1]), col: Number(m[2]) });
-        }
-      }
-      changed.sort((a,b) => (a.row - b.row) || (a.col - b.col));
-      return changed;
-    }
+
+    changed.sort((a,b) => (a.row - b.row) || (a.col - b.col));
+    return changed;
+  }
 
   async function updateOnlyChangedCellsFromTopPage(){
     const btn = document.getElementById('dba-btn-battleinfo');
@@ -8078,31 +8134,6 @@
       const curSnap = getBattlemapSnapshotFromDoc(document);
       const newSnap = getBattlemapSnapshotFromDoc(doc);
 
-        // (2-RB-FOW) RB限定：explored の比較結果で「短押しの対象セル」を決める
-        // 条件：
-        //  - ローカル explored 数 < サーバ explored 数 → サーバ explored のみで短押し処理
-        //  - ローカル explored 数 == サーバ explored 数 かつ 座標一致 → サーバ explored のみで短押し処理
-        //  - それ以外 → 短押しはやめて「長押し処理」（=全セル巡回）へフォールバック
-        let rbExploredKeySet = null;
-        if(mode === 'rb'){
-          const localFow = parseRbExploredSetFromDoc(document);
-          const serverFow = parseRbExploredSetFromDoc(doc);
-  
-          const lc = Number(localFow.count || 0);
-          const sc = Number(serverFow.count || 0);
-          const same = (lc === sc) && setEquals(localFow.set, serverFow.set);
-          const allowShort = !!(serverFow.ok && ((lc < sc) || same));
-  
-          if(!allowShort){
-            if(btn) btn.textContent = '全更新（探索差）…';
-            await scanAllCellsAndRender();
-            return;
-          }
-  
-          // サーバ側 explored を「短押し対象セル」として採用
-          rbExploredKeySet = serverFow.set;
-        }
-
       // (2-1) サイズ違い → 長押しと同じ
       if(curSnap.rows !== newSnap.rows || curSnap.cols !== newSnap.cols){
         if(btn) btn.textContent = '全更新（サイズ差）…';
@@ -8120,9 +8151,13 @@
       }
 
       // (2-3) 差分セルだけ詳細取得
-        const changed = (mode === 'rb' && rbExploredKeySet)
-          ? diffChangedCellsInKeys(curSnap, newSnap, rbExploredKeySet)
-          : diffChangedCells(curSnap, newSnap);
+      // RB のクリックは「サーバーHTMLの window.__FOW（<script>window.__FOW=... </script>）内の座標」
+      // ＝ visible + explored の union（既知領域）だけを差分判定対象にする
+      // ※座標抽出は extractRbKnownCoordsFromDoc(doc) を使用
+      const rbKnown = (mode === 'rb') ? extractRbKnownCoordsFromDoc(doc) : null;
+      const changed = (mode === 'rb')
+        ? diffChangedCellsWithinCoords(curSnap, newSnap, rbKnown)
+        : diffChangedCells(curSnap, newSnap);
 
       // ★追加要件： (2-3) に該当する場合は、差分セルの詳細取得に加えて
       // 「バトルマップの最新版への差し替え（最新データを使っての再描画）」も実施する
@@ -8144,13 +8179,11 @@
       await raf2();
 
       if(changed.length === 0){
+        // 差分なし：現状維持（レイヤー表示も触らず、ボタン表示も通常に戻して操作待ち）
         if(btn){
-          btn.textContent = '差分なし';
-          setTimeout(() => {
-            btn.disabled = false;
-            btn.dataset.dbaBusy = '0';
-            btn.textContent = '戦況情報';
-          }, 600);
+          btn.disabled = false;
+          btn.dataset.dbaBusy = '0';
+          btn.textContent = '戦況情報';
         }
         return;
       }
@@ -8638,39 +8671,7 @@
         lpFired = true;
         longPressGaugeComplete();
         try{
-            // RB限定：explored の比較結果で「長押し対象セル」を絞り込む
-            // 条件：
-            //  - ローカル explored 数 < サーバ explored 数 → サーバ explored のみ
-            //  - ローカル explored 数 == サーバ explored 数 かつ 座標一致 → サーバ explored のみ
-            //  - それ以外 → 全座標（従来通り）
-            if(mode === 'rb'){
-              const topUrl = `https://donguri.5ch.net/teambattle?m=${mode}`;
-              try{
-                const res = await fetch(topUrl, { method:'GET', credentials:'include', cache:'no-store' });
-                if(!res.ok) throw new Error(`HTTP ${res.status}`);
-                const html = await res.text();
-                const doc = new DOMParser().parseFromString(html, 'text/html');
-
-                const localFow  = parseRbExploredSetFromDoc(document);
-                const serverFow = parseRbExploredSetFromDoc(doc);
-                const lc = Number(localFow.count || 0);
-                const sc = Number(serverFow.count || 0);
-                const same = (lc === sc) && setEquals(localFow.set, serverFow.set);
-                const allowExploredOnly = !!(serverFow.ok && ((lc < sc) || same));
-
-                if(allowExploredOnly){
-                  await scanAllCellsAndRender({ keySet: serverFow.set });
-                }else{
-                  await scanAllCellsAndRender(); // 全座標
-                }
-                return;
-              }catch(_e2){
-                // fetch/parse 失敗時は安全側（全座標）
-                await scanAllCellsAndRender();
-                return;
-              }
-            }
-            await scanAllCellsAndRender();
+          await scanAllCellsAndRender();
         }catch(_e){
           // 何かあれば控えめに
           alert('戦況情報の取得に失敗しました。');
