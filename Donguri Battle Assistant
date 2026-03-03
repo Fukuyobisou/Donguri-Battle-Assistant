@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Donguri Battle Assistant
 // @namespace    https://donguri.5ch.net/
-// @version      0.0.20.1
+// @version      0.0.21.1
 // @description  5ちゃんねるのどんぐりシステムから派生したゲームの操作性を改善するためのユーザースクリプト
 // @author       福呼び草
 // @match        https://donguri.5ch.net/teambattle*
@@ -7739,7 +7739,10 @@
     }
   }
 
-  async function scanAllCellsAndRender(){
+  async function scanAllCellsAndRender(opts){
+      const opt = (opts && typeof opts === 'object') ? opts : {};
+      const keySet = (opt.keySet instanceof Set) ? opt.keySet : null;
+
     const btn = document.getElementById('dba-btn-battleinfo');
     if(btn){
       btn.disabled = true;
@@ -7759,17 +7762,24 @@
     scheduleBattlemapLayerSync();
     await raf2(); // cells が rebuild されるのを待つ
 
+      // 対象セル（全セル or explored限定）
+      const allCells = Array.from(document.querySelectorAll('#dba-battlemap-layer-grid .dba-layer-cell'));
+      const targetCells = keySet
+        ? allCells.filter((c) => keySet.has(`${c.dataset.row}-${c.dataset.col}`))
+        : allCells;
+
+
     // まず全セルにプレースホルダ
     clearLayerTexts();
-    const cells = Array.from(document.querySelectorAll('#dba-battlemap-layer-grid .dba-layer-cell'));
-    for(const c of cells){
-      setLayerCellText(c.dataset.row, c.dataset.col, '…');
-    }
+      // 全セルに '…' を置くと explored 限定時にノイズになるので、対象セルのみプレースホルダを置く
+      for(const c of targetCells){
+        setLayerCellText(c.dataset.row, c.dataset.col, '…');
+      }
 
     // fetch の並列数（多すぎると重いので抑制）
     const CONCURRENCY = 9;
 
-    const jobs = cells.map((c) => ({ row: Number(c.dataset.row), col: Number(c.dataset.col) }));
+    const jobs = targetCells.map((c) => ({ row: Number(c.dataset.row), col: Number(c.dataset.col) }));
     await mapLimit(jobs, CONCURRENCY, async (job) => {
       const { row, col } = job;
       try{
@@ -7970,6 +7980,80 @@
     return changed;
   }
 
+    // =========================
+    // RB: window.__FOW の "explored" 解析＆比較
+    //  - explored の座標数/内容を比較し、短押し処理の対象セルを explored に限定するためのヘルパ
+    // =========================
+    function setEquals(a, b){
+      if(!(a instanceof Set) || !(b instanceof Set)) return false;
+      if(a.size !== b.size) return false;
+      for(const v of a){
+        if(!b.has(v)) return false;
+      }
+      return true;
+    }
+  
+    function parseRbExploredSetFromDoc(doc){
+      // return: { ok:boolean, set:Set<string>, count:number }
+      const out = { ok:false, set:new Set(), count:0 };
+      try{
+        if(!doc) return out;
+        const scripts = Array.from(doc.querySelectorAll('script'));
+        for(const sc of scripts){
+          const t = sc.textContent || '';
+          if(!t) continue;
+          // window.__FOW = {"explored":[[r,c]...],"hasCapital":true,"visible":[...]}
+          if(!t.includes('window.__FOW') || !t.includes('explored')) continue;
+  
+          // "explored":[ ... ] を最短で抜く（hasCapital までを目印にする）
+          let m = t.match(/"explored"\s*:\s*(\[[\s\S]*?\])\s*,\s*"hasCapital"/);
+          if(!m){
+            // 予備：hasCapital が無い/順序が違う場合に備えて、次のカンマまで
+            m = t.match(/"explored"\s*:\s*(\[[\s\S]*?\])\s*,/);
+          }
+          if(!m) continue;
+  
+          const arr = JSON.parse(m[1]); // [[r,c], ...]
+          if(!Array.isArray(arr)) continue;
+  
+          const s = new Set();
+          for(const rc of arr){
+            if(!rc || rc.length < 2) continue;
+            const r = Number(rc[0]);
+            const c = Number(rc[1]);
+            if(!Number.isFinite(r) || !Number.isFinite(c)) continue;
+            s.add(`${r}-${c}`);
+          }
+          out.ok = true;
+          out.set = s;
+          out.count = s.size;
+          return out;
+        }
+      }catch(_e){
+        // noop
+      }
+      return out;
+    }
+  
+    // RB短押し用：キー集合（例: exploredSet）に限定して差分セルを検出
+    function diffChangedCellsInKeys(curSnap, newSnap, keySet){
+      const changed = [];
+      const keys = (keySet instanceof Set) ? keySet : new Set();
+      for(const k of keys){
+        const c1 = (curSnap.cellColors && (k in curSnap.cellColors)) ? curSnap.cellColors[k] : null;
+        const c2 = (newSnap.cellColors && (k in newSnap.cellColors)) ? newSnap.cellColors[k] : null;
+        const cap1 = curSnap.capitalSet ? curSnap.capitalSet.has(k) : false;
+        const cap2 = newSnap.capitalSet ? newSnap.capitalSet.has(k) : false;
+        if(c1 !== c2 || cap1 !== cap2){
+          const m = k.match(/^(\d+)-(\d+)$/);
+          if(!m) continue;
+          changed.push({ row: Number(m[1]), col: Number(m[2]) });
+        }
+      }
+      changed.sort((a,b) => (a.row - b.row) || (a.col - b.col));
+      return changed;
+    }
+
   async function updateOnlyChangedCellsFromTopPage(){
     const btn = document.getElementById('dba-btn-battleinfo');
     if(btn){
@@ -7994,6 +8078,31 @@
       const curSnap = getBattlemapSnapshotFromDoc(document);
       const newSnap = getBattlemapSnapshotFromDoc(doc);
 
+        // (2-RB-FOW) RB限定：explored の比較結果で「短押しの対象セル」を決める
+        // 条件：
+        //  - ローカル explored 数 < サーバ explored 数 → サーバ explored のみで短押し処理
+        //  - ローカル explored 数 == サーバ explored 数 かつ 座標一致 → サーバ explored のみで短押し処理
+        //  - それ以外 → 短押しはやめて「長押し処理」（=全セル巡回）へフォールバック
+        let rbExploredKeySet = null;
+        if(mode === 'rb'){
+          const localFow = parseRbExploredSetFromDoc(document);
+          const serverFow = parseRbExploredSetFromDoc(doc);
+  
+          const lc = Number(localFow.count || 0);
+          const sc = Number(serverFow.count || 0);
+          const same = (lc === sc) && setEquals(localFow.set, serverFow.set);
+          const allowShort = !!(serverFow.ok && ((lc < sc) || same));
+  
+          if(!allowShort){
+            if(btn) btn.textContent = '全更新（探索差）…';
+            await scanAllCellsAndRender();
+            return;
+          }
+  
+          // サーバ側 explored を「短押し対象セル」として採用
+          rbExploredKeySet = serverFow.set;
+        }
+
       // (2-1) サイズ違い → 長押しと同じ
       if(curSnap.rows !== newSnap.rows || curSnap.cols !== newSnap.cols){
         if(btn) btn.textContent = '全更新（サイズ差）…';
@@ -8011,7 +8120,9 @@
       }
 
       // (2-3) 差分セルだけ詳細取得
-      const changed = diffChangedCells(curSnap, newSnap);
+        const changed = (mode === 'rb' && rbExploredKeySet)
+          ? diffChangedCellsInKeys(curSnap, newSnap, rbExploredKeySet)
+          : diffChangedCells(curSnap, newSnap);
 
       // ★追加要件： (2-3) に該当する場合は、差分セルの詳細取得に加えて
       // 「バトルマップの最新版への差し替え（最新データを使っての再描画）」も実施する
@@ -8527,7 +8638,39 @@
         lpFired = true;
         longPressGaugeComplete();
         try{
-          await scanAllCellsAndRender();
+            // RB限定：explored の比較結果で「長押し対象セル」を絞り込む
+            // 条件：
+            //  - ローカル explored 数 < サーバ explored 数 → サーバ explored のみ
+            //  - ローカル explored 数 == サーバ explored 数 かつ 座標一致 → サーバ explored のみ
+            //  - それ以外 → 全座標（従来通り）
+            if(mode === 'rb'){
+              const topUrl = `https://donguri.5ch.net/teambattle?m=${mode}`;
+              try{
+                const res = await fetch(topUrl, { method:'GET', credentials:'include', cache:'no-store' });
+                if(!res.ok) throw new Error(`HTTP ${res.status}`);
+                const html = await res.text();
+                const doc = new DOMParser().parseFromString(html, 'text/html');
+
+                const localFow  = parseRbExploredSetFromDoc(document);
+                const serverFow = parseRbExploredSetFromDoc(doc);
+                const lc = Number(localFow.count || 0);
+                const sc = Number(serverFow.count || 0);
+                const same = (lc === sc) && setEquals(localFow.set, serverFow.set);
+                const allowExploredOnly = !!(serverFow.ok && ((lc < sc) || same));
+
+                if(allowExploredOnly){
+                  await scanAllCellsAndRender({ keySet: serverFow.set });
+                }else{
+                  await scanAllCellsAndRender(); // 全座標
+                }
+                return;
+              }catch(_e2){
+                // fetch/parse 失敗時は安全側（全座標）
+                await scanAllCellsAndRender();
+                return;
+              }
+            }
+            await scanAllCellsAndRender();
         }catch(_e){
           // 何かあれば控えめに
           alert('戦況情報の取得に失敗しました。');
