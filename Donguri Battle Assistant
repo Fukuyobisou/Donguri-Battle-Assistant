@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Donguri Battle Assistant
 // @namespace    https://donguri.5ch.net/
-// @version      0.0.22.2
+// @version      0.0.22.3
 // @description  5ちゃんねるのどんぐりシステムから派生したゲームの操作性を改善するためのユーザースクリプト
 // @author       福呼び草
 // @match        https://donguri.5ch.net/teambattle*
@@ -7967,6 +7967,35 @@
     }
   }
 
+  // =========================
+  // RB専用：normalizeTerrainsPayload() の戻り値（JSON文字列）を
+  // 「座標キー(k='r-c') → 地形(t)」へ展開して扱う
+  //  - (2)(3)(5) の判定に使う
+  // =========================
+  function terrainsKeyToMap(terrainsKey){
+    const map = Object.create(null); // k -> t
+    const keys = new Set();          // k
+    try{
+      const s = String(terrainsKey || '');
+      if(!s) return { map, keys };
+      const rows = JSON.parse(s);
+      if(!Array.isArray(rows)) return { map, keys };
+      for(const it of rows){
+        if(!it) continue;
+        const r = Number(it.r);
+        const c = Number(it.c);
+        const t = String(it.t ?? '').trim();
+        if(!Number.isFinite(r) || !Number.isFinite(c)) continue;
+        const k = `${r}-${c}`;
+        keys.add(k);
+        map[k] = t;
+      }
+      return { map, keys };
+    }catch(_e){
+      return { map, keys };
+    }
+  }
+
   function getHcLGridSpecFromDoc(doc){
     const grid = doc.querySelector('.grid');
     if(!grid) return { rows:0, cols:0 };
@@ -8134,30 +8163,110 @@
       const curSnap = getBattlemapSnapshotFromDoc(document);
       const newSnap = getBattlemapSnapshotFromDoc(doc);
 
-      // (2-1) サイズ違い → 長押しと同じ
+      // (1) GRID_SIZE 差 → 長押し（全セル更新）へ
       if(curSnap.rows !== newSnap.rows || curSnap.cols !== newSnap.cols){
         if(btn) btn.textContent = '全更新（サイズ差）…';
         await scanAllCellsAndRender();
         return;
       }
 
-      // (2-2) RBのみ terrainsPayload が違う → 長押しと同じ
+      // ============================================================
+      // RBクリック専用：サーバーとローカルを比較して (1)〜(7) で分岐
+      //  - (1)〜(3) なら「長押し処理（全セル更新）」へ引き継ぐ
+      //  - (4)〜(7) なら「クリック処理（差分セルだけ更新）」を実施
+      // ============================================================
+      let jobs = null; // [{row,col}, ...]
+
       if(mode === 'rb'){
-        if((curSnap.terrainsKey || '') !== (newSnap.terrainsKey || '')){
-          if(btn) btn.textContent = '全更新（地形差）…';
+        // (A) __FOW（visible+explored union）＝「既知領域」
+        const fowLocal = extractRbKnownCoordsFromDoc(document);
+        const fowServer = extractRbKnownCoordsFromDoc(doc);
+        const fowLocalSet = new Set((fowLocal||[]).map(rc => `${rc.row}-${rc.col}`));
+        const fowServerSet = new Set((fowServer||[]).map(rc => `${rc.row}-${rc.col}`));
+
+        // (B) terrainsPayload（既知地形）
+        const terrLocal = terrainsKeyToMap(curSnap.terrainsKey || '');
+        const terrServer = terrainsKeyToMap(newSnap.terrainsKey || '');
+
+        // -----------------------
+        // (2) GRID_SIZE 同じ かつ terrainsPayload の「既知座標数」が
+        //     ローカル > サーバー なら長押しへ
+        // -----------------------
+        if(terrLocal.keys.size > terrServer.keys.size){
+          if(btn) btn.textContent = '全更新（地形既知数:ローカル>サーバ）…';
           await scanAllCellsAndRender();
           return;
         }
+
+        // -----------------------
+        // (3) GRID_SIZE 同じ かつ terrainsPayload の「共通既知座標」で
+        //     地形が食い違う座標があれば長押しへ
+        // -----------------------
+        for(const k of terrLocal.keys){
+          if(!terrServer.keys.has(k)) continue; // 共通既知のみ
+          const t1 = terrLocal.map[k];
+          const t2 = terrServer.map[k];
+          if(t1 !== t2){
+            if(btn) btn.textContent = '全更新（地形食い違い）…';
+            await scanAllCellsAndRender();
+            return;
+          }
+        }
+
+        // -----------------------
+        // (4) __FOW：サーバー既知 & ローカル未知 → その座標だけ更新
+        // -----------------------
+        const need = new Set(); // k='r-c'
+        for(const k of fowServerSet){
+          if(!fowLocalSet.has(k)) need.add(k);
+        }
+
+        // -----------------------
+        // (5) terrainsPayload：サーバー既知 & ローカル未知 → その座標だけ更新
+        // -----------------------
+        for(const k of terrServer.keys){
+          if(!terrLocal.keys.has(k)) need.add(k);
+        }
+
+        // -----------------------
+        // (6) capitalList：片方にしか無い座標 → その座標だけ更新（共通座標は更新しない）
+        // -----------------------
+        const capLocal = curSnap.capitalSet || new Set();
+        const capServer = newSnap.capitalSet || new Set();
+        for(const k of capLocal){
+          if(!capServer.has(k)) need.add(k);
+        }
+        for(const k of capServer){
+          if(!capLocal.has(k)) need.add(k);
+        }
+
+        // -----------------------
+        // (7) cellColors：サーバーとローカルで色が異なる座標 → その座標だけ更新
+        //     （同じ座標は更新しない）
+        // -----------------------
+        const colorKeys = new Set();
+        for(const k of Object.keys(curSnap.cellColors||{})) colorKeys.add(k);
+        for(const k of Object.keys(newSnap.cellColors||{})) colorKeys.add(k);
+        for(const k of colorKeys){
+          const c1 = (curSnap.cellColors && (k in curSnap.cellColors)) ? curSnap.cellColors[k] : null;
+          const c2 = (newSnap.cellColors && (k in newSnap.cellColors)) ? newSnap.cellColors[k] : null;
+          if(c1 !== c2) need.add(k);
+        }
+
+        // jobs へ変換（安定化ソート）
+        jobs = [];
+        for(const k of need){
+          const m = String(k).match(/^(\d+)-(\d+)$/);
+          if(!m) continue;
+          jobs.push({ row: Number(m[1]), col: Number(m[2]) });
+        }
+        jobs.sort((a,b) => (a.row - b.row) || (a.col - b.col));
+      }else{
+        // RB以外：従来通り（色/首都の差分）
+        jobs = diffChangedCells(curSnap, newSnap);
       }
 
-      // (2-3) 差分セルだけ詳細取得
-      // RB のクリックは「サーバーHTMLの window.__FOW（<script>window.__FOW=... </script>）内の座標」
-      // ＝ visible + explored の union（既知領域）だけを差分判定対象にする
-      // ※座標抽出は extractRbKnownCoordsFromDoc(doc) を使用
-      const rbKnown = (mode === 'rb') ? extractRbKnownCoordsFromDoc(doc) : null;
-      const changed = (mode === 'rb')
-        ? diffChangedCellsWithinCoords(curSnap, newSnap, rbKnown)
-        : diffChangedCells(curSnap, newSnap);
+      const changed = jobs || [];
 
       // ★追加要件： (2-3) に該当する場合は、差分セルの詳細取得に加えて
       // 「バトルマップの最新版への差し替え（最新データを使っての再描画）」も実施する
