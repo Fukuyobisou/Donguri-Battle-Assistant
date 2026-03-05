@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Donguri Battle Assistant
 // @namespace    https://donguri.5ch.net/
-// @version      0.0.22.3
+// @version      0.0.23.2
 // @description  5ちゃんねるのどんぐりシステムから派生したゲームの操作性を改善するためのユーザースクリプト
 // @author       福呼び草
 // @match        https://donguri.5ch.net/teambattle*
@@ -470,7 +470,7 @@
     /* ===== 戦闘結果：透過ON時の表示は dialog を使わずフロートパネルで表示 ===== */
     #dba-br-float{
       position: fixed;
-      top: calc(var(--dba-fn-height) + 480px);  /* フロートパネルの表示位置（高さ） */
+      top: calc(var(--dba-fn-height) + 0px);  /* フロートパネルの表示位置（高さ） */
       left: 12px;
       right: 12px;
       margin: 0 auto;
@@ -1489,6 +1489,8 @@
   const LS_BR_ALIGN_KEY = 'dba.battleResult.align.v1'; // left / center / right
   const LS_BR_PASS_KEY  = 'dba.battleResult.passThrough.v1'; // 0/1 クリック透過
   const LS_BR_TOP_KEY   = 'dba.battleResult.topOffsetPx.v1'; // number 上端からの距離(px)
+  const LS_BR_HIDE_CLOSE_KEY = 'dba.battleResult.hideClose.v1'; // 0/1 「戦闘結果」ウインドウのCloseボタン非表示
+  const LS_BR_HIDE_OPT_KEY   = 'dba.battleResult.hideOption.v1'; // 0/1 「戦闘結果」ウインドウのオプションボタン非表示
 
   // トップページ「経過時間」プログレス（同期用）
   const LS_TOP_ELAPSED_PROGRESS_KEY = 'dba.topElapsedProgress.v1';
@@ -2088,16 +2090,44 @@
     try{ localStorage.setItem(LS_BR_PASS_KEY, on ? '1' : '0'); }catch(_e){}
   }
 
+  function loadBattleResultHideClose(){
+    try{
+      const raw = localStorage.getItem(LS_BR_HIDE_CLOSE_KEY);
+      if(raw == null) return false; // デフォルトOFF
+      return raw === '1';
+    }catch(_e){
+      return false;
+    }
+  }
+
+  function saveBattleResultHideClose(on){
+    try{ localStorage.setItem(LS_BR_HIDE_CLOSE_KEY, on ? '1' : '0'); }catch(_e){}
+  }
+
+  function loadBattleResultHideOption(){
+    try{
+      const raw = localStorage.getItem(LS_BR_HIDE_OPT_KEY);
+      if(raw == null) return false; // デフォルトOFF
+      return raw === '1';
+    }catch(_e){
+      return false;
+    }
+  }
+
+  function saveBattleResultHideOption(on){
+    try{ localStorage.setItem(LS_BR_HIDE_OPT_KEY, on ? '1' : '0'); }catch(_e){}
+  }
+
   function loadBattleResultTopOffsetPx(){
     try{
       const raw = localStorage.getItem(LS_BR_TOP_KEY);
-      // 未設定は現状のフロート既定値(480px)に合わせる
-      if(raw == null) return 480;
+      // 未設定は 0px（今回要望）
+      if(raw == null) return 0;
       const n = Number.parseInt(raw, 10);
-      if(!Number.isFinite(n)) return 480;
+      if(!Number.isFinite(n)) return 0;
       return clampInt(n, 0, 2000);
     }catch(_e){
-      return 480;
+      return 0;
     }
   }
 
@@ -2959,6 +2989,20 @@
     const topPx = loadBattleResultTopOffsetPx();
     root.style.top = `calc(var(--dba-fn-height) + ${topPx}px)`;
 
+    // Closeボタンの表示/非表示
+    try{
+      const hideClose = loadBattleResultHideClose();
+      const btnClose = root.querySelector('.dba-btn-close');
+      if(btnClose) btnClose.style.display = hideClose ? 'none' : '';
+    }catch(_e){}
+
+    // オプションボタンの表示/非表示
+    try{
+      const hideOpt = loadBattleResultHideOption();
+      const btnOpt = root.querySelector('#dba-br-float-btn-option');
+      if(btnOpt) btnOpt.style.display = hideOpt ? 'none' : '';
+    }catch(_e){}
+
     // ※「配置移動」機能は passThrough と独立（ここでは align のみ反映）
     const align = loadBattleResultAlign();
     if(align === 'left'){
@@ -3002,6 +3046,20 @@
     const pass = loadBattleResultPassThrough();
     if(pass) dlg.classList.add('dba-br-pass');
     else dlg.classList.remove('dba-br-pass');
+
+    // Closeボタンの表示/非表示
+    try{
+      const hideClose = loadBattleResultHideClose();
+      const btnClose = dlg.querySelector('.dba-btn-close');
+      if(btnClose) btnClose.style.display = hideClose ? 'none' : '';
+    }catch(_e){}
+
+    // オプションボタンの表示/非表示
+    try{
+      const hideOpt = loadBattleResultHideOption();
+      const btnOpt = dlg.querySelector('#dba-br-btn-option');
+      if(btnOpt) btnOpt.style.display = hideOpt ? 'none' : '';
+    }catch(_e){}
   }
 
   function buildBattleResultOptionsModal(){
@@ -3126,6 +3184,36 @@
     passWrap.appendChild(passText);
     mid.appendChild(passWrap);
 
+    // (4) Closeボタン非表示
+    const hideCloseWrap = document.createElement('label');
+    hideCloseWrap.className = 'dba-br-tail2-chk';
+    hideCloseWrap.id = 'dba-br-opt-hideclose-wrap';
+    hideCloseWrap.style.marginTop = '12px';
+
+    const hideCloseChk = document.createElement('input');
+    hideCloseChk.type = 'checkbox';
+    hideCloseChk.id = 'dba-br-opt-hideclose';
+    const hideCloseText = document.createElement('span');
+    hideCloseText.textContent = '「戦闘結果」ウインドウの「Close」ボタンを非表示にする';
+    hideCloseWrap.appendChild(hideCloseChk);
+    hideCloseWrap.appendChild(hideCloseText);
+    mid.appendChild(hideCloseWrap);
+
+    // (5) オプションボタン非表示
+    const hideOptWrap = document.createElement('label');
+    hideOptWrap.className = 'dba-br-tail2-chk';
+    hideOptWrap.id = 'dba-br-opt-hideopt-wrap';
+    hideOptWrap.style.marginTop = '12px';
+
+    const hideOptChk = document.createElement('input');
+    hideOptChk.type = 'checkbox';
+    hideOptChk.id = 'dba-br-opt-hideopt';
+    const hideOptText = document.createElement('span');
+    hideOptText.textContent = '「戦闘結果」ウインドウの「オプション」ボタンを非表示にする';
+    hideOptWrap.appendChild(hideOptChk);
+    hideOptWrap.appendChild(hideOptText);
+    mid.appendChild(hideOptWrap);
+
     const bot = document.createElement('div');
     bot.className = 'dba-modal__bot';
     const btnClose = document.createElement('button');
@@ -3150,6 +3238,8 @@
     // 初期値反映（open時にも更新するが、念のため）
     tail2Chk.checked = loadBattleResultTail2Enabled();
     passChk.checked = loadBattleResultPassThrough();
+    hideCloseChk.checked = loadBattleResultHideClose();
+    hideOptChk.checked = loadBattleResultHideOption();
     const align = loadBattleResultAlign();
     for(const r of Array.from(dlg.querySelectorAll('input[type="radio"][name="dba-br-opt-align"]'))){
       r.checked = (r.value === align);
@@ -3169,6 +3259,20 @@
       applyBattleResultOptionsToModal();
       // 透過ON/OFFでモーダルの開き方が変わるため、開いてるなら表示形態を揃える
       normalizeBattleResultDialogOpenMode();
+    });
+
+    hideCloseChk.addEventListener('change', (e) => {
+      e.stopPropagation();
+      saveBattleResultHideClose(!!hideCloseChk.checked);
+      applyBattleResultOptionsToModal();
+      applyBattleResultOptionsToFloat();
+    });
+
+    hideOptChk.addEventListener('change', (e) => {
+      e.stopPropagation();
+      saveBattleResultHideOption(!!hideOptChk.checked);
+      applyBattleResultOptionsToModal();
+      applyBattleResultOptionsToFloat();
     });
 
     // 上端からの距離
@@ -3203,6 +3307,10 @@
     if(tail2Chk) tail2Chk.checked = loadBattleResultTail2Enabled();
     const passChk = dlg.querySelector('#dba-br-opt-pass');
     if(passChk) passChk.checked = loadBattleResultPassThrough();
+    const hideCloseChk = dlg.querySelector('#dba-br-opt-hideclose');
+    if(hideCloseChk) hideCloseChk.checked = loadBattleResultHideClose();
+    const hideOptChk = dlg.querySelector('#dba-br-opt-hideopt');
+    if(hideOptChk) hideOptChk.checked = loadBattleResultHideOption();
     const align = loadBattleResultAlign();
     for(const r of Array.from(dlg.querySelectorAll('input[type="radio"][name="dba-br-opt-align"]'))){
       r.checked = (r.value === align);
@@ -8462,6 +8570,56 @@
       row.appendChild(lab);
       row.appendChild(wrap);
       mid.appendChild(row);
+    })();
+
+    // ショートカット
+    (function mkShortcutBlock(){
+      const box = document.createElement('div');
+      box.style.marginTop = '12px';
+      box.style.border = '1px solid #00000022';
+      box.style.borderRadius = '12px';
+      box.style.background = '#fff';
+      box.style.padding = '10px 10px';
+
+      const t = document.createElement('div');
+      t.style.fontWeight = '900';
+      t.style.textAlign = 'left';
+      t.style.marginBottom = '8px';
+      t.textContent = 'ショートカット';
+      box.appendChild(t);
+
+      const row = document.createElement('div');
+      row.style.display = 'flex';
+      row.style.flexWrap = 'wrap';
+      row.style.gap = '8px';
+      row.style.justifyContent = 'flex-start';
+      row.style.alignItems = 'center';
+
+      const btnBrOpt = document.createElement('button');
+      btnBrOpt.type = 'button';
+      btnBrOpt.className = 'dba-btn-mini';
+      btnBrOpt.textContent = '「戦闘結果」のオプションを開く';
+
+      const btnAeOpt = document.createElement('button');
+      btnAeOpt.type = 'button';
+      btnAeOpt.className = 'dba-btn-mini';
+      btnAeOpt.textContent = '「オート装備設定」のオプションを開く';
+
+      btnBrOpt.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openBattleResultOptionsModal(); // dba-m-battle-result-opt
+      });
+      btnAeOpt.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openAutoEquipOptionsModal(); // dba-m-auto-equip-opt
+      });
+
+      row.appendChild(btnBrOpt);
+      row.appendChild(btnAeOpt);
+      box.appendChild(row);
+      mid.appendChild(box);
     })();
 
     // Bot
