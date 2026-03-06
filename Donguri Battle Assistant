@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name         Donguri Battle Assistant
-// @namespace    https://donguri.5ch.net/
-// @version      0.0.23.2
+// @namespace    https://donguri.5ch.io/
+// @version      1.0.0.1
 // @description  5ちゃんねるのどんぐりシステムから派生したゲームの操作性を改善するためのユーザースクリプト
 // @author       福呼び草
-// @match        https://donguri.5ch.net/teambattle*
-// @match        https://donguri.5ch.net/bag
-// @match        https://donguri.5ch.net/
+// @match        https://donguri.5ch.io/teambattle*
+// @match        https://donguri.5ch.io/bag
+// @match        https://donguri.5ch.io/
 // @run-at       document-start
 // @grant        GM_addStyle
 // ==/UserScript==
@@ -16,10 +16,47 @@
 
   console.log('[DBA] BOOT', 'ver=', (typeof DBA_VERSION !== 'undefined' ? DBA_VERSION : '(meta)'), 'href=', location.href);
 
+  // =========================
+  // URL / ドメイン集中管理
+  //  今後ドメインが変わった場合は、まずここを直す
+  // =========================
+  const DBA_BASE_ORIGIN = 'https://donguri.5ch.io';
+
+  function makeSiteUrl(path){
+    const p = String(path || '');
+    return `${DBA_BASE_ORIGIN}${p.startsWith('/') ? p : `/${p}`}`;
+  }
+
+  function makeTeambattleUrl(params){
+    const usp = new URLSearchParams();
+    const src = params || {};
+    for(const [k, v] of Object.entries(src)){
+      if(v == null) continue;
+      usp.set(k, String(v));
+    }
+    return `${makeSiteUrl('/teambattle')}?${usp.toString()}`;
+  }
+
+  function makeTopPageUrl(){
+    return makeSiteUrl('/');
+  }
+
+  function makeBagUrl(){
+    return makeSiteUrl('/bag');
+  }
+
+  function makeEquipUrl(id){
+    return makeSiteUrl(`/equip/${Number(id)}`);
+  }
+
+  function makeTeamChallengeUrl(modeValue){
+    return makeSiteUrl(`/teamchallenge?m=${encodeURIComponent(String(modeValue || ''))}`);
+  }
+
   // URL判定
   const urlObj = new URL(location.href);
   const mode = urlObj.searchParams.get('m');
-  const isTopPage = (urlObj.origin === 'https://donguri.5ch.net' && urlObj.pathname === '/' && !mode);
+  const isTopPage = (urlObj.origin === DBA_BASE_ORIGIN && urlObj.pathname === '/' && !mode);
 
   // トップページ（どんぐり基地）は「経過時間」プログレス取得だけ行う
   if(isTopPage){
@@ -1903,7 +1940,7 @@
       // メタ表示を更新（見た目だけ）
       try{ renderTopProgress(); }catch(_e){}
 
-      const res = await fetch('https://donguri.5ch.net/', {
+      const res = await fetch(makeTopPageUrl(), {
         method: 'GET',
         credentials: 'include',
         cache: 'no-store'
@@ -2389,7 +2426,7 @@
   }
 
   function getTeamChallengeUrl(){
-    return `https://donguri.5ch.net/teamchallenge?m=${mode}`;
+    return makeTeamChallengeUrl(mode);
   }
 
   async function rapidAttackAt(row, col){
@@ -2685,7 +2722,7 @@
 
   // =========================
   // セル詳細モーダル（セルクリックで表示）
-  //  - 詳細ページ: https://donguri.5ch.net/teambattle?r={row}&c={col}&m={mode}
+  //  - 詳細ページ: makeTeambattleUrl({ r: row, c: col, m: mode })
   //  - <header> の次にある <table> を抽出して表示
   //  - table内の form（「エリアに挑む」「アリーナを強化する」「アリーナを弱体化する」等）はそのまま機能
   // =========================
@@ -3743,7 +3780,7 @@
       box.textContent = '読み込み中…';
 
       try{
-        const url = `https://donguri.5ch.net/teambattle?r=${row}&c=${col}&m=${mode}`;
+        const url = makeTeambattleUrl({ r: row, c: col, m: mode });
         const res = await fetch(url, { method:'GET', credentials:'include', cache:'no-store' });
         if(!res.ok) throw new Error(`HTTP ${res.status}`);
         const html = await res.text();
@@ -4959,7 +4996,7 @@
 
   async function equipById(id){
     if(id == null) return true;
-    const url = `https://donguri.5ch.net/equip/${Number(id)}`;
+    const url = makeEquipUrl(id);
     const res = await fetch(url, { method:'GET', credentials:'include', cache:'no-store' });
     if(!res.ok) throw new Error(`equip failed: ${res.status}`);
     return true;
@@ -7043,7 +7080,7 @@
   }
 
   async function fetchBagTableDoc(){
-    const url = 'https://donguri.5ch.net/bag';
+    const url = makeBagUrl();
     const res = await fetch(url, { method:'GET', credentials:'include', cache:'no-store' });
     if(!res.ok) throw new Error(`bag fetch failed: ${res.status}`);
     const html = await res.text();
@@ -7423,7 +7460,7 @@
   }
 
   function refreshHeaderAndTeamTablesFromFetchedDoc(doc, meta){
-    const topUrl = meta?.topUrl || `https://donguri.5ch.net/teambattle?m=${mode}`;
+    const topUrl = meta?.topUrl || makeTeambattleUrl({ m: mode });
     const sx = window.scrollX;
     const sy = window.scrollY;
 
@@ -7469,15 +7506,51 @@
     return doc.querySelector('.grid');
   }
 
+  function normalizeExecutableScriptType(typeValue){
+    const raw = String(typeValue || '').trim();
+    if(!raw) return '';
+
+    const low = raw.toLowerCase();
+
+    // Cloudflare Rocket Loader が
+    //   type="xxxxxxxx-text/javascript"
+    // のように変形している場合がある。
+    // これをそのまま引き継ぐとブラウザが実行しないため、
+    // 通常の executable な JavaScript type に正規化する。
+    if(
+      low === 'text/javascript' ||
+      low === 'application/javascript' ||
+      low === 'module' ||
+      low.endsWith('-text/javascript') ||
+      low.endsWith('-application/javascript')
+    ){
+      return (low === 'module') ? 'module' : 'text/javascript';
+    }
+
+    // それ以外で "javascript" を含むタイプも安全側で実行可能扱いに寄せる
+    if(low.includes('javascript')){
+      return 'text/javascript';
+    }
+
+    // JSON 等の非JS type はそのまま維持
+    return raw;
+  }
+
   function reactivateScriptsWithin(root){
     if(!root) return 0;
     const scripts = Array.from(root.querySelectorAll('script'));
     let count = 0;
     for(const old of scripts){
       const s = document.createElement('script');
-      // type属性を維持（基本は未指定のIIFE想定）
-      if(old.type) s.type = old.type;
+
+      // Rocket Loader 由来の変形 type を実行可能な JavaScript type に戻す
+      const normalizedType = normalizeExecutableScriptType(old.type);
+      if(normalizedType){
+        s.type = normalizedType;
+      }
+
       if(old.noModule) s.noModule = true;
+
       // src は本ページでは基本使われていない想定だが、一応コピー
       if(old.src){
         s.src = old.src;
@@ -7516,7 +7589,7 @@
   //    既に取得済みの最新HTML/Docを再利用して「最新版への差し替え（再描画）」を行うためのヘルパー
   // =========================
   async function refreshBattlemapFromFetchedDoc(doc, meta){
-    const topUrl = meta?.topUrl || `https://donguri.5ch.net/teambattle?m=${mode}`;
+    const topUrl = meta?.topUrl || makeTeambattleUrl({ m: mode });
     const t0 = performance.now();
     const sx = window.scrollX;
     const sy = window.scrollY;
@@ -7579,7 +7652,7 @@
   }
 
   async function refreshBattlemapFromTopPage(){
-    const topUrl = `https://donguri.5ch.net/teambattle?m=${mode}`;
+    const topUrl = makeTeambattleUrl({ m: mode });
     const t0 = performance.now();
     const sx = window.scrollX;
     const sy = window.scrollY;
@@ -7787,7 +7860,7 @@
   }
 
   async function fetchCellDetail(row, col){
-    const url = `https://donguri.5ch.net/teambattle?r=${row}&c=${col}&m=${mode}`;
+    const url = `https://donguri.5ch.io/teambattle?r=${row}&c=${col}&m=${mode}`;
     try{
       const res = await fetch(url, {
         method: 'GET',
@@ -7923,7 +7996,7 @@
 
     if(mode === 'rb'){
       // RBは「サーバーから返ってきたHTML」を調べ、visible + explored（既知領域）だけを対象にする
-      const topUrl = `https://donguri.5ch.net/teambattle?m=${mode}`;
+      const topUrl = makeTeambattleUrl({ m: mode });
       try{
         const res = await fetch(topUrl, { method:'GET', credentials:'include', cache:'no-store' });
         if(!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -8255,7 +8328,7 @@
       btn.textContent = '差分確認中…';
     }
 
-    const topUrl = `https://donguri.5ch.net/teambattle?m=${mode}`;
+    const topUrl = makeTeambattleUrl({ m: mode });
     try{
       // (1) 最新ページを取得
       const res = await fetch(topUrl, { method:'GET', credentials:'include', cache:'no-store' });
