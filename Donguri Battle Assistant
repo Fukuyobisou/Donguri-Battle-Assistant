@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Donguri Battle Assistant
 // @namespace    https://donguri.5ch.io/
-// @version      1.0.2.2
+// @version      1.0.2.3
 // @description  5ちゃんねるのどんぐりシステムから派生したゲームの操作性を改善するためのユーザースクリプト
 // @author       福呼び草
 // @match        https://donguri.5ch.io/teambattle*
@@ -4256,8 +4256,13 @@
         evt.stopImmediatePropagation();
         return;
       }
-      // DBA側のセル操作が有効な時のみ “遷移” を潰す（通常時のページ既定挙動は残す）
-      if(!loadAutoEquipEnabled() && !loadRapidAttackEnabled()) return;
+      // HC/L のセルクリックは、DBA側が
+      //   - オート装備ON なら handleAutoEquipClick()
+      //   - ラピッド攻撃ON なら rapidAttackAt()
+      //   - 両方OFF     なら openCellDetailModal()
+      // を担当するため、後続の click 既定遷移は常に止める。
+      // ここを条件付きにすると、OFF/OFF 時に環境依存で <a> の遷移が生き残り、
+      // セル詳細 modal が出る前にページ遷移してしまうことがある。
       evt.preventDefault();
       evt.stopImmediatePropagation();
     }, true);
