@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Donguri Battle Assistant
 // @namespace    https://donguri.5ch.io/
-// @version      1.0.0.1
+// @version      1.0.2.2
 // @description  5ちゃんねるのどんぐりシステムから派生したゲームの操作性を改善するためのユーザースクリプト
 // @author       福呼び草
 // @match        https://donguri.5ch.io/teambattle*
@@ -392,7 +392,7 @@
       border-radius: 12px;
       padding: 0;
       margin: auto;
-      width: min(560px, calc(100vw - 24px));
+      width: min(640px, calc(100vw - 24px));
       max-height: min(80vh, calc(100vh - 24px));
       background: #f8f8f8;
       color: #111;
@@ -663,33 +663,64 @@
       line-height: 1.4rem;
     }
 
-    /* 設定UI小物 */
+    /* ===== 「設定」modal ===== */
     .dba-setting-row{
-      display: grid;
-      grid-template-columns: 1fr 120px;
-      gap: 10px;
-      align-items: center;
-      padding: 8px 6px;
+      display: block;
+      padding: 8px 10px;
       border: 1px solid #00000022;
       border-radius: 10px;
       background: #fff;
       margin-bottom: 10px;
+      box-sizing: border-box;
     }
     .dba-setting-row label{
       text-align: left;
       font-weight: 700;
     }
     .dba-setting-row input[type="number"]{
-      width: 100%;
+      width: 50px;
       box-sizing: border-box;
-      padding: 6px 8px;
+      padding: 4px 6px;
       border: 1px solid #00000055;
       border-radius: 10px;
       font-size: 1em;
+      text-align: right;
     }
     .dba-setting-row input[type="range"]{
       width: 100%;
       box-sizing: border-box;
+    }
+    .dba-setting-block-title{
+      text-align: left;
+      font-size: 0.95em;
+      margin: 0 0 8px 0;
+    }
+    .dba-setting-cellsize-list{
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .dba-setting-cellsize-line{
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 4px;
+      text-align: left;
+      white-space: nowrap;
+    }
+    .dba-setting-cellsize-name{
+      min-width: 10.5em;
+      max-width: 12em;
+      font-weight: 700;
+      text-align: left;
+    }
+    .dba-setting-cellsize-unit{
+      white-space: nowrap;
+    }
+    .dba-setting-cellsize-sep{
+      white-space: nowrap;
+      margin: 0 2px;
     }
 
     /* ===== 装備ロスター ===== */
@@ -729,7 +760,7 @@
       border: 2px solid #000;
       border-radius: 10px;
       padding: 6px 10px;
-      margin: 0;
+      margin: 0 0 0 6px;
       font-size: 0.95em;
       font-weight: 700;
       cursor: pointer;
@@ -2076,9 +2107,16 @@
     }
   }
 
+  // セルサイズ及びレイヤー文字濃度のデフォルト値
   const DEFAULT_SETTINGS = {
-    scale: { rb: 100, hc: 100, l: 100 },
-    layer: { textOpacity: 100 } // 0〜100（レイヤー文字濃度）
+    // セルサイズ（width、heightを px で指定）
+    cellSize: {
+      rb: { width: 64, height: 64 },
+      hc: { width: 72, height: 64 },
+      l:  { width: 72, height: 64 }
+    },
+    // レイヤー文字濃度（範囲：0〜100）
+    layer: { textOpacity: 100 } 
   };
 
   function loadBattleResultTail2Enabled(){
@@ -2471,11 +2509,12 @@
     return Math.max(min, Math.min(max, x));
   }
 
-  function sanitizeScale(v){
-    // 指定範囲外や不正値は 100 に戻す
+  function sanitizeCellPx(v, fallback){
+    const fb = Number.isFinite(Number(fallback)) ? Number(fallback) : 30;
     const x = Number.parseInt(v, 10);
-    if (!Number.isFinite(x)) return 100;
-    if (x < 100 || x > 200) return 100;
+    if (!Number.isFinite(x)) return fb;
+    if (x < 8) return 8;
+    if (x > 256) return 256;
     return x;
   }
 
@@ -2493,9 +2532,21 @@
       if(!raw) return JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
       const obj = JSON.parse(raw);
       const out = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
-      if(obj && obj.scale){
+      if(obj && obj.cellSize){
         for(const k of ['rb','hc','l']){
-          out.scale[k] = sanitizeScale(obj.scale[k]);
+          const base = DEFAULT_SETTINGS.cellSize[k];
+          const src = obj.cellSize[k] || {};
+          out.cellSize[k].width  = sanitizeCellPx(src.width,  base.width);
+          out.cellSize[k].height = sanitizeCellPx(src.height, base.height);
+        }
+      }else if(obj && obj.scale){
+        // 旧scale設定からの緩やかな移行
+        const legacyBase = { rb: 32, hc: 30, l: 30 };
+        for(const k of ['rb','hc','l']){
+          const pct = clampInt(obj.scale[k], 100, 200);
+          const px = Math.max(8, Math.round(legacyBase[k] * (pct / 100)));
+          out.cellSize[k].width = px;
+          out.cellSize[k].height = px;
         }
       }
       if(obj && obj.layer){
@@ -2510,7 +2561,20 @@
   function saveSettings(s){
     try{
       const out = {
-        scale: { rb: sanitizeScale(s?.scale?.rb), hc: sanitizeScale(s?.scale?.hc), l: sanitizeScale(s?.scale?.l) },
+        cellSize: {
+          rb: {
+            width:  sanitizeCellPx(s?.cellSize?.rb?.width,  DEFAULT_SETTINGS.cellSize.rb.width),
+            height: sanitizeCellPx(s?.cellSize?.rb?.height, DEFAULT_SETTINGS.cellSize.rb.height)
+          },
+          hc: {
+            width:  sanitizeCellPx(s?.cellSize?.hc?.width,  DEFAULT_SETTINGS.cellSize.hc.width),
+            height: sanitizeCellPx(s?.cellSize?.hc?.height, DEFAULT_SETTINGS.cellSize.hc.height)
+          },
+          l: {
+            width:  sanitizeCellPx(s?.cellSize?.l?.width,  DEFAULT_SETTINGS.cellSize.l.width),
+            height: sanitizeCellPx(s?.cellSize?.l?.height, DEFAULT_SETTINGS.cellSize.l.height)
+          }
+        },
         layer: { textOpacity: sanitizeOpacity(s?.layer?.textOpacity) }
       };
       localStorage.setItem(LS_KEY, JSON.stringify(out));
@@ -2519,19 +2583,66 @@
 
   function getModeLabel(m){
     if(m === 'rb') return 'レッドvsブルーモード';
-    if(m === 'hc') return 'ハードモード';
+    if(m === 'hc') return 'ハードコアモード';
     if(m === 'l') return 'ラダーモード';
     return m;
   }
 
-  function applyScaleToGrid(scalePct){
+  function getDefaultCellSizeForMode(modeKey){
+    if(modeKey === 'rb'){
+      const gridSize = getRbGridSizeFromPageScript() || 14;
+      const wrap = document.getElementById('gridWrap');
+      if(wrap){
+        const rect = wrap.getBoundingClientRect();
+        const w = Math.round(rect.width / gridSize);
+        const h = Math.round(rect.height / gridSize);
+        return {
+          width: sanitizeCellPx(w, DEFAULT_SETTINGS.cellSize.rb.width),
+          height: sanitizeCellPx(h, DEFAULT_SETTINGS.cellSize.rb.height)
+        };
+      }
+      return {
+        width: DEFAULT_SETTINGS.cellSize.rb.width,
+        height: DEFAULT_SETTINGS.cellSize.rb.height
+      };
+    }
+
+    const grid = document.querySelector('.grid');
+    const cell = grid ? grid.querySelector('.cell') : null;
+    if(cell){
+      const cs = window.getComputedStyle(cell);
+      const w = Math.round(parseFloat(cs.width) || parseFloat(cell.style.width) || DEFAULT_SETTINGS.cellSize[modeKey].width);
+      const h = Math.round(parseFloat(cs.height) || parseFloat(cell.style.height) || DEFAULT_SETTINGS.cellSize[modeKey].height);
+      return {
+        width: sanitizeCellPx(w, DEFAULT_SETTINGS.cellSize[modeKey].width),
+        height: sanitizeCellPx(h, DEFAULT_SETTINGS.cellSize[modeKey].height)
+      };
+    }
+
+    return {
+      width: DEFAULT_SETTINGS.cellSize[modeKey].width,
+      height: DEFAULT_SETTINGS.cellSize[modeKey].height
+    };
+  }
+
+  function getEffectiveCellSizeForMode(modeKey, settingsObj){
+    const s = settingsObj || loadSettings();
+    const def = getDefaultCellSizeForMode(modeKey);
+    const src = (s && s.cellSize && s.cellSize[modeKey]) ? s.cellSize[modeKey] : {};
+    return {
+      width: sanitizeCellPx(src.width, def.width),
+      height: sanitizeCellPx(src.height, def.height)
+    };
+  }
+
+  function applyCellSizeToGrid(widthPx, heightPx){
     const grid = document.querySelector('.grid');
     if(!grid) return false;
 
-    const s = sanitizeScale(scalePct);
-    const scale = s / 100;
+    const width = sanitizeCellPx(widthPx, 30);
+    const height = sanitizeCellPx(heightPx, 30);
 
-    // grid-template-columns / rows を更新（repeat(n, 35px) の px を拡大）
+    // grid-template-columns / rows を更新
     const gtc = grid.style.gridTemplateColumns || '';
     const gtr = grid.style.gridTemplateRows || '';
     const m1 = gtc.match(/repeat\(\s*(\d+)\s*,\s*(\d+)px\s*\)/);
@@ -2539,35 +2650,45 @@
 
     if(m1){
       const n = Number(m1[1]);
-      const base = Number(m1[2]);
-      const px = Math.max(1, Math.round(base * scale));
-      grid.style.gridTemplateColumns = `repeat(${n}, ${px}px)`;
+      grid.style.gridTemplateColumns = `repeat(${n}, ${width}px)`;
     }
     if(m2){
       const n = Number(m2[1]);
-      const base = Number(m2[2]);
-      const px = Math.max(1, Math.round(base * scale));
-      grid.style.gridTemplateRows = `repeat(${n}, ${px}px)`;
+      grid.style.gridTemplateRows = `repeat(${n}, ${height}px)`;
     }
 
     // 各セルサイズ（ページ側で inline 指定されても上書き）
-    const cellPx = Math.max(1, Math.round(30 * scale));
     for(const el of grid.querySelectorAll('.cell')){
-      el.style.width = cellPx + 'px';
-      el.style.height = cellPx + 'px';
+      el.style.width = width + 'px';
+      el.style.height = height + 'px';
     }
 
     scheduleBattlemapLayerSync();
     return true;
   }
 
-  function applyScaleToCanvasWrap(scalePct){
+  function applyCellSizeToCanvasWrap(widthPx, heightPx){
     const wrap = document.getElementById('gridWrap');
     if(!wrap) return false;
-    const s = sanitizeScale(scalePct);
-    const scale = s / 100;
-    wrap.style.transformOrigin = 'left top';
-    wrap.style.transform = `scale(${scale})`;
+
+    const gridSize = getRbGridSizeFromPageScript() || 14;
+    const width = sanitizeCellPx(widthPx, DEFAULT_SETTINGS.cellSize.rb.width);
+    const height = sanitizeCellPx(heightPx, DEFAULT_SETTINGS.cellSize.rb.height);
+    const totalW = width * gridSize;
+    const totalH = height * gridSize;
+
+    wrap.style.transformOrigin = '';
+    wrap.style.transform = '';
+    wrap.style.width = `${totalW}px`;
+    wrap.style.height = `${totalH}px`;
+
+    for(const id of ['gridBase', 'gridFog', 'gridOverlay']){
+      const cv = document.getElementById(id);
+      if(!cv) continue;
+      cv.style.width = `${totalW}px`;
+      cv.style.height = `${totalH}px`;
+    }
+
     scheduleBattlemapLayerSync();
     return true;
   }
@@ -2642,10 +2763,49 @@
 
     // iOS Safari 対策：touch と pointer の二重発火を抑止
     let lastTouchAt = 0;
+    let suppressUntil = 0;
+
+    function isTouchLikeEvent(evt){
+      return !!(evt && (evt.type === 'touchstart' || evt.type === 'touchend' || evt.type === 'touchcancel'
+        || evt.pointerType === 'touch'
+        || (evt.touches && evt.touches.length)
+        || (evt.changedTouches && evt.changedTouches.length)));
+    }
+
+    function isPrimaryActivationEvent(evt){
+      if(isTouchLikeEvent(evt)) return true;
+      if(evt instanceof MouseEvent || (typeof PointerEvent !== 'undefined' && evt instanceof PointerEvent)){
+        return evt.button === 0;
+      }
+      return true;
+    }
+
+    function armContextMenuGuard(ms){
+      suppressUntil = Date.now() + Math.max(300, Number(ms || 700));
+    }
+
+    function isContextMenuGuardActive(){
+      return Date.now() < suppressUntil;
+    }
 
     function onPointerDown(evt){
       if(evt.type === 'touchstart') lastTouchAt = Date.now();
       if(evt.type === 'pointerdown' && (Date.now() - lastTouchAt) < 800) return;
+
+      if(isContextMenuGuardActive()){
+        clearLP();
+        lpFired = false;
+        lpCtx = null;
+        return;
+      }
+
+      if(!isPrimaryActivationEvent(evt)){
+        armContextMenuGuard(900);
+        clearLP();
+        lpFired = false;
+        lpCtx = null;
+        return;
+      }
 
       // 既存ハンドラを無効化
       evt.preventDefault();
@@ -2677,6 +2837,21 @@
       if(evt.type === 'touchend') lastTouchAt = Date.now();
       if(evt.type === 'pointerup' && (Date.now() - lastTouchAt) < 800) return;
 
+      if(isContextMenuGuardActive()){
+        clearLP();
+        lpFired = false;
+        lpCtx = null;
+        return;
+      }
+
+      if(!isPrimaryActivationEvent(evt)){
+        armContextMenuGuard(900);
+        clearLP();
+        lpFired = false;
+        lpCtx = null;
+        return;
+      }
+
       evt.preventDefault();
       evt.stopImmediatePropagation();
 
@@ -2707,6 +2882,20 @@
     overlay.addEventListener('pointerdown', onPointerDown, true);
     overlay.addEventListener('pointerup', onPointerUp, true);
     overlay.addEventListener('pointercancel', (e)=>{ clearLP(); }, true);
+    overlay.addEventListener('contextmenu', (evt) => {
+      armContextMenuGuard(1200);
+      clearLP();
+      lpFired = false;
+      lpCtx = null;
+    }, true);
+    overlay.addEventListener('auxclick', (evt) => {
+      armContextMenuGuard(900);
+      clearLP();
+      lpFired = false;
+      lpCtx = null;
+      evt.preventDefault();
+      evt.stopImmediatePropagation();
+    }, true);
     // iOS Safari 用（passive:false が重要）
     overlay.addEventListener('touchstart', onPointerDown, { capture:true, passive:false });
     overlay.addEventListener('touchend', onPointerUp, { capture:true, passive:false });
@@ -2714,6 +2903,11 @@
     // ★重要：一部環境で pointer で止めても click が別途発火してページ側ハンドラが動く事があるため、
     //        click を capture で確実に遮断する（遷移/既存処理の暴発を防ぐ）
     overlay.addEventListener('click', (evt) => {
+      if(isContextMenuGuardActive()){
+        evt.preventDefault();
+        evt.stopImmediatePropagation();
+        return;
+      }
       evt.preventDefault();
       evt.stopImmediatePropagation();
     }, true);
@@ -3496,8 +3690,7 @@
       box.appendChild(nodeOrText);
     }else{
       delete dlg.dataset.dbaBattleFullText;
-      const pre = document.cr
-      eateElement('div');
+      const pre = document.createElement('div');
       pre.className = 'dba-battle-result-text';
       pre.textContent = '結果を表示できませんでした。';
       box.appendChild(pre);
@@ -3878,12 +4071,51 @@
     //   touchstart/touchend を passive:false + capture で拾う
     // - touch と pointer が両方来る環境では二重実行を抑止
     let lastTouchAt = 0;
+    let suppressUntil = 0;
+
+    function isTouchLikeEvent(evt){
+      return !!(evt && (evt.type === 'touchstart' || evt.type === 'touchend' || evt.type === 'touchcancel'
+        || evt.pointerType === 'touch'
+        || (evt.touches && evt.touches.length)
+        || (evt.changedTouches && evt.changedTouches.length)));
+    }
+
+    function isPrimaryActivationEvent(evt){
+      if(isTouchLikeEvent(evt)) return true;
+      if(evt instanceof MouseEvent || (typeof PointerEvent !== 'undefined' && evt instanceof PointerEvent)){
+        return evt.button === 0;
+      }
+      return true;
+    }
+
+    function armContextMenuGuard(ms){
+      suppressUntil = Date.now() + Math.max(300, Number(ms || 700));
+    }
+
+    function isContextMenuGuardActive(){
+      return Date.now() < suppressUntil;
+    }
 
     function onDown(evt){
       if(mode === 'rb') return;
 
       if(evt.type === 'touchstart') lastTouchAt = Date.now();
       if(evt.type === 'pointerdown' && (Date.now() - lastTouchAt) < 800) return;
+
+      if(isContextMenuGuardActive()){
+        clearLP();
+        lpFired = false;
+        lpCtx = null;
+        return;
+      }
+
+      if(!isPrimaryActivationEvent(evt)){
+        armContextMenuGuard(900);
+        clearLP();
+        lpFired = false;
+        lpCtx = null;
+        return;
+      }
 
       const rc = getRCFromEvent(evt);
       if(!rc) return;
@@ -3921,7 +4153,27 @@
       if(evt.type === 'touchend') lastTouchAt = Date.now();
       if(evt.type === 'pointerup' && (Date.now() - lastTouchAt) < 800) return;
 
+      if(isContextMenuGuardActive()){
+        clearLP();
+        lpFired = false;
+        lpCtx = null;
+        return;
+      }
+
+      if(!isPrimaryActivationEvent(evt)){
+        armContextMenuGuard(900);
+        clearLP();
+        lpFired = false;
+        lpCtx = null;
+        return;
+      }
+
       const rc = lpCtx ? { r: lpCtx.r, c: lpCtx.c } : getRCFromEvent(evt);
+      // ★重要：
+      // pointerdown 時に保持した lpCtx は、この pointerup / touchend の処理が終わったら
+      // 必ず破棄する。これを残すと、次回以降にグリッド外で pointerup しても
+      // 「前回のセル座標」が再利用され、最後にクリックしたセル詳細が誤って開いてしまう。
+      lpCtx = null;
       if(!rc) return;
 
       evt.preventDefault();
@@ -3959,6 +4211,32 @@
     document.addEventListener('pointerdown', onDown, true);
     document.addEventListener('pointerup', onUp, true);
     document.addEventListener('pointercancel', onCancel, true);
+    document.addEventListener('contextmenu', (evt) => {
+      if(mode === 'rb') return;
+      const grid = document.querySelector('.grid');
+      if(!grid || !evt.target) return;
+      const t = evt.target;
+      const inGrid = (t instanceof Element) ? !!t.closest('.grid') : false;
+      if(!inGrid) return;
+      armContextMenuGuard(1200);
+      clearLP();
+      lpFired = false;
+      lpCtx = null;
+    }, true);
+    document.addEventListener('auxclick', (evt) => {
+      if(mode === 'rb') return;
+      const grid = document.querySelector('.grid');
+      if(!grid || !evt.target) return;
+      const t = evt.target;
+      const inGrid = (t instanceof Element) ? !!t.closest('.grid') : false;
+      if(!inGrid) return;
+      armContextMenuGuard(900);
+      clearLP();
+      lpFired = false;
+      lpCtx = null;
+      evt.preventDefault();
+      evt.stopImmediatePropagation();
+    }, true);
     // iOS Safari 用（passive:false が重要）
     document.addEventListener('touchstart', onDown, { capture:true, passive:false });
     document.addEventListener('touchend', onUp, { capture:true, passive:false });
@@ -3973,6 +4251,11 @@
       const t = evt.target;
       const inGrid = (t instanceof Element) ? !!t.closest('.grid') : false;
       if(!inGrid) return;
+      if(isContextMenuGuardActive()){
+        evt.preventDefault();
+        evt.stopImmediatePropagation();
+        return;
+      }
       // DBA側のセル操作が有効な時のみ “遷移” を潰す（通常時のページ既定挙動は残す）
       if(!loadAutoEquipEnabled() && !loadRapidAttackEnabled()) return;
       evt.preventDefault();
@@ -4135,18 +4418,21 @@
     const settings = loadSettings();
     applyLayerTextOpacity(settings.layer.textOpacity);
     if(mode === 'rb'){
-      applyScaleToCanvasWrap(settings.scale.rb);
+      const sz = getEffectiveCellSizeForMode('rb', settings);
+      applyCellSizeToCanvasWrap(sz.width, sz.height);
       ensureRbPointerFix();
       scheduleBattlemapLayerSync();
       return;
     }
     if(mode === 'hc'){
-      applyScaleToGrid(settings.scale.hc);
+      const sz = getEffectiveCellSizeForMode('hc', settings);
+      applyCellSizeToGrid(sz.width, sz.height);
       scheduleBattlemapLayerSync();
       return;
     }
     if(mode === 'l'){
-      applyScaleToGrid(settings.scale.l);
+      const sz = getEffectiveCellSizeForMode('l', settings);
+      applyCellSizeToGrid(sz.width, sz.height);
       scheduleBattlemapLayerSync();
       return;
     }
@@ -8516,14 +8802,17 @@
 
   function waitAndApplyScale(){
     const tryApply = () => {
+      const settings = loadSettings();
       if(mode === 'rb'){
-        if(applyScaleToCanvasWrap(loadSettings().scale.rb)){
+        const sz = getEffectiveCellSizeForMode('rb', settings);
+        if(applyCellSizeToCanvasWrap(sz.width, sz.height)){
           ensureRbPointerFix();
           scheduleBattlemapLayerSync();
           return true;
         }
       }else{
-        if(applyScaleToGrid(loadSettings().scale[mode])){
+        const sz = getEffectiveCellSizeForMode(mode, settings);
+        if(applyCellSizeToGrid(sz.width, sz.height)){
           scheduleBattlemapLayerSync();
           return true;
         }
@@ -8571,88 +8860,85 @@
     const mid = document.createElement('div');
     mid.className = 'dba-modal__mid';
 
-    const hint = document.createElement('div');
-    hint.style.textAlign = 'left';
-    hint.style.marginBottom = '10px';
-    hint.style.fontSize = '0.95em';
-    hint.textContent = '各モードのバトルマップのセルサイズ（%）を設定できます（100〜200、範囲外は100に補正）。';
-    mid.appendChild(hint);
-
     const settings = loadSettings();
 
-    function mkRow(modeKey){
-      const row = document.createElement('div');
-      row.className = 'dba-setting-row';
+    function mkCellSizeLine(modeKey){
+      const line = document.createElement('div');
+      line.className = 'dba-setting-cellsize-line';
 
-      const lab = document.createElement('label');
-      lab.textContent = getModeLabel(modeKey);
+      const name = document.createElement('span');
+      name.className = 'dba-setting-cellsize-name';
+      name.textContent = getModeLabel(modeKey);
 
-      const input = document.createElement('input');
-      input.type = 'number';
-      input.min = '100';
-      input.max = '200';
-      input.step = '1';
-      input.value = String(sanitizeScale(settings.scale[modeKey]));
-      input.dataset.modeKey = modeKey;
+      const widthLabel = document.createElement('span');
+      widthLabel.className = 'dba-setting-cellsize-unit';
+      widthLabel.textContent = 'width';
 
-      row.appendChild(lab);
-      row.appendChild(input);
-      return row;
+      const sz = getEffectiveCellSizeForMode(modeKey, settings);
+
+      const wInput = document.createElement('input');
+      wInput.type = 'number';
+      wInput.min = '8';
+      wInput.max = '256';
+      wInput.step = '1';
+      wInput.value = String(sz.width);
+      wInput.dataset.modeKey = modeKey;
+      wInput.dataset.axis = 'width';
+
+      const wPx = document.createElement('span');
+      wPx.className = 'dba-setting-cellsize-unit';
+      wPx.textContent = 'px';
+
+      const sep = document.createElement('span');
+      sep.className = 'dba-setting-cellsize-sep';
+      sep.textContent = '／';
+
+      const heightLabel = document.createElement('span');
+      heightLabel.className = 'dba-setting-cellsize-unit';
+      heightLabel.textContent = 'height';
+
+      const hInput = document.createElement('input');
+      hInput.type = 'number';
+      hInput.min = '8';
+      hInput.max = '256';
+      hInput.step = '1';
+      hInput.value = String(sz.height);
+      hInput.dataset.modeKey = modeKey;
+      hInput.dataset.axis = 'height';
+
+      const hPx = document.createElement('span');
+      hPx.className = 'dba-setting-cellsize-unit';
+      hPx.textContent = 'px';
+
+      const resetBtn = document.createElement('button');
+      resetBtn.type = 'button';
+      resetBtn.className = 'dba-btn-mini';
+      resetBtn.textContent = 'リセット';
+      resetBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const def = getDefaultCellSizeForMode(modeKey);
+        wInput.value = String(def.width);
+        hInput.value = String(def.height);
+        dirty = true;
+      });
+
+      line.appendChild(name);
+      line.appendChild(widthLabel);
+      line.appendChild(wInput);
+      line.appendChild(wPx);
+      line.appendChild(sep);
+      line.appendChild(heightLabel);
+      line.appendChild(hInput);
+      line.appendChild(hPx);
+      line.appendChild(resetBtn);
+      return line;
     }
-
-    mid.appendChild(mkRow('rb'));
-    mid.appendChild(mkRow('hc'));
-    mid.appendChild(mkRow('l'));
-
-    // レイヤー文字濃度（将来のテキスト/絵文字表示のための事前準備）
-    (function mkOpacityRow(){
-      const row = document.createElement('div');
-      row.className = 'dba-setting-row';
-
-      const lab = document.createElement('label');
-      lab.textContent = 'レイヤー文字濃度（0〜100）';
-
-      const wrap = document.createElement('div');
-      wrap.style.display = 'grid';
-      wrap.style.gridTemplateColumns = '1fr 52px';
-      wrap.style.gap = '8px';
-      wrap.style.alignItems = 'center';
-
-      const input = document.createElement('input');
-      input.type = 'range';
-      input.min = '0';
-      input.max = '100';
-      input.step = '1';
-      input.value = String(sanitizeOpacity(settings.layer.textOpacity));
-      input.dataset.layerOpacity = '1';
-
-      const out = document.createElement('div');
-      out.textContent = input.value;
-      out.style.textAlign = 'right';
-      out.style.fontWeight = '700';
-
-      input.addEventListener('input', () => {
-        out.textContent = input.value;
-        // 即時反映（保存は Apply/OK）
-        applyLayerTextOpacity(input.value);
-      }, { passive: true });
-
-      wrap.appendChild(input);
-      wrap.appendChild(out);
-
-      row.appendChild(lab);
-      row.appendChild(wrap);
-      mid.appendChild(row);
-    })();
 
     // ショートカット
     (function mkShortcutBlock(){
       const box = document.createElement('div');
-      box.style.marginTop = '12px';
-      box.style.border = '1px solid #00000022';
-      box.style.borderRadius = '12px';
-      box.style.background = '#fff';
-      box.style.padding = '10px 10px';
+      box.className = 'dba-setting-row';
 
       const t = document.createElement('div');
       t.style.fontWeight = '900';
@@ -8693,6 +8979,66 @@
       row.appendChild(btnAeOpt);
       box.appendChild(row);
       mid.appendChild(box);
+    })();
+
+    (function mkCellSizeBlock(){
+      const row = document.createElement('div');
+      row.className = 'dba-setting-row';
+
+      const title = document.createElement('div');
+      title.className = 'dba-setting-block-title';
+      title.textContent = 'セルサイズ調整：各モードのバトルマップのセル width ／ height を px で設定できます。';
+
+      const list = document.createElement('div');
+      list.className = 'dba-setting-cellsize-list';
+      list.appendChild(mkCellSizeLine('rb'));
+      list.appendChild(mkCellSizeLine('l'));
+      list.appendChild(mkCellSizeLine('hc'));
+
+      row.appendChild(title);
+      row.appendChild(list);
+      mid.appendChild(row);
+    })();
+
+    // レイヤー文字濃度（将来のテキスト/絵文字表示のための事前準備）
+    (function mkOpacityRow(){
+      const row = document.createElement('div');
+      row.className = 'dba-setting-row';
+
+      const lab = document.createElement('label');
+      lab.textContent = 'レイヤー文字濃度（0〜100）';
+
+      const wrap = document.createElement('div');
+      wrap.style.display = 'grid';
+      wrap.style.gridTemplateColumns = '1fr 52px';
+      wrap.style.gap = '8px';
+      wrap.style.alignItems = 'center';
+
+      const input = document.createElement('input');
+      input.type = 'range';
+      input.min = '0';
+      input.max = '100';
+      input.step = '1';
+      input.value = String(sanitizeOpacity(settings.layer.textOpacity));
+      input.dataset.layerOpacity = '1';
+
+      const out = document.createElement('div');
+      out.textContent = input.value;
+      out.style.textAlign = 'right';
+      out.style.fontWeight = '700';
+
+      input.addEventListener('input', () => {
+        out.textContent = input.value;
+        // 即時反映（保存は Apply/OK）
+        applyLayerTextOpacity(input.value);
+      }, { passive: true });
+
+      wrap.appendChild(input);
+      wrap.appendChild(out);
+
+      row.appendChild(lab);
+      row.appendChild(wrap);
+      mid.appendChild(row);
     })();
 
     // Bot
@@ -8758,10 +9104,16 @@
     let dirty = false;
 
     function readModalValues(){
-      const out = { rb: 100, hc: 100, l: 100, layerTextOpacity: 100 };
-      for(const inp of dlg.querySelectorAll('input[type="number"][data-mode-key]')){
+      const out = {
+        rb: { width: 32, height: 32 },
+        hc: { width: 30, height: 30 },
+        l:  { width: 30, height: 30 },
+        layerTextOpacity: 100
+      };
+      for(const inp of dlg.querySelectorAll('input[type="number"][data-mode-key][data-axis]')){
         const k = inp.dataset.modeKey;
-        out[k] = Number.parseInt(inp.value, 10);
+        const axis = inp.dataset.axis;
+        out[k][axis] = Number.parseInt(inp.value, 10);
       }
       const op = dlg.querySelector('input[type="range"][data-layer-opacity="1"]');
       if(op) out.layerTextOpacity = Number.parseInt(op.value, 10);
@@ -8769,9 +9121,11 @@
     }
 
     function setInputsFromSettings(s){
-      for(const inp of dlg.querySelectorAll('input[type="number"][data-mode-key]')){
+      for(const inp of dlg.querySelectorAll('input[type="number"][data-mode-key][data-axis]')){
         const k = inp.dataset.modeKey;
-        inp.value = String(sanitizeScale(s.scale[k]));
+        const axis = inp.dataset.axis;
+        const eff = getEffectiveCellSizeForMode(k, s);
+        inp.value = String(axis === 'width' ? eff.width : eff.height);
       }
       const op = dlg.querySelector('input[type="range"][data-layer-opacity="1"]');
       if(op){
@@ -8794,12 +9148,15 @@
     function commitFromModal(){
       const cur = loadSettings();
       const v = readModalValues();
-      cur.scale.rb = sanitizeScale(v.rb);
-      cur.scale.hc = sanitizeScale(v.hc);
-      cur.scale.l  = sanitizeScale(v.l);
+      cur.cellSize.rb.width  = sanitizeCellPx(v.rb.width,  DEFAULT_SETTINGS.cellSize.rb.width);
+      cur.cellSize.rb.height = sanitizeCellPx(v.rb.height, DEFAULT_SETTINGS.cellSize.rb.height);
+      cur.cellSize.hc.width  = sanitizeCellPx(v.hc.width,  DEFAULT_SETTINGS.cellSize.hc.width);
+      cur.cellSize.hc.height = sanitizeCellPx(v.hc.height, DEFAULT_SETTINGS.cellSize.hc.height);
+      cur.cellSize.l.width   = sanitizeCellPx(v.l.width,   DEFAULT_SETTINGS.cellSize.l.width);
+      cur.cellSize.l.height  = sanitizeCellPx(v.l.height,  DEFAULT_SETTINGS.cellSize.l.height);
       cur.layer.textOpacity = sanitizeOpacity(v.layerTextOpacity);
 
-      // 範囲外入力はここで 100 に補正し、UIにも反映
+      /// 範囲外入力はここで px に補正し、UIにも反映
       saveSettings(cur);
       setInputsFromSettings(cur);
 
