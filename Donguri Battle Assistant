@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Donguri Battle Assistant
 // @namespace    https://donguri.5ch.io/
-// @version      1.1.2.3
+// @version      1.1.4.3
 // @description  5ちゃんねるのどんぐりシステムから派生したゲームの操作性を改善するためのユーザースクリプト
 // @author       福呼び草
 // @assistant    ChatGPT (OpenAI)
@@ -831,7 +831,8 @@
       grid-template-columns: 1fr auto;
       gap: 10px;
       align-items: center;
-      margin-bottom: 10px;
+      border-bottom: 2px solid #999999;
+      padding-bottom: 8px;
     }
     .dba-roster-title{
       font-size: 1.15em;
@@ -5191,17 +5192,19 @@
   const ROSTER_LS_KEY = 'dba.roster.v1';
 
   // =========================
-  // 保存データ世代（Gen1/Gen2）
+  // 保存データ世代（Gen1/Gen2/Gen3）
   //  - Gen1: ロスター保存とオート装備保存を別管理
   //  - Gen2: ロスター内に autoEquip を内包して統合保存
+  //  - Gen3: Gen2 + createdAt / updatedAt を「年月日時分秒」のローカル時刻で保持
   // =========================
-  const DBA_SAVE_GEN_CURRENT = 2; // 現行フォーマット（Gen2）
+  const DBA_SAVE_GEN_CURRENT = 3; // 現行フォーマット（Gen3）
 
   function normalizeGenValue(v){
     const n = Number.parseInt(v, 10);
     if(!Number.isFinite(n)) return 1;
     if(n <= 1) return 1;
-    return 2;
+    if(n === 2) return 2;
+    return 3;
   }
 
   function detectStoreGen(store){
@@ -5210,21 +5213,33 @@
       return normalizeGenValue(store.gen);
     }
     // 明示が無い場合は内容から推定：
-    // roster に autoEquip が1つでもあれば Gen2 とみなす
+    // roster に autoEquip が1つでもあれば少なくとも Gen2
+    // さらに createdAt / updatedAt が「YYYY-MM-DD HH:MM:SS」なら Gen3 とみなす
     try{
       const rosters = store && store.rosters ? store.rosters : {};
+      let inferred = 1;
       for(const id of Object.keys(rosters || {})){
         const r = rosters[id];
-        if(r && typeof r === 'object' && r.autoEquip && typeof r.autoEquip === 'object'){
-          return 2;
+        if(!r || typeof r !== 'object') continue;
+        if(r.autoEquip && typeof r.autoEquip === 'object'){
+          inferred = Math.max(inferred, 2);
+        }
+        const createdAt = sanitizeText(r.createdAt || '');
+        const updatedAt = sanitizeText(r.updatedAt || '');
+        if(
+          /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(createdAt) ||
+          /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(updatedAt)
+        ){
+          inferred = 3;
         }
       }
+      return inferred;
     }catch(_e){}
     return 1;
   }
 
-  // teambattle起動時に呼ぶ：Gen1→Gen2 自動移行
-  function migrateSaveDataToGen2IfNeeded(){
+  // teambattle起動時に呼ぶ：Gen1/Gen2 → Gen3 自動移行
+  function migrateSaveDataToGen3IfNeeded(){
     try{
       const store = loadRosterStore();
       const gen = detectStoreGen(store);
@@ -5237,15 +5252,21 @@
         return true;
       }
 
-      // ---- Gen1 → Gen2 へ移行 ----
+      // ---- Gen1 / Gen2 → Gen3 へ移行 ----
       store.gen = DBA_SAVE_GEN_CURRENT;
       store.rosters = (store.rosters && typeof store.rosters === 'object') ? store.rosters : {};
 
-      // 1) すべてのロスターに autoEquip ブロックを生やす
+      // 1) すべてのロスターに autoEquip ブロックを生やし、日時形式を Gen3 へ正規化
       for(const id of Object.keys(store.rosters)){
         const r = store.rosters[id];
         if(!r || typeof r !== 'object') continue;
         ensureRosterAutoEquipBlock(r);
+
+        const createdAt0 = normalizeRosterDateTimeValue(r.createdAt, '');
+        const updatedAt0 = normalizeRosterDateTimeValue(r.updatedAt, '');
+        const nowText = nowIso();
+        r.createdAt = createdAt0 || updatedAt0 || nowText;
+        r.updatedAt = updatedAt0 || createdAt0 || nowText;
       }
 
       // 2) 旧LSのオート装備（候補/last）を active roster に統合
@@ -5279,7 +5300,7 @@
 
           rAct.autoEquip = ae;
           rAct.updatedAt = nowIso();
-          store.rosters[activeId] = rAct;
+          store.rosters[store.activeId] = rAct;
         }
       }
 
@@ -5497,7 +5518,22 @@
     const d = new Date();
     return `${d.getFullYear()}${pad2(d.getMonth()+1)}${pad2(d.getDate())}`;
   }
-  function nowIso(){ try{ return new Date().toISOString(); }catch(_e){ return ''; } }
+  function formatLocalDateTimeSec(d){
+    return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+  }
+  function nowIso(){ try{ return formatLocalDateTimeSec(new Date()); }catch(_e){ return ''; } }
+  function normalizeRosterDateTimeValue(v, fallback = ''){
+    const s = sanitizeText(v || '');
+    if(!s) return String(fallback || '');
+    if(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(s)){
+      return s;
+    }
+    const t = Date.parse(s);
+    if(Number.isFinite(t)){
+      try{ return formatLocalDateTimeSec(new Date(t)); }catch(_e){}
+    }
+    return String(fallback || '');
+  }
 
   function loadRosterStore(){
     try{
@@ -5514,6 +5550,14 @@
         obj.gen = detectStoreGen(obj);
       }else{
         obj.gen = normalizeGenValue(obj.gen);
+      }
+      for(const id of Object.keys(obj.rosters || {})){
+        const r = obj.rosters[id];
+        if(!r || typeof r !== 'object') continue;
+        const createdAt0 = normalizeRosterDateTimeValue(r.createdAt, '');
+        const updatedAt0 = normalizeRosterDateTimeValue(r.updatedAt, '');
+        if(createdAt0) r.createdAt = createdAt0;
+        if(updatedAt0) r.updatedAt = updatedAt0;
       }
       return obj;
     }catch(_e){
@@ -5578,6 +5622,8 @@
     if(!obj || typeof obj !== 'object') throw new Error('Invalid JSON object');
     const inGen = ('gen' in obj) ? normalizeGenValue(obj.gen) : 1; // gen無しは Gen1 とみなす
     const title = sanitizeText(obj.title || roster.title);
+    const createdAtIn = normalizeRosterDateTimeValue(obj.createdAt, '');
+    const updatedAtIn = normalizeRosterDateTimeValue(obj.updatedAt, '');
     const presets = (obj.presets && typeof obj.presets === 'object') ? obj.presets : {};
     // ★オート装備（任意）：無ければ既存維持
     const aeIn = (obj.autoEquip && typeof obj.autoEquip === 'object') ? obj.autoEquip : null;
@@ -5602,8 +5648,9 @@
     roster.presets = cleaned;
     // 表示順はバックアップの記述順にする（ここで並び替えない）
     roster.presetOrder = order;
+    roster.createdAt = createdAtIn || normalizeRosterDateTimeValue(roster.createdAt, nowIso());
 
-    // ★Gen2：autoEquip が入っていれば復元
+    // ★Gen2/Gen3：autoEquip が入っていれば復元
     // ★Gen1：autoEquip が無い想定。空の autoEquip を確保しつつ、旧LSが残っていれば統合する
     try{
       const ae = ensureRosterAutoEquipBlock(roster);
@@ -5614,11 +5661,11 @@
       if(inGen <= 1){
         // 旧バックアップ（Gen1）で、かつ旧LSが残っている場合は active roster に統合
         // （“保存データ世代”を上げる要件に合わせる）
-        migrateSaveDataToGen2IfNeeded();
+        migrateSaveDataToGen3IfNeeded();
       }
     }catch(_e){}
 
-    roster.updatedAt = nowIso();
+    roster.updatedAt = updatedAtIn || nowIso();
     store.rosters[store.activeId] = roster;
     store.gen = DBA_SAVE_GEN_CURRENT;
     saveRosterStore(store);
@@ -6730,102 +6777,719 @@
     if(document.body) openNow(); else document.addEventListener('DOMContentLoaded', openNow, { once:true });
   }
 
-  // ---- バックアップ modal（json表示・保存で上書き） ----
-  function openRosterBackupModal(onDone){
-    const ensure = () => {
-      if(document.getElementById('dba-m-roster-backup')) return;
-      const dlg = document.createElement('dialog');
-      dlg.id = 'dba-m-roster-backup';
-      dlg.className = 'dba-m-std';
-
-      const top = document.createElement('div');
-      top.className = 'dba-modal__top';
-      const t = document.createElement('div');
-      t.className = 'dba-modal__title';
-      t.textContent = 'バックアップ';
-      const x = document.createElement('button');
-      x.type = 'button';
-      x.className = 'dba-btn-x';
-      x.textContent = '×';
-      top.appendChild(t); top.appendChild(x);
-
-      const mid = document.createElement('div');
-      mid.className = 'dba-modal__mid';
-      const ta = document.createElement('textarea');
-      ta.id = 'dba-roster-backup-ta';
-      ta.className = 'dba-backup-textarea';
-      mid.appendChild(ta);
-
-      const bot = document.createElement('div');
-      bot.className = 'dba-modal__bot';
-      const save = document.createElement('button');
-      save.type = 'button';
-      save.className = 'dba-btn-apply';
-      save.textContent = '保存';
-      const cancel = document.createElement('button');
-      cancel.type = 'button';
-      cancel.className = 'dba-btn-close';
-      cancel.textContent = '中止';
-      bot.appendChild(save); bot.appendChild(cancel);
-
-      dlg.appendChild(top); dlg.appendChild(mid); dlg.appendChild(bot);
-      document.body.appendChild(dlg);
-
-      function closeDirect(){ try{ dlg.close(); }catch(_e){ dlg.removeAttribute('open'); } }
-      x.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeDirect(); });
-      cancel.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeDirect(); });
-      dlg.addEventListener('cancel', (e)=>{ e.preventDefault(); closeDirect(); });
-      save.addEventListener('click', (e)=>{
-        e.preventDefault(); e.stopPropagation();
-        const text = document.getElementById('dba-roster-backup-ta')?.value || '';
-        try{
-          const obj = JSON.parse(text);
-          overwriteRosterFromObject(obj);
-          try{ onDone && onDone(); }catch(_e2){}
-          closeDirect();
-        }catch(_e2){
-          alert('JSONの解析に失敗しました。');
-        }
-      });
+  // ---- 装備ロスター バックアップ helper ----
+  function buildRosterBackupJsonObject(roster){
+    const r = roster || {};
+    return {
+      gen: DBA_SAVE_GEN_CURRENT,
+      title: sanitizeText(r.title || ''),
+      createdAt: normalizeRosterDateTimeValue(r.createdAt, ''),
+      updatedAt: normalizeRosterDateTimeValue(r.updatedAt, ''),
+      presets: (r.presets && typeof r.presets === 'object') ? r.presets : {},
+      autoEquip: (r.autoEquip && typeof r.autoEquip === 'object')
+        ? r.autoEquip
+        : { candidates: {}, lastPreset: '' }
     };
+  }
 
-    const openNow = () => {
-      ensure();
-      const { roster } = getActiveRoster();
-      const obj = {
-        gen: DBA_SAVE_GEN_CURRENT,
-        title: roster.title,
-        presets: roster.presets || {},
-        autoEquip: (roster && roster.autoEquip && typeof roster.autoEquip === 'object')
-          ? roster.autoEquip
-          : { candidates: {}, lastPreset: '' }
+  function stringifyRosterBackupObject(obj){
+    try{
+      let text = JSON.stringify(obj, null, 2);
+      text = text.replace(
+        /\[\s*\n\s*(null|\d+)\s*,\s*\n\s*(null|\d+)\s*,\s*\n\s*(null|\d+)\s*\n\s*\]/g,
+        '[$1,$2,$3]'
+      );
+      return text;
+    }catch(_e){
+      return '';
+    }
+  }
+
+  function parseRosterBackupObject(text){
+    const obj = JSON.parse(String(text || ''));
+    if(!obj || typeof obj !== 'object') throw new Error('Invalid JSON object');
+    return obj;
+  }
+
+  function rosterDateTimeToMs(v){
+    const s = normalizeRosterDateTimeValue(v, '');
+    if(!s) return 0;
+    const t = Date.parse(s.replace(' ', 'T'));
+    return Number.isFinite(t) ? t : 0;
+  }
+
+  function cloneJsonSafe(obj){
+    try{
+      return JSON.parse(JSON.stringify(obj));
+    }catch(_e){
+      return null;
+    }
+  }
+
+  function sanitizeFileNamePart(s){
+    const raw = sanitizeText(s || '') || 'roster';
+    return raw.replace(/[\\\/:*?"<>|]/g, '_');
+  }
+
+  function downloadRosterJsonFile(obj, fallbackTitle){
+    const title = sanitizeFileNamePart((obj && obj.title) || fallbackTitle || 'roster');
+    const stamp = normalizeRosterDateTimeValue((obj && obj.updatedAt) || nowIso(), nowIso())
+      .replace(/[: ]/g, '-');
+    const filename = `${title}_${stamp}.json`;
+    const text = stringifyRosterBackupObject(obj);
+    const blob = new Blob([text], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    try{
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }finally{
+      setTimeout(() => {
+        try{ URL.revokeObjectURL(url); }catch(_e){}
+      }, 1000);
+    }
+  }
+
+  function chooseJsonFileFromDisk(){
+    return new Promise((resolve, reject) => {
+      try{
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json,application/json';
+        input.style.display = 'none';
+        document.body.appendChild(input);
+
+        const cleanup = () => {
+          try{ input.remove(); }catch(_e){}
+        };
+
+        input.addEventListener('change', async () => {
+          try{
+            const file = input.files && input.files[0] ? input.files[0] : null;
+            cleanup();
+            if(!file){
+              reject(new Error('NO_FILE'));
+              return;
+            }
+            const text = await file.text();
+            resolve({ file, text });
+          }catch(err){
+            cleanup();
+            reject(err);
+          }
+        }, { once:true });
+
+        input.click();
+      }catch(err){
+        reject(err);
+      }
+    });
+  }
+
+  function getAllRosterEntriesForUi(){
+    const store = loadRosterStore();
+    const ids = Object.keys(store.rosters || {});
+    return ids.map((id) => {
+      const r = store.rosters[id] || {};
+      return {
+        id,
+        title: sanitizeText(r.title || ''),
+        updatedAt: normalizeRosterDateTimeValue(r.updatedAt, ''),
+        createdAt: normalizeRosterDateTimeValue(r.createdAt, '')
       };
-      const ta = document.getElementById('dba-roster-backup-ta');
-      if(ta){
-        try{
-          // バックアップ表示の改行を減らす：
-          // プリセットの [weaponId, armorId, necklaceId]（長さ3配列）を 1 行に圧縮する
-          let text = JSON.stringify(obj, null, 2);
-          // 例：
-          // [
-          //   111111111,
-          //   222222222,
-          //   333333333
-          // ]
-          // → [111111111,222222222,333333333]
-          text = text.replace(
-            /\[\s*\n\s*(null|\d+)\s*,\s*\n\s*(null|\d+)\s*,\s*\n\s*(null|\d+)\s*\n\s*\]/g,
-            '[$1,$2,$3]'
-          );
-          ta.value = text;
-        }catch(_e){
-          ta.value = '';
-        }
+    });
+  }
+
+  function makeRosterUniqueTitle(baseTitle, excludeId){
+    const store = loadRosterStore();
+    const used = new Set();
+    for(const id of Object.keys(store.rosters || {})){
+      if(excludeId && id === excludeId) continue;
+      const t = sanitizeText(store.rosters[id]?.title || '');
+      if(t) used.add(t);
+    }
+    const base = sanitizeText(baseTitle || '') || `装備ロスター_${yyyymmddLocal()}`;
+    if(!used.has(base)) return base;
+    let i = 2;
+    while(used.has(`${base} (${i})`)) i++;
+    return `${base} (${i})`;
+  }
+
+  function buildNormalizedRosterFromBackupObject(obj, opt = {}){
+    if(!obj || typeof obj !== 'object') throw new Error('Invalid JSON object');
+    const fallbackTitle = sanitizeText(opt.fallbackTitle || `装備ロスター_${yyyymmddLocal()}`);
+    const title = sanitizeText(obj.title || fallbackTitle) || fallbackTitle;
+    const createdAtIn = normalizeRosterDateTimeValue(obj.createdAt, '');
+    const updatedAtIn = normalizeRosterDateTimeValue(obj.updatedAt, '');
+    const presets = (obj.presets && typeof obj.presets === 'object') ? obj.presets : {};
+    const aeIn = (obj.autoEquip && typeof obj.autoEquip === 'object') ? obj.autoEquip : null;
+    const aeCandidates = (aeIn && aeIn.candidates && typeof aeIn.candidates === 'object') ? aeIn.candidates : {};
+    const aeLast = (aeIn && typeof aeIn.lastPreset === 'string') ? aeIn.lastPreset : '';
+
+    const cleaned = {};
+    const order = [];
+    for(const k of Object.keys(presets)){
+      const name = sanitizeText(k);
+      if(!name) continue;
+      const v = presets[k];
+      if(!Array.isArray(v) || v.length !== 3) continue;
+      cleaned[name] = [
+        (v[0] === null || Number.isFinite(Number(v[0]))) ? (v[0] === null ? null : Number(v[0])) : null,
+        (v[1] === null || Number.isFinite(Number(v[1]))) ? (v[1] === null ? null : Number(v[1])) : null,
+        (v[2] === null || Number.isFinite(Number(v[2]))) ? (v[2] === null ? null : Number(v[2])) : null
+      ];
+      order.push(name);
+    }
+
+    return {
+      title,
+      createdAt: createdAtIn || nowIso(),
+      updatedAt: updatedAtIn || nowIso(),
+      presets: cleaned,
+      presetOrder: order,
+      autoEquip: {
+        candidates: aeCandidates,
+        lastPreset: String(aeLast || '')
       }
+    };
+  }
+
+  function installRosterBackupObjectAsSeparate(obj){
+    const store = loadRosterStore();
+    const normalized = buildNormalizedRosterFromBackupObject(obj);
+    const id = `r_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    store.rosters[id] = {
+      id,
+      title: makeRosterUniqueTitle(normalized.title),
+      createdAt: normalized.createdAt,
+      updatedAt: normalized.updatedAt,
+      presets: normalized.presets,
+      presetOrder: normalized.presetOrder,
+      autoEquip: normalized.autoEquip
+    };
+    store.gen = DBA_SAVE_GEN_CURRENT;
+    saveRosterStore(store);
+    return id;
+  }
+
+  function closeDialogById(id){
+    const dlg = document.getElementById(id);
+    if(!dlg) return;
+    try{ dlg.close(); }catch(_e){ dlg.removeAttribute('open'); }
+  }
+
+  function ensureRosterBackupEditorModal(){
+    if(document.getElementById('dba-m-roster-backup-editor')) return;
+
+    const dlg = document.createElement('dialog');
+    dlg.id = 'dba-m-roster-backup-editor';
+    dlg.className = 'dba-m-std';
+
+    const top = document.createElement('div');
+    top.className = 'dba-modal__top';
+    const t = document.createElement('div');
+    t.className = 'dba-modal__title';
+    t.textContent = 'ファイルを直接編集';
+    const x = document.createElement('button');
+    x.type = 'button';
+    x.className = 'dba-btn-x';
+    x.textContent = '×';
+    top.appendChild(t); top.appendChild(x);
+
+    const mid = document.createElement('div');
+    mid.className = 'dba-modal__mid';
+    const ta = document.createElement('textarea');
+    ta.id = 'dba-roster-backup-editor-ta';
+    ta.className = 'dba-backup-textarea';
+    mid.appendChild(ta);
+
+    const bot = document.createElement('div');
+    bot.className = 'dba-modal__bot';
+    const save = document.createElement('button');
+    save.type = 'button';
+    save.className = 'dba-btn-apply';
+    save.textContent = '保存';
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'dba-btn-close';
+    cancel.textContent = 'Cancel';
+    bot.appendChild(save); bot.appendChild(cancel);
+
+    dlg.appendChild(top); dlg.appendChild(mid); dlg.appendChild(bot);
+    document.body.appendChild(dlg);
+
+    function closeDirect(){ try{ dlg.close(); }catch(_e){ dlg.removeAttribute('open'); } }
+    x.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeDirect(); });
+    cancel.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeDirect(); });
+    dlg.addEventListener('cancel', (e)=>{ e.preventDefault(); closeDirect(); });
+  }
+
+  function openRosterBackupEditorModal(onDone){
+    const openNow = () => {
+      ensureRosterBackupEditorModal();
+      const { roster } = getActiveRoster();
+      const obj = buildRosterBackupJsonObject(roster);
+      const ta = document.getElementById('dba-roster-backup-editor-ta');
+      const dlg = document.getElementById('dba-m-roster-backup-editor');
+      if(ta) ta.value = stringifyRosterBackupObject(obj);
+      if(!dlg) return;
+
+      const save = dlg.querySelector('.dba-btn-apply');
+      if(save){
+        save.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const text = document.getElementById('dba-roster-backup-editor-ta')?.value || '';
+          try{
+            const parsed = parseRosterBackupObject(text);
+            overwriteRosterFromObject(parsed);
+            try{ onDone && onDone(); }catch(_e2){}
+            closeDialogById('dba-m-roster-backup-editor');
+          }catch(_e2){
+            alert('JSONの解析に失敗しました。');
+          }
+        };
+      }
+
+      try{ dlg.showModal(); }catch(_e){ dlg.setAttribute('open',''); }
+    };
+    if(document.body) openNow(); else document.addEventListener('DOMContentLoaded', openNow, { once:true });
+  }
+
+  function ensureRosterExportPickModal(){
+    if(document.getElementById('dba-m-roster-export-pick')) return;
+
+    const dlg = document.createElement('dialog');
+    dlg.id = 'dba-m-roster-export-pick';
+    dlg.className = 'dba-m-std';
+
+    const top = document.createElement('div');
+    top.className = 'dba-modal__top';
+    const t = document.createElement('div');
+    t.className = 'dba-modal__title';
+    t.textContent = 'エクスポートする装備ロスターを選択';
+    const x = document.createElement('button');
+    x.type = 'button';
+    x.className = 'dba-btn-x';
+    x.textContent = '×';
+    top.appendChild(t); top.appendChild(x);
+
+    const mid = document.createElement('div');
+    mid.className = 'dba-modal__mid';
+    const list = document.createElement('div');
+    list.id = 'dba-roster-export-pick-list';
+    list.className = 'dba-roster-list';
+    mid.appendChild(list);
+
+    const bot = document.createElement('div');
+    bot.className = 'dba-modal__bot';
+    const ok = document.createElement('button');
+    ok.type = 'button';
+    ok.className = 'dba-btn-apply';
+    ok.textContent = '決定';
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'dba-btn-close';
+    cancel.textContent = 'Cancel';
+    bot.appendChild(ok); bot.appendChild(cancel);
+
+    dlg.appendChild(top); dlg.appendChild(mid); dlg.appendChild(bot);
+    document.body.appendChild(dlg);
+
+    function closeDirect(){ try{ dlg.close(); }catch(_e){ dlg.removeAttribute('open'); } }
+    x.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeDirect(); });
+    cancel.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeDirect(); });
+    dlg.addEventListener('cancel', (e)=>{ e.preventDefault(); closeDirect(); });
+  }
+
+  function openRosterExportPickModal(onDone){
+    const openNow = () => {
+      ensureRosterExportPickModal();
+      const dlg = document.getElementById('dba-m-roster-export-pick');
+      const list = document.getElementById('dba-roster-export-pick-list');
+      if(!dlg || !list) return;
+
+      const store = loadRosterStore();
+      const ids = Object.keys(store.rosters || {});
+      let selectedId = ids.includes(store.activeId) ? store.activeId : (ids[0] || '');
+
+      list.textContent = '';
+      for(const id of ids){
+        const r = store.rosters[id] || {};
+        const item = document.createElement('div');
+        item.className = 'dba-roster-item';
+        item.dataset.id = id;
+        item.dataset.selected = (id === selectedId) ? '1' : '0';
+
+        const n = document.createElement('div');
+        n.className = 'dba-roster-item__name';
+        n.textContent = sanitizeText(r.title || '(無題)');
+
+        const m = document.createElement('div');
+        m.className = 'dba-roster-item__meta';
+        m.textContent = normalizeRosterDateTimeValue(r.updatedAt, '');
+
+        item.appendChild(n);
+        item.appendChild(m);
+        item.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          selectedId = id;
+          for(const el of list.querySelectorAll('.dba-roster-item')){
+            el.dataset.selected = (el.dataset.id === selectedId) ? '1' : '0';
+          }
+        });
+        list.appendChild(item);
+      }
+
+      const ok = dlg.querySelector('.dba-btn-apply');
+      if(ok){
+        ok.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if(!selectedId || !store.rosters[selectedId]){
+            alert('装備ロスターを選択してください。');
+            return;
+          }
+          const obj = buildRosterBackupJsonObject(store.rosters[selectedId]);
+          downloadRosterJsonFile(obj, store.rosters[selectedId].title);
+          try{ onDone && onDone(); }catch(_e2){}
+          closeDialogById('dba-m-roster-export-pick');
+        };
+      }
+
+      try{ dlg.showModal(); }catch(_e){ dlg.setAttribute('open',''); }
+    };
+    if(document.body) openNow(); else document.addEventListener('DOMContentLoaded', openNow, { once:true });
+  }
+
+  function ensureRosterImportConflictModal(){
+    if(document.getElementById('dba-m-roster-import-conflict')) return;
+
+    const dlg = document.createElement('dialog');
+    dlg.id = 'dba-m-roster-import-conflict';
+    dlg.className = 'dba-m-std';
+
+    const top = document.createElement('div');
+    top.className = 'dba-modal__top';
+    const t = document.createElement('div');
+    t.className = 'dba-modal__title';
+    t.textContent = 'インポート方法を選択';
+    const x = document.createElement('button');
+    x.type = 'button';
+    x.className = 'dba-btn-x';
+    x.textContent = '×';
+    top.appendChild(t); top.appendChild(x);
+
+    const mid = document.createElement('div');
+    mid.className = 'dba-modal__mid';
+
+    const wrap = document.createElement('div');
+    wrap.style.display = 'grid';
+    wrap.style.gridTemplateColumns = '1fr 1fr';
+    wrap.style.gap = '10px';
+
+    const curBox = document.createElement('div');
+    curBox.id = 'dba-roster-import-cur';
+    curBox.className = 'dba-roster-item';
+    curBox.style.display = 'block';
+    curBox.style.cursor = 'pointer';
+
+    const impBox = document.createElement('div');
+    impBox.id = 'dba-roster-import-imp';
+    impBox.className = 'dba-roster-item';
+    impBox.style.display = 'block';
+    impBox.style.cursor = 'pointer';
+
+    wrap.appendChild(curBox);
+    wrap.appendChild(impBox);
+    mid.appendChild(wrap);
+
+    const bot = document.createElement('div');
+    bot.className = 'dba-modal__bot';
+    bot.style.flexWrap = 'wrap';
+
+    const btnNew = document.createElement('button');
+    btnNew.type = 'button';
+    btnNew.className = 'dba-btn-ok';
+    btnNew.innerHTML = '別データとして<br>インストール';
+    btnNew.style.width = '8.5em';
+
+    const btnOverwrite = document.createElement('button');
+    btnOverwrite.type = 'button';
+    btnOverwrite.className = 'dba-btn-apply';
+    btnOverwrite.innerHTML = '上書きして<br>インストール';
+    btnOverwrite.style.width = '8.5em';
+
+    const btnCancel = document.createElement('button');
+    btnCancel.type = 'button';
+    btnCancel.className = 'dba-btn-close';
+    btnCancel.textContent = 'Cancel';
+
+    bot.appendChild(btnNew);
+    bot.appendChild(btnOverwrite);
+    bot.appendChild(btnCancel);
+
+    dlg.appendChild(top);
+    dlg.appendChild(mid);
+    dlg.appendChild(bot);
+    document.body.appendChild(dlg);
+
+    function closeDirect(){ try{ dlg.close(); }catch(_e){ dlg.removeAttribute('open'); } }
+    x.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeDirect(); });
+    btnCancel.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeDirect(); });
+    dlg.addEventListener('cancel', (e)=>{ e.preventDefault(); closeDirect(); });
+  }
+
+  function openRosterImportConflictModal(activeRosterObj, importedObj, onDone){
+    const openNow = () => {
+      ensureRosterImportConflictModal();
+      const dlg = document.getElementById('dba-m-roster-import-conflict');
+      const curBox = document.getElementById('dba-roster-import-cur');
+      const impBox = document.getElementById('dba-roster-import-imp');
+      if(!dlg || !curBox || !impBox) return;
+
+      let selectedSide = 'imported';
+      const renderSideSelection = () => {
+        curBox.dataset.selected = (selectedSide === 'current') ? '1' : '0';
+        impBox.dataset.selected = (selectedSide === 'imported') ? '1' : '0';
+      };
+
+      curBox.textContent = '';
+      impBox.textContent = '';
+
+      const curName = document.createElement('div');
+      curName.className = 'dba-roster-item__name';
+      curName.textContent = `展開中\n${sanitizeText(activeRosterObj.title || '(無題)')}`;
+      const curMeta = document.createElement('div');
+      curMeta.className = 'dba-roster-item__meta';
+      curMeta.style.marginTop = '8px';
+      curMeta.textContent = normalizeRosterDateTimeValue(activeRosterObj.updatedAt, '');
+      curBox.appendChild(curName);
+      curBox.appendChild(curMeta);
+
+      const impName = document.createElement('div');
+      impName.className = 'dba-roster-item__name';
+      impName.textContent = `インポート予定\n${sanitizeText(importedObj.title || '(無題)')}`;
+      const impMeta = document.createElement('div');
+      impMeta.className = 'dba-roster-item__meta';
+      impMeta.style.marginTop = '8px';
+      impMeta.textContent = normalizeRosterDateTimeValue(importedObj.updatedAt, '');
+      impBox.appendChild(impName);
+      impBox.appendChild(impMeta);
+
+      curBox.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        selectedSide = 'current';
+        renderSideSelection();
+      };
+      impBox.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        selectedSide = 'imported';
+        renderSideSelection();
+      };
+      renderSideSelection();
+
+      const btns = dlg.querySelectorAll('.dba-modal__bot button');
+      const btnNew = btns[0];
+      const btnOverwrite = btns[1];
+      if(btnNew){
+        btnNew.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if(!selectedSide){
+            alert('どちらかを選択してください。');
+            return;
+          }
+          installRosterBackupObjectAsSeparate(importedObj);
+          try{ onDone && onDone(); }catch(_e2){}
+          closeDialogById('dba-m-roster-import-conflict');
+        };
+      }
+      if(btnOverwrite){
+        btnOverwrite.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if(!selectedSide){
+            alert('どちらかを選択してください。');
+            return;
+          }
+          overwriteRosterFromObject(importedObj);
+          try{ onDone && onDone(); }catch(_e2){}
+          closeDialogById('dba-m-roster-import-conflict');
+        };
+      }
+
+      try{ dlg.showModal(); }catch(_e){ dlg.setAttribute('open',''); }
+    };
+    if(document.body) openNow(); else document.addEventListener('DOMContentLoaded', openNow, { once:true });
+  }
+
+  function exportRosterViaUi(onDone){
+    const store = loadRosterStore();
+    const ids = Object.keys(store.rosters || {});
+    if(ids.length <= 0){
+      alert('装備ロスターがありません。');
+      return;
+    }
+    if(ids.length === 1){
+      const only = store.rosters[ids[0]];
+      downloadRosterJsonFile(buildRosterBackupJsonObject(only), only.title);
+      try{ onDone && onDone(); }catch(_e){}
+      return;
+    }
+    openRosterExportPickModal(onDone);
+  }
+
+  async function importRosterViaUi(onDone){
+    let picked;
+    try{
+      picked = await chooseJsonFileFromDisk();
+    }catch(err){
+      if(err && String(err.message || err) === 'NO_FILE') return;
+      alert('ファイルの読み込みに失敗しました。');
+      return;
+    }
+
+    let importedObj;
+    try{
+      importedObj = parseRosterBackupObject(picked.text);
+    }catch(_e){
+      alert('JSONの解析に失敗しました。');
+      return;
+    }
+
+    const { roster } = getActiveRoster();
+    const activeObj = buildRosterBackupJsonObject(roster);
+    const activeName = sanitizeText(activeObj.title || '');
+    const importedName = sanitizeText(importedObj.title || '');
+    const activeMs = rosterDateTimeToMs(activeObj.updatedAt);
+    const importedMs = rosterDateTimeToMs(importedObj.updatedAt);
+
+    const needConfirm =
+      (activeName !== importedName) ||
+      (importedMs > 0 && activeMs > 0 && importedMs < activeMs);
+
+    if(needConfirm){
+      openRosterImportConflictModal(activeObj, importedObj, onDone);
+      return;
+    }
+
+    overwriteRosterFromObject(importedObj);
+    try{ onDone && onDone(); }catch(_e){}
+  }
+
+  function ensureRosterBackupModal(){
+    if(document.getElementById('dba-m-roster-backup')) return;
+
+    const dlg = document.createElement('dialog');
+    dlg.id = 'dba-m-roster-backup';
+    dlg.className = 'dba-m-std';
+
+    const top = document.createElement('div');
+    top.className = 'dba-modal__top';
+    const t = document.createElement('div');
+    t.className = 'dba-modal__title';
+    t.textContent = '装備ロスター バックアップ管理';
+    const x = document.createElement('button');
+    x.type = 'button';
+    x.className = 'dba-btn-x';
+    x.textContent = '×';
+    top.appendChild(t); top.appendChild(x);
+
+    const mid = document.createElement('div');
+    mid.className = 'dba-modal__mid';
+
+    const wrap = document.createElement('div');
+    wrap.style.display = 'flex';
+    wrap.style.flexDirection = 'column';
+    wrap.style.gap = '12px';
+    wrap.style.alignItems = 'stretch';
+
+    const btnExport = document.createElement('button');
+    btnExport.type = 'button';
+    btnExport.id = 'dba-roster-backup-btn-export';
+    btnExport.className = 'dba-btn-mini';
+    btnExport.textContent = 'エクスポート';
+    btnExport.style.padding = '12px 10px';
+
+    const btnImport = document.createElement('button');
+    btnImport.type = 'button';
+    btnImport.id = 'dba-roster-backup-btn-import';
+    btnImport.className = 'dba-btn-mini';
+    btnImport.textContent = 'インポート';
+    btnImport.style.padding = '12px 10px';
+
+    const btnEdit = document.createElement('button');
+    btnEdit.type = 'button';
+    btnEdit.id = 'dba-roster-backup-btn-edit';
+    btnEdit.className = 'dba-btn-mini';
+    btnEdit.textContent = 'ファイルを直接編集';
+    btnEdit.style.padding = '12px 10px';
+
+    wrap.appendChild(btnExport);
+    wrap.appendChild(btnImport);
+    wrap.appendChild(btnEdit);
+    mid.appendChild(wrap);
+
+    const bot = document.createElement('div');
+    bot.className = 'dba-modal__bot';
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'dba-btn-close';
+    cancel.textContent = 'Cancel';
+    bot.appendChild(cancel);
+
+    dlg.appendChild(top);
+    dlg.appendChild(mid);
+    dlg.appendChild(bot);
+    document.body.appendChild(dlg);
+
+    function closeDirect(){ try{ dlg.close(); }catch(_e){ dlg.removeAttribute('open'); } }
+    x.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeDirect(); });
+    cancel.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeDirect(); });
+    dlg.addEventListener('cancel', (e)=>{ e.preventDefault(); closeDirect(); });
+  }
+
+  // ---- バックアップ modal（エクスポート / インポート / 直接編集） ----
+  function openRosterBackupModal(onDone){
+    const openNow = () => {
+      ensureRosterBackupModal();
       const dlg = document.getElementById('dba-m-roster-backup');
-      if(dlg){
-        try{ dlg.showModal(); }catch(_e){ dlg.setAttribute('open',''); }
+      if(!dlg) return;
+
+      const btnExport = document.getElementById('dba-roster-backup-btn-export');
+      const btnImport = document.getElementById('dba-roster-backup-btn-import');
+      const btnEdit = document.getElementById('dba-roster-backup-btn-edit');
+
+      if(btnExport){
+        btnExport.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          exportRosterViaUi(onDone);
+        };
       }
+      if(btnImport){
+        btnImport.onclick = async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          await importRosterViaUi(onDone);
+        };
+      }
+      if(btnEdit){
+        btnEdit.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          openRosterBackupEditorModal(onDone);
+        };
+      }
+
+      try{ dlg.showModal(); }catch(_e){ dlg.setAttribute('open',''); }
     };
     if(document.body) openNow(); else document.addEventListener('DOMContentLoaded', openNow, { once:true });
   }
@@ -8176,6 +8840,14 @@
       if(curWrap && newWrap && curWrap.parentNode){
         const importedWrap = document.importNode(newWrap, true);
         curWrap.parentNode.replaceChild(importedWrap, curWrap);
+      }
+
+      // (C) fnbar 上段の「チームカラー」表示も、差し替え後の header を元に再描画
+      // - 戦況情報のクリック時/長押し時の双方で、サーバーHTML由来の最新色へ追従させる
+      // - fnbar 未生成のタイミングでは何もしない
+      if(document.getElementById('dba-fn-header-info')){
+        renderFnHeaderInfo();
+        scheduleFnbarHeightSync();
       }
 
       // 差し替えで微妙にレイアウトが動いても、スクロールは維持
@@ -9867,9 +10539,9 @@
   }
 
   function injectWhenReady() {
-    // ★保存データの世代を確認し、Gen1ならGen2へ自動移行
+    // ★保存データの世代を確認し、Gen1/Gen2ならGen3へ自動移行
     //   （/teambattle?m=* を開いた時に行う要件）
-    try{ migrateSaveDataToGen2IfNeeded(); }catch(_e){}
+    try{ migrateSaveDataToGen3IfNeeded(); }catch(_e){}
 
     addStyle(CSS);
 
