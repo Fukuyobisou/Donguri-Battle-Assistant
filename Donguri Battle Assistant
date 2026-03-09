@@ -1,9 +1,11 @@
 // ==UserScript==
 // @name         Donguri Battle Assistant
 // @namespace    https://donguri.5ch.io/
-// @version      1.0.2.3
+// @version      1.1.2.3
 // @description  5ちゃんねるのどんぐりシステムから派生したゲームの操作性を改善するためのユーザースクリプト
 // @author       福呼び草
+// @assistant    ChatGPT (OpenAI)
+// @license      BSD-3-Clause license
 // @match        https://donguri.5ch.io/teambattle*
 // @match        https://donguri.5ch.io/bag
 // @match        https://donguri.5ch.io/
@@ -98,7 +100,7 @@
       flex-direction: column;       /* ★縦積み（上=progress / 下=ボタン群） */
       align-items: stretch;
       justify-content: flex-start;
-      gap: 6px;
+      gap: 2px;
       margin: 0;
       padding: 6px 8px;             /* ★内側余白を少し確保 */
       box-sizing: border-box;
@@ -112,7 +114,99 @@
       scrollbar-gutter: stable both-edges;
     }
 
-    /* fnbar：上段（progress）/下段（ボタン群） */
+    /* fnbar：上段（<header>情報）／中段（progress）／下段（ボタン群） */
+    #dba-fn-header-host{
+      width: 100%;
+      min-width: 0;
+    }
+    #dba-fn-header-info{
+      width: 100%;
+      min-width: 0;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 10px;
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      border: 0 none #000;
+      background: trasparent;
+    }
+    .dba-fn-header-info__title{
+      font-size: 1.1em;
+      font-weight: 900;
+      line-height: 1.2;
+      white-space: nowrap;
+    }
+    .dba-fn-header-info__mode{
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 6px;
+      min-width: 0;
+      flex-wrap: wrap;
+      font-size: 1.1em;
+      font-weight: 800;
+      line-height: 1.2;
+      white-space: nowrap;
+    }
+    .dba-fn-header-info__team{
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 0;
+      margin-left: 8px;
+      min-width: 0;
+      flex-wrap: wrap;
+      font-size: 1.1em;
+      font-weight: 800;
+      line-height: 1.2;
+    }
+    .dba-fn-header-info__team-label{
+      white-space: nowrap;
+    }
+    .dba-fn-header-info__team-name{
+      margin-right: 6px;
+      white-space: nowrap;
+    }
+    .dba-fn-header-info__team-dot{
+      display: inline-block;
+      width: 18px;
+      height: 18px;
+      min-width: 18px;
+      min-height: 18px;
+      border-radius: 999px;
+      border: 1px solid #00000022;
+      vertical-align: middle;
+      box-sizing: border-box;
+      flex: 0 0 auto;
+    }
+    .dba-fn-header-info__anim-bracket{
+      white-space: nowrap;
+    }
+    .dba-fn-header-info__links{
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-left: 8px;
+      min-width: 0;
+      font-size: 1em;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+    .dba-fn-header-info__links a{
+      color: #0040c0;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      white-space: nowrap;
+    }
+    .dba-fn-header-info__links a:hover{
+      color: #0000e0;
+    }
+
     #dba-fn-progress-host{
       width: 100%;
       min-width: 0;
@@ -135,17 +229,15 @@
     #dba-top-progress{
       margin: 0;                /* ★fnbar内に入るので外側マージンは0 */
       padding: 6px 8px;         /* ★fnbar内向けに少し圧縮 */
-      border: 2px solid #000;
-      border-radius: 12px;
-      background: #fff;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      border: 0 none #000;
+      background: transparent;
       width: 100%;
       box-sizing: border-box;
     }
     /* 3ペイン（左：進捗 / 中央：ボタン / 右：同期情報） */
     #dba-top-progress .dba-top-progress__panes{
       display: flex;
-      gap: 12px;
+      gap: 8px;
       align-items: stretch;
       justify-content: space-between;
       min-width: 0; /* はみ出し抑止 */
@@ -158,10 +250,10 @@
       border-right: 1px solid #00000022;
       padding: 0 12px;
       display: flex;
-      flex-direction: column;
-      align-items: stretch;
-      justify-content: flex-start;
-      gap: 8px;
+      flex-direction: row;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
     }
     #dba-top-progress .dba-top-progress__paneL{
       flex: 1 1 auto;
@@ -180,13 +272,16 @@
     #dba-top-progress[data-showinfo="1"] .dba-top-progress__paneR{
       display: block;
     }
-    /* ★中央ペイン：縦並びボタン（右のマージン系は無効化） */
+    /* ★中央ペイン：横並びボタン（右のマージン系は無効化） */
     #dba-top-progress .dba-top-progress__paneM #dba-top-progress-sync-info,
     #dba-top-progress .dba-top-progress__paneM #dba-top-progress-sync-now{
       margin-left: 0;
-      width: 100%;
+      width: calc(50% - 4px);
       border-radius: 10px;
       padding: 6px 10px;
+      line-height: 1.15;
+      white-space: normal;
+      text-align: center;
     }
     #dba-top-progress .dba-top-progress__paneM #dba-top-progress-sync-now[disabled]{
       opacity: 0.6;
@@ -215,8 +310,6 @@
     /* 「今すぐ同期」ボタン（第xx期の右） */
     #dba-top-progress-sync-now{
       margin-left: 1.2em; /* 1～2em 程度 */
-      padding: 4px 10px;
-      border-radius: 10px;
     }
     #dba-top-progress-sync-now[disabled]{
       opacity: 0.6;
@@ -225,18 +318,18 @@
     /* 「同期情報」ボタン（スイッチ） */
     #dba-top-progress-sync-info{
       margin-left: 0.6em;
-      padding: 4px 10px;
-      border-radius: 10px;
     }
     #dba-top-progress-sync-info[data-on="1"]{
       background: #33a033;
       color: #fff;
     }
     /* ★termRow内で横に伸びるバー */
-    #dba-top-progress .progress-bar{      height: 20px;
+    #dba-top-progress .progress-bar{
+      height: 18px;
       background: #ccc;
-      border-radius: 8px;
-      font-size: 16px;
+      border-radius: 10px;
+      font-size: 15px;
+      line-height: 17px;
       overflow: hidden;
       margin-top: 0;     /* ★同一行なので上マージン不要 */
       flex: 1 1 auto;    /* ★横に伸びる */
@@ -257,8 +350,8 @@
       display: flex;
       align-items: center;
       justify-content: flex-start;
-      gap: 1.2em; /* テキストと進捗バーの間隔 */
-      margin-top: 8px;
+      gap: 1.1em; /* テキストと進捗バーの間隔 */
+      margin-top: 6px;
       min-width: 0;
     }
     #dba-top-progress .dba-top-progress__matchLabel{
@@ -283,10 +376,10 @@
     }
     /* 試合バー */
     #dba-top-progress .progress-bar.dba-match-progress{
-      height: 20px;
-      font-size: 16px;
+      height: 18x;
+      font-size: 15px;
       margin-top: 0;
-      border-radius: 8px;
+      border-radius: 10px;
     }
     /* 右ペイン：同期情報（縦に1行ずつ） */
     #dba-top-progress .dba-top-progress__infoLine{
@@ -773,6 +866,24 @@
     .dba-btn-mini:active{ transform: translateY(1px); }
     .dba-btn-mini--danger{ background:#f3d0d0; }
     .dba-btn-mini--ok{ background:#cfe3ff; }
+
+    .dba-btn-progress-mini{
+      appearance: none;
+      width: 4.5em !important;
+      border: 2px solid #000;
+      border-radius: 10px;
+      padding: 6px 2px !important;
+      margin: 0 0 0 6px;
+      font-size: 0.95em;
+      font-weight: 700;
+      cursor: pointer;
+      user-select: none;
+      background: #eee;
+      color: #000;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.12);
+    }
+    .dba-btn-progress-mini:hover{ filter: brightness(0.97); }
+    .dba-btn-progress-mini:active{ transform: translateY(1px); }
 
     .dba-roster-row2{
       display: flex;
@@ -1564,6 +1675,7 @@
   const LS_TOP_ELAPSED_PROGRESS_KEY = 'dba.topElapsedProgress.v1';
   const DBA_TOP_PROGRESS_CYCLE_MS = 60 * 60 * 1000; // 1サイクル=約1時間（ユーザー説明に基づく）
   const LS_TOP_SYNCINFO_SHOW_KEY = 'dba.topElapsedProgress.showInfo.v1'; // 0/1
+  const LS_SHOW_ORIGINAL_HEADER_KEY = 'dba.showOriginalHeader.v1'; // 0/1
 
   function loadTopSyncInfoShow(){
     try{
@@ -1579,6 +1691,85 @@
     try{
       localStorage.setItem(LS_TOP_SYNCINFO_SHOW_KEY, on ? '1' : '0');
     }catch(_e){}
+  }
+
+  function loadShowOriginalHeader(){
+    try{
+      const raw = localStorage.getItem(LS_SHOW_ORIGINAL_HEADER_KEY);
+      if(raw == null) return false; // デフォルトOFF
+      return raw === '1';
+    }catch(_e){
+      return false;
+    }
+  }
+
+  function saveShowOriginalHeader(on){
+    try{
+      localStorage.setItem(LS_SHOW_ORIGINAL_HEADER_KEY, on ? '1' : '0');
+    }catch(_e){}
+  }
+
+  function applyOriginalHeaderVisibility(show){
+    const header = document.querySelector('header');
+    if(!header) return false;
+    header.style.display = show ? '' : 'none';
+    return true;
+  }
+
+  function reapplyOriginalHeaderVisibilityFromSettings(){
+    try{
+      const s = loadSettings();
+      return applyOriginalHeaderVisibility(!!s?.header?.showOriginalHeader);
+    }catch(_e){
+      return applyOriginalHeaderVisibility(loadShowOriginalHeader());
+    }
+  }
+
+  let DBA_ORIGINAL_HEADER_VIS_OBS = null;
+  let DBA_ORIGINAL_HEADER_VIS_RAF = 0;
+
+  function scheduleReapplyOriginalHeaderVisibility(){
+    if(DBA_ORIGINAL_HEADER_VIS_RAF) return;
+    DBA_ORIGINAL_HEADER_VIS_RAF = requestAnimationFrame(() => {
+      DBA_ORIGINAL_HEADER_VIS_RAF = 0;
+      reapplyOriginalHeaderVisibilityFromSettings();
+    });
+  }
+
+  function startOriginalHeaderVisibilityObserver(){
+    if(DBA_ORIGINAL_HEADER_VIS_OBS) return;
+
+    const root = document.body || document.documentElement;
+    if(!root) return;
+
+    DBA_ORIGINAL_HEADER_VIS_OBS = new MutationObserver((mutations) => {
+      let shouldReapply = false;
+
+      for(const m of mutations){
+        if(m.type === 'childList'){
+          for(const n of m.addedNodes){
+            if(!(n instanceof Element)) continue;
+            if(
+              n.matches('header') ||
+              n.querySelector('header')
+            ){
+              shouldReapply = true;
+              break;
+            }
+          }
+          if(shouldReapply) break;
+        }
+      }
+
+      if(shouldReapply){
+        scheduleReapplyOriginalHeaderVisibility();
+      }
+    });
+
+    DBA_ORIGINAL_HEADER_VIS_OBS.observe(root, {
+      childList: true,
+      subtree: true
+    });
   }
 
   function loadTopElapsedProgress(){
@@ -1651,6 +1842,225 @@
     return { totalMatches: 2, matchSec: 30 * 60 };
   }
 
+  function extractFnHeaderInfoFromCurrentHeader(){
+    const out = {
+      title: 'どんぐりチーム戦い',
+      teamName: '',
+      teamColor: '',
+      prevHref: '',
+      prevText: '',
+      animHref: '',
+      animText: ''
+    };
+
+    const header = document.querySelector('header');
+    if(!header) return out;
+
+    const root = header.querySelector('div') || header;
+    if(!root) return out;
+
+    // RB専用：「チーム: 色名」ブロック + 色ドット
+    if(mode === 'rb'){
+      const spans = Array.from(root.querySelectorAll('span'));
+      let teamLabelSpan = null;
+      for(const sp of spans){
+        const txt = String(sp.textContent || '').replace(/\s+/g, ' ').trim();
+        const ownText = String(
+          sp.childNodes[0] && sp.childNodes[0].nodeType === Node.TEXT_NODE
+            ? sp.childNodes[0].textContent
+            : ''
+        ).replace(/\s+/g, ' ').trim();
+        const st = String(sp.getAttribute('style') || '');
+        const hasBg = /background\s*:/i.test(st);
+        if(/^チーム\s*:/.test(txt) && !hasBg && (!teamLabelSpan || /^チーム\s*:/.test(ownText))){
+          teamLabelSpan = sp;
+        }
+      }
+      if(teamLabelSpan){
+        const txt = String(teamLabelSpan.textContent || '').replace(/\s+/g, ' ').trim();
+        const m = txt.match(/チーム\s*:\s*(.+)$/);
+        if(m) out.teamName = String(m[1] || '').trim();
+
+        const colorSearchRoots = [];
+        if(teamLabelSpan.parentElement) colorSearchRoots.push(teamLabelSpan.parentElement);
+        if(teamLabelSpan.parentElement && teamLabelSpan.parentElement.parentElement){
+          colorSearchRoots.push(teamLabelSpan.parentElement.parentElement);
+        }
+
+        let fallbackColor = '';
+        for(const sr of colorSearchRoots){
+          const elems = Array.from(sr.querySelectorAll('span, div, i, b, em, strong'));
+          for(const el of elems){
+            if(!(el instanceof HTMLElement)) continue;
+            if(el === teamLabelSpan) continue;
+
+            const st = String(el.getAttribute('style') || '');
+            const mBg = st.match(/background\s*:\s*([^;]+)/i);
+            if(!mBg) continue;
+
+            const hasWidth = /(?:^|;)\s*width\s*:/i.test(st);
+            const hasHeight = /(?:^|;)\s*height\s*:/i.test(st);
+            const hasRadius = /border-radius\s*:/i.test(st);
+
+            if(hasWidth && hasHeight && hasRadius){
+              out.teamColor = String(mBg[1] || '').trim();
+              break;
+            }
+
+            if(!fallbackColor){
+              fallbackColor = String(mBg[1] || '').trim();
+            }
+          }
+          if(out.teamColor) break;
+        }
+
+        if(!out.teamColor && fallbackColor){
+          out.teamColor = fallbackColor;
+        }
+      }
+    }
+
+    // 「前回のチームバトルの結果」「[アニメーション]」
+    const links = Array.from(root.querySelectorAll('a'));
+    for(const a of links){
+      const txt = String(a.textContent || '').replace(/\s+/g, ' ').trim();
+      const href = String(a.getAttribute('href') || '').trim();
+      if(!out.prevHref && txt.includes('前回のチームバトルの結果')){
+        out.prevHref = href;
+        out.prevText = txt || '前回のチームバトルの結果';
+        continue;
+      }
+      if(!out.animHref && txt.includes('[アニメーション]')){
+        out.animHref = href;
+        out.animText = txt || '[アニメーション]';
+        continue;
+      }
+    }
+
+    return out;
+  }
+
+  function normalizeAnimLinkText(text){
+    const raw = String(text || '').replace(/\s+/g, ' ').trim();
+    if(!raw) return { left: '[', body: 'アニメーション', right: ']' };
+
+    const m = raw.match(/^(.*?)(アニメーション)(.*?)$/);
+    if(m){
+      return {
+        left: String(m[1] || '').trim() || '[',
+        body: String(m[2] || '').trim() || 'アニメーション',
+        right: String(m[3] || '').trim() || ']'
+      };
+    }
+
+    return { left: '[', body: raw, right: ']' };
+  }
+
+  function ensureFnHeaderInfoContainer(targetParent){
+    const existed = document.getElementById('dba-fn-header-info');
+    if(existed){
+      if(targetParent && existed.parentNode !== targetParent){
+        try{ targetParent.appendChild(existed); }catch(_e){}
+      }
+      return existed;
+    }
+
+    const wrap = document.createElement('div');
+    wrap.id = 'dba-fn-header-info';
+
+    if(targetParent){
+      try{ targetParent.appendChild(wrap); }catch(_e){}
+    }
+    return wrap;
+  }
+
+  function renderFnHeaderInfo(){
+    const wrap = document.getElementById('dba-fn-header-info');
+    if(!wrap) return;
+
+    const info = extractFnHeaderInfoFromCurrentHeader();
+    wrap.textContent = '';
+
+    const title = document.createElement('span');
+    title.className = 'dba-fn-header-info__title';
+    title.textContent = 'どんぐりチーム戦い';
+    wrap.appendChild(title);
+
+    const modeLabel = document.createElement('span');
+    modeLabel.className = 'dba-fn-header-info__mode';
+    if(mode === 'hc'){
+      modeLabel.textContent = '《 ハードコア 》';
+    }else if(mode === 'l'){
+      modeLabel.textContent = '《 ラダー 》';
+    }else if(mode === 'rb'){
+      modeLabel.textContent = '《 レッドvsブルー 》';
+    }else{
+      modeLabel.textContent = '《 unknown mode 》';
+    }
+    wrap.appendChild(modeLabel);
+
+    if(mode === 'rb' && (info.teamName || info.teamColor)){
+      const team = document.createElement('span');
+      team.className = 'dba-fn-header-info__team';
+
+      const lab = document.createElement('span');
+      lab.className = 'dba-fn-header-info__team-label';
+      lab.textContent = 'チームカラー：';
+      team.appendChild(lab);
+
+      if(info.teamName){
+        const nm = document.createElement('span');
+        nm.className = 'dba-fn-header-info__team-name';
+        nm.textContent = info.teamName;
+        team.appendChild(nm);
+      }
+
+      if(info.teamColor){
+        const dot = document.createElement('span');
+        dot.className = 'dba-fn-header-info__team-dot';
+        dot.style.background = info.teamColor;
+        team.appendChild(dot);
+      }
+
+      wrap.appendChild(team);
+    }
+
+    if(info.prevHref || info.animHref){
+      const links = document.createElement('span');
+      links.className = 'dba-fn-header-info__links';
+
+      if(info.prevHref){
+        const aPrev = document.createElement('a');
+        aPrev.href = info.prevHref;
+        aPrev.textContent = info.prevText || '前回のチームバトルの結果';
+        aPrev.target = '_self';
+        links.appendChild(aPrev);
+      }
+
+      if(info.animHref){
+        const anim = normalizeAnimLinkText(info.animText || '[アニメーション]');
+
+        const bL = document.createElement('span');
+        bL.className = 'dba-fn-header-info__anim-bracket';
+        bL.textContent = anim.left || '[';
+        links.appendChild(bL);
+
+        const aAnim = document.createElement('a');
+        aAnim.href = info.animHref;
+        aAnim.textContent = anim.body || 'アニメーション';
+        aAnim.target = '_self';
+        links.appendChild(aAnim);
+
+        const bR = document.createElement('span');
+        bR.className = 'dba-fn-header-info__anim-bracket';
+        bR.textContent = anim.right || ']';
+        links.appendChild(bR);
+      }
+
+      wrap.appendChild(links);
+    }
+  }
+
   function ensureTopProgressContainer(targetParent){
     const existed = document.getElementById('dba-top-progress');
     if(existed){
@@ -1693,8 +2103,8 @@
     const btnSync = document.createElement('button');
     btnSync.type = 'button';
     btnSync.id = 'dba-top-progress-sync-now';
-    btnSync.className = 'dba-btn-mini';
-    btnSync.textContent = '今すぐ同期';
+    btnSync.className = 'dba-btn-progress-mini';
+    btnSync.innerHTML = '今すぐ<br>同期';
     btnSync.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -1706,8 +2116,8 @@
     const btnInfo = document.createElement('button');
     btnInfo.type = 'button';
     btnInfo.id = 'dba-top-progress-sync-info';
-    btnInfo.className = 'dba-btn-mini';
-    btnInfo.textContent = '同期情報';
+    btnInfo.className = 'dba-btn-progress-mini';
+    btnInfo.innerHTML = '同期<br>情報';
     btnInfo.dataset.on = (wrap.dataset.showinfo === '1') ? '1' : '0';
     btnInfo.addEventListener('click', (e) => {
       e.preventDefault();
@@ -1734,9 +2144,9 @@
 
     paneL.appendChild(termRow);
 
-    // ★中央ペイン：上から「同期情報」→「今すぐ同期」
-    paneM.appendChild(btnInfo);
+    // ★中央ペイン：左から「今すぐ同期」→「同期情報」
     paneM.appendChild(btnSync);
+    paneM.appendChild(btnInfo);
 
     // --- match progress (under term progress) ---
     const matchRow = document.createElement('div');
@@ -1782,17 +2192,11 @@
 
     const line2 = document.createElement('div');
     line2.className = 'dba-top-progress__infoLine';
-    line2.id = 'dba-top-progress-info-pct';
-    line2.textContent = 'その時のプログレスバー： -- ％';
-
-    const line3 = document.createElement('div');
-    line3.className = 'dba-top-progress__infoLine';
-    line3.id = 'dba-top-progress-info-auto';
-    line3.textContent = '最終補正（自動）： --- 秒前';
+    line2.id = 'dba-top-progress-info-auto';
+    line2.textContent = '最終補正（自動）： --- 秒前';
 
     paneR.appendChild(line1);
     paneR.appendChild(line2);
-    paneR.appendChild(line3);
 
     panes.appendChild(paneL);
     panes.appendChild(paneM);
@@ -1824,7 +2228,6 @@
     const btnInfo = document.getElementById('dba-top-progress-sync-info');
     const wrap = document.getElementById('dba-top-progress');
     const infoSync = document.getElementById('dba-top-progress-info-sync');
-    const infoPct  = document.getElementById('dba-top-progress-info-pct');
     const infoAuto = document.getElementById('dba-top-progress-info-auto');
     const matchLabel = document.getElementById('dba-top-progress-match-label');
     const matchTime  = document.getElementById('dba-top-progress-match-time');
@@ -1904,7 +2307,7 @@
     if(btnSync){
       const inflight = !!DBA_TOP_PROGRESS_AUTOSYNC.inFlight;
       btnSync.disabled = inflight;
-      btnSync.textContent = inflight ? '同期中…' : '今すぐ同期';
+      btnSync.innerHTML = inflight ? '同期中…' : '今すぐ<br>同期';
     }
 
     // 「同期情報」スイッチ状態（見た目だけ同期）
@@ -1922,13 +2325,6 @@
       }else{
         const sec = Math.floor(Math.max(0, now - data.fetchedAt) / 1000);
         infoSync.textContent = `最終同期（手動＆自動）： ${sec} 秒前`;
-      }
-    }
-    if(infoPct){
-      if(!data){
-        infoPct.textContent = 'その時のプログレスバー： -- ％';
-      }else{
-        infoPct.textContent = `その時のプログレスバー： ${clampInt(data.pct, 0, 100)} ％`;
       }
     }
     if(infoAuto){
@@ -2116,7 +2512,9 @@
       l:  { width: 72, height: 64 }
     },
     // レイヤー文字濃度（範囲：0〜100）
-    layer: { textOpacity: 100 } 
+    layer: { textOpacity: 100 },
+    // オリジナルHTMLの<header>要素を表示するか
+    header: { showOriginalHeader: false }
   };
 
   function loadBattleResultTail2Enabled(){
@@ -2552,6 +2950,12 @@
       if(obj && obj.layer){
         out.layer.textOpacity = sanitizeOpacity(obj.layer.textOpacity);
       }
+      if(obj && obj.header){
+        out.header.showOriginalHeader = !!obj.header.showOriginalHeader;
+      }else{
+        // 旧版からの移行：専用LSがあれば引き継ぐ
+        out.header.showOriginalHeader = loadShowOriginalHeader();
+      }
       return out;
     }catch(_e){
       return JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
@@ -2575,9 +2979,11 @@
             height: sanitizeCellPx(s?.cellSize?.l?.height, DEFAULT_SETTINGS.cellSize.l.height)
           }
         },
-        layer: { textOpacity: sanitizeOpacity(s?.layer?.textOpacity) }
+        layer: { textOpacity: sanitizeOpacity(s?.layer?.textOpacity) },
+        header: { showOriginalHeader: !!s?.header?.showOriginalHeader }
       };
       localStorage.setItem(LS_KEY, JSON.stringify(out));
+      saveShowOriginalHeader(out.header.showOriginalHeader);
     }catch(_e){}
   }
 
@@ -9046,6 +9452,32 @@
       mid.appendChild(row);
     })();
 
+    // オリジナルHTMLの<header>要素の表示/非表示
+    (function mkHeaderVisibleRow(){
+      const row = document.createElement('div');
+      row.className = 'dba-setting-row';
+
+      const lab = document.createElement('label');
+      lab.style.display = 'inline-flex';
+      lab.style.alignItems = 'center';
+      lab.style.justifyContent = 'flex-start';
+      lab.style.gap = '8px';
+      lab.style.cursor = 'pointer';
+
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.checked = !!settings.header.showOriginalHeader;
+      input.dataset.showOriginalHeader = '1';
+
+      const txt = document.createElement('span');
+      txt.textContent = 'HTMLソースの<header>要素を表示する';
+
+      lab.appendChild(input);
+      lab.appendChild(txt);
+      row.appendChild(lab);
+      mid.appendChild(row);
+    })();
+
     // Bot
     const bot = document.createElement('div');
     bot.className = 'dba-modal__bot';
@@ -9113,7 +9545,8 @@
         rb: { width: 32, height: 32 },
         hc: { width: 30, height: 30 },
         l:  { width: 30, height: 30 },
-        layerTextOpacity: 100
+        layerTextOpacity: 100,
+        showOriginalHeader: false
       };
       for(const inp of dlg.querySelectorAll('input[type="number"][data-mode-key][data-axis]')){
         const k = inp.dataset.modeKey;
@@ -9122,6 +9555,8 @@
       }
       const op = dlg.querySelector('input[type="range"][data-layer-opacity="1"]');
       if(op) out.layerTextOpacity = Number.parseInt(op.value, 10);
+      const hd = dlg.querySelector('input[type="checkbox"][data-show-original-header="1"]');
+      if(hd) out.showOriginalHeader = !!hd.checked;
       return out;
     }
 
@@ -9138,6 +9573,10 @@
         // 表示側の数値も更新
         const disp = op.parentElement && op.parentElement.children ? op.parentElement.children[1] : null;
         if(disp && disp.textContent != null) disp.textContent = op.value;
+      }
+      const hd = dlg.querySelector('input[type="checkbox"][data-show-original-header="1"]');
+      if(hd){
+        hd.checked = !!s?.header?.showOriginalHeader;
       }
     }
 
@@ -9160,6 +9599,7 @@
       cur.cellSize.l.width   = sanitizeCellPx(v.l.width,   DEFAULT_SETTINGS.cellSize.l.width);
       cur.cellSize.l.height  = sanitizeCellPx(v.l.height,  DEFAULT_SETTINGS.cellSize.l.height);
       cur.layer.textOpacity = sanitizeOpacity(v.layerTextOpacity);
+      cur.header.showOriginalHeader = !!v.showOriginalHeader;
 
       /// 範囲外入力はここで px に補正し、UIにも反映
       saveSettings(cur);
@@ -9167,6 +9607,7 @@
 
       // 反映
       applyCurrentModeScale();
+      reapplyOriginalHeaderVisibilityFromSettings();
       scheduleBattlemapLayerSync();
 
       refreshInitial();
@@ -9264,7 +9705,9 @@
     const bar = document.createElement('section');
     bar.id = 'dba-function-section';
 
-    // 2段構造：上=progress / 下=ボタン群
+    // 3段構造：上=header情報 / 中=progress / 下=ボタン群
+    const headerHost = document.createElement('div');
+    headerHost.id = 'dba-fn-header-host';
     const progressHost = document.createElement('div');
     progressHost.id = 'dba-fn-progress-host';
     const buttonsRow = document.createElement('div');
@@ -9417,6 +9860,7 @@
     buttonsRow.appendChild(btnRoster);
     buttonsRow.appendChild(btnBattleInfo);
 
+    bar.appendChild(headerHost);
     bar.appendChild(progressHost);
     bar.appendChild(buttonsRow);
     return bar;
@@ -9433,6 +9877,9 @@
       // 二重挿入防止
       if (document.getElementById('dba-function-section')) return;
 
+      // 保存設定に従って、元の<header>表示を反映
+      reapplyOriginalHeaderVisibilityFromSettings();
+
       document.documentElement.classList.add('dba-has-fnbar');
 
       const bar = buildFunctionSection();
@@ -9444,6 +9891,11 @@
         // header が見つからない場合は body 先頭に
         (document.body || document.documentElement).insertBefore(bar, (document.body || document.documentElement).firstChild);
       }
+
+      // fnbar 最上段に、header由来の情報ブロックを設置
+      const hh = bar.querySelector('#dba-fn-header-host');
+      ensureFnHeaderInfoContainer(hh || null);
+      renderFnHeaderInfo();
 
       // fnbar 内（上段）に、トップページ同期の「経過時間」プログレスバーを設置
       const ph = bar.querySelector('#dba-fn-progress-host');
@@ -9461,6 +9913,8 @@
       initBattlemapLayer();
       // セルクリックで詳細モーダル（遷移抑止）
       initBattlemapCellClickIntercept();
+      // 後から<header>が差し替わっても表示設定を再適用
+      startOriginalHeaderVisibilityObserver();
     };
 
     // document-start なので body がまだ無いことがある：DOM 構築を待つ
