@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Donguri Battle Assistant
 // @namespace    https://donguri.5ch.io/
-// @version      1.1.6.0
+// @version      2.0.0.0
 // @description  5ちゃんねるのどんぐりシステムから派生したゲームの操作性を改善するためのユーザースクリプト
 // @author       福呼び草
 // @assistant    ChatGPT (OpenAI)
@@ -19,7 +19,7 @@
   // =========================
   // スクリプト自身のバージョン（スクリプト情報表示用）
   // =========================
-  const DBA_VERSION = '1.1.6.0';
+  const DBA_VERSION = '2.0.1.0';
 
   console.log('[DBA] BOOT', 'ver=', DBA_VERSION, 'href=', location.href);
 
@@ -684,7 +684,7 @@
     }
 
     /* ===== モーダル（アラート） ===== */
-    #dba-m-alert.dba-m-alert {
+    .dba-m-alert {
       border: 4px solid #e00;
       border-radius: 12px;
       padding: 0;
@@ -694,16 +694,27 @@
       color: #000;
       box-shadow: 0 12px 40px rgba(0,0,0,0.35);
     }
-    #dba-m-alert.dba-m-alert::backdrop {
+    .dba-m-alert::backdrop {
       background: rgba(0,0,0,0.55);
     }
-    #dba-m-alert .dba-alert__mid {
+    .dba-m-alert .dba-alert__title {
+      padding: 10px 12px;
+      border-bottom: 1px solid #000;
+      background: #f0f0e0;
+      font-size: 1.2em;
+      font-weight: 800;
+      line-height: 1.2em;
+      text-align: left;
+    }
+    .dba-m-alert .dba-alert__mid {
       padding: 14px 12px;
       font-size: 1.15em;
       font-weight: 700;
       line-height: 1.3em;
+      white-space: pre-wrap;
+      text-align: left;
     }
-    #dba-m-alert .dba-alert__bot {
+    .dba-m-alert .dba-alert__bot {
       display: flex;
       justify-content: center;
       gap: 10px;
@@ -4292,6 +4303,190 @@
     }catch(_e){}
   }
 
+  function closeRosterResultModal(){
+    const dlg = document.getElementById('dba-m-roster-result');
+    if(!dlg) return;
+    try{
+      const tid = Number(dlg.dataset.dbaAutoCloseTimer || '0');
+      if(tid) clearTimeout(tid);
+    }catch(_e){}
+    dlg.dataset.dbaAutoCloseTimer = '0';
+    try{ dlg.close(); }catch(_e){ dlg.removeAttribute('open'); }
+  }
+
+  function buildPresetMissingAlertModal(){
+    if(document.getElementById('dba-m-preset-missing-alert')) return;
+
+    const dlg = document.createElement('dialog');
+    dlg.id = 'dba-m-preset-missing-alert';
+    dlg.className = 'dba-m-alert';
+
+    const title = document.createElement('div');
+    title.className = 'dba-alert__title';
+    title.textContent = 'Alert:';
+
+    const mid = document.createElement('div');
+    mid.className = 'dba-alert__mid';
+    mid.id = 'dba-preset-missing-alert-text';
+    mid.textContent = 'アイテムが見つかりませんでした。\nこのプリセットを削除しますか？';
+
+    const bot = document.createElement('div');
+    bot.className = 'dba-alert__bot';
+
+    const btnYes = document.createElement('button');
+    btnYes.type = 'button';
+    btnYes.className = 'dba-btn-ok';
+    btnYes.textContent = 'はい';
+
+    const btnNo = document.createElement('button');
+    btnNo.type = 'button';
+    btnNo.className = 'dba-btn-close';
+    btnNo.textContent = 'いいえ';
+
+    bot.appendChild(btnYes);
+    bot.appendChild(btnNo);
+
+    dlg.appendChild(title);
+    dlg.appendChild(mid);
+    dlg.appendChild(bot);
+    document.body.appendChild(dlg);
+  }
+
+  function openPresetMissingAlertModal(presetName){
+    buildPresetMissingAlertModal();
+    const dlg = document.getElementById('dba-m-preset-missing-alert');
+    const mid = document.getElementById('dba-preset-missing-alert-text');
+    if(!dlg || !mid) return Promise.resolve(false);
+
+    const nm = sanitizeText(presetName);
+    mid.textContent = 'アイテムが見つかりませんでした。\nこのプリセットを削除しますか？';
+
+    return new Promise((resolve) => {
+      const btnYes = dlg.querySelector('.dba-btn-ok');
+      const btnNo = dlg.querySelector('.dba-btn-close');
+
+      const finalize = (answer) => {
+        try{ dlg.close(); }catch(_e){ dlg.removeAttribute('open'); }
+        resolve(answer);
+      };
+
+      if(btnYes){
+        btnYes.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          finalize(true);
+        };
+      }
+      if(btnNo){
+        btnNo.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          finalize(false);
+        };
+      }
+      dlg.oncancel = (e) => {
+        e.preventDefault();
+        finalize(false);
+      };
+
+      try{ dlg.showModal(); }catch(_e){ dlg.setAttribute('open',''); }
+    });
+  }
+
+  function buildPresetDeleteResultModal(){
+    if(document.getElementById('dba-m-preset-delete-result')) return;
+
+    const dlg = document.createElement('dialog');
+    dlg.id = 'dba-m-preset-delete-result';
+    dlg.className = 'dba-m-alert';
+
+    const title = document.createElement('div');
+    title.className = 'dba-alert__title';
+    title.textContent = 'Result:';
+
+    const mid = document.createElement('div');
+    mid.className = 'dba-alert__mid';
+    mid.id = 'dba-preset-delete-result-text';
+    mid.textContent = 'プリセットを削除しました。';
+
+    const bot = document.createElement('div');
+    bot.className = 'dba-alert__bot';
+
+    const btnOk = document.createElement('button');
+    btnOk.type = 'button';
+    btnOk.className = 'dba-btn-ok';
+    btnOk.textContent = 'OK';
+
+    bot.appendChild(btnOk);
+
+    dlg.appendChild(title);
+    dlg.appendChild(mid);
+    dlg.appendChild(bot);
+    document.body.appendChild(dlg);
+  }
+
+  function openPresetDeleteResultModal(messageText){
+    buildPresetDeleteResultModal();
+    const dlg = document.getElementById('dba-m-preset-delete-result');
+    const mid = document.getElementById('dba-preset-delete-result-text');
+    if(!dlg || !mid) return Promise.resolve();
+
+    mid.textContent = sanitizeText(messageText) || 'プリセットを削除しました。';
+
+    return new Promise((resolve) => {
+      const btnOk = dlg.querySelector('.dba-btn-ok');
+
+      const finalize = () => {
+        try{ dlg.close(); }catch(_e){ dlg.removeAttribute('open'); }
+        resolve();
+      };
+
+      if(btnOk){
+        btnOk.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          finalize();
+        };
+      }
+      dlg.oncancel = (e) => {
+        e.preventDefault();
+        finalize();
+      };
+
+      try{ dlg.showModal(); }catch(_e){ dlg.setAttribute('open',''); }
+    });
+  }
+
+  function isItemMissingResponseText(text){
+    return sanitizeText(text) === 'アイテムが見つかりませんでした。';
+  }
+
+  async function handleMissingPresetDuringEquip(presetName){
+    closeRosterResultModal();
+
+    const nm = sanitizeText(presetName);
+    const yes = await openPresetMissingAlertModal(nm);
+    if(!yes){
+      return { ok:false, missing:true, deleted:false };
+    }
+
+    const deleted = deletePreset(nm);
+    try{
+      const rosterDlg = document.getElementById('dba-m-roster');
+      if(rosterDlg && (rosterDlg.open || rosterDlg.hasAttribute('open'))){
+        renderRosterModalState(null);
+      }
+    }catch(_e){}
+
+    await openPresetDeleteResultModal(
+      deleted
+        ? `プリセットを削除しました。\n${nm}`
+        : `プリセットの削除に失敗しました。\n${nm}`
+    );
+
+    return { ok:false, missing:true, deleted:!!deleted };
+  }
+
   function extractBattleResultBlock(doc){
     // 戦闘結果はページ実装差があり得るため、特徴語を含む要素を優先して拾う
     // 例（サンプル）: 「アリーナチャレンジ開始」「ターン」「が勝った！」等 :contentReference[oaicite:2]{index=2}
@@ -5045,6 +5240,129 @@
   // =========================
   // オート装備：候補ポップアップ
   // =========================
+  function sleepMs(ms){
+    return new Promise((resolve) => {
+      setTimeout(resolve, Math.max(0, Number(ms) || 0));
+    });
+  }
+
+  function normalizeColorTokenForCompare(v){
+    const s0 = String(v || '').trim().toLowerCase();
+    if(!s0) return '';
+
+    if(/^#([0-9a-f]{3})$/.test(s0)){
+      return '#' + s0.slice(1).split('').map(ch => ch + ch).join('');
+    }
+    if(/^#([0-9a-f]{6})$/.test(s0)){
+      return s0;
+    }
+
+    const m = s0.match(/^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s*,\s*[\d.]+\s*)?\)$/);
+    if(m){
+      const r = Math.max(0, Math.min(255, Number(m[1])));
+      const g = Math.max(0, Math.min(255, Number(m[2])));
+      const b = Math.max(0, Math.min(255, Number(m[3])));
+      const hh = (n) => n.toString(16).padStart(2, '0');
+      return `#${hh(r)}${hh(g)}${hh(b)}`;
+    }
+
+    return s0.replace(/\s+/g, '');
+  }
+
+  function getRbTeamKeyFromColorOrName(colorValue, teamName){
+    const color = normalizeColorTokenForCompare(colorValue);
+    const name = sanitizeText(teamName).toLowerCase();
+
+    if(name.includes('レッド') || name.includes('red')) return 'red';
+    if(name.includes('ブルー') || name.includes('blue')) return 'blue';
+
+    if(color === '#d32f2f') return 'red';
+    if(color === '#1976d2') return 'blue';
+
+    return '';
+  }
+
+  function getCurrentRbTeamInfo(){
+    if(mode !== 'rb') return { teamKey:'', teamColor:'', teamName:'' };
+    const info = extractFnHeaderInfoFromCurrentHeader();
+    const teamColor = normalizeColorTokenForCompare(info?.teamColor || '');
+    const teamName = sanitizeText(info?.teamName || '');
+    const teamKey = getRbTeamKeyFromColorOrName(teamColor, teamName);
+    return { teamKey, teamColor, teamName };
+  }
+
+  function getCurrentRbTileColor(row, col){
+    if(mode !== 'rb') return '';
+    try{
+      const snap = getBattlemapSnapshotFromDoc(document);
+      const raw = snap?.cellColors?.[`${row}-${col}`] || '';
+      return normalizeColorTokenForCompare(raw);
+    }catch(_e){
+      return '';
+    }
+  }
+
+  function isRbTileOwnedByCurrentTeam(row, col){
+    if(mode !== 'rb') return false;
+    const team = getCurrentRbTeamInfo();
+    if(!team.teamColor) return false;
+    const tileColor = getCurrentRbTileColor(row, col);
+    if(!tileColor) return false;
+    return tileColor === team.teamColor;
+  }
+
+  async function triggerBattleInfoShortPress(){
+    const btn = document.getElementById('dba-btn-battleinfo');
+    if(btn && btn.disabled) return false;
+    await updateOnlyChangedCellsFromTopPage();
+    return true;
+  }
+
+  async function buildOnRbTileFromPopup(row, col, kind){
+    if(mode !== 'rb') return false;
+
+    const team = getCurrentRbTeamInfo();
+    if(!team.teamKey){
+      alert('チーム情報を取得できません。');
+      return false;
+    }
+
+    const body = new URLSearchParams();
+    body.set('mode', String(mode || ''));
+    body.set('team', team.teamKey);
+    body.set('r', String(row));
+    body.set('c', String(col));
+    body.set('type', String(kind || ''));
+
+    try{
+      const res = await fetch(makeSiteUrl('/build'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+          'Accept': 'application/json'
+        },
+        credentials: 'include',
+        body: body.toString()
+      });
+
+      const data = await res.json().catch(() => ({ ok:false, error:'server_error' }));
+      if(!(res.ok && data && data.ok)){
+        const msg = (data && data.error) ? String(data.error) : '建設に失敗しました。';
+        alert(msg);
+        return false;
+      }
+
+      closeAutoEquipPopup(false);
+      // 「タイル操作」の後に「戦況情報」を自動実行する待機ミリ秒
+      await sleepMs(1000);
+      await triggerBattleInfoShortPress();
+      return true;
+    }catch(_e){
+      alert('建設に失敗しました。');
+      return false;
+    }
+  }
+
   function ensureAutoEquipPopup(){
     if(document.getElementById('dba-auto-equip-pop')) return;
     const pop = document.createElement('div');
@@ -5135,7 +5453,10 @@
 
     openRosterResultModalWithNode(`装備切替中…\n${nm}`, 'オート装備');
     try{
-      await equipPresetByName(nm);
+      const result = await equipPresetByName(nm);
+      if(result && result.missing){
+        return false;
+      }
       saveAutoEquipLastPreset(nm);
       openRosterResultModalWithNode(`装備切替完了\n${nm}`, 'オート装備');
     }catch(_e){
@@ -5208,15 +5529,61 @@
     placePopupNearPoint(pop, clientX, clientY);
 
     let reg = '';
+    let canTileOps = false;
     try{
       const d = await fetchCellDetail(row, col);
       reg = d?.reg || '';
     }catch(_e){
       reg = '';
     }
+    canTileOps = isRbTileOwnedByCurrentTeam(row, col);
     const { key, list } = getAutoEquipCandidatesForReg(reg);
 
     pop.textContent = '';
+
+    if(canTileOps){
+      const tileTtl = document.createElement('div');
+      tileTtl.className = 'dba-ae-pop-title';
+      tileTtl.textContent = 'タイル操作';
+      pop.appendChild(tileTtl);
+
+      const btnFort = document.createElement('button');
+      btnFort.type = 'button';
+      btnFort.className = 'dba-ae-pop-btn';
+      btnFort.textContent = '要塞を建設';
+      btnFort.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        btnFort.disabled = true;
+        btnRadar.disabled = true;
+        try{
+          await buildOnRbTileFromPopup(row, col, 'f');
+        }finally{
+          btnFort.disabled = false;
+          btnRadar.disabled = false;
+        }
+      });
+      pop.appendChild(btnFort);
+
+      const btnRadar = document.createElement('button');
+      btnRadar.type = 'button';
+      btnRadar.className = 'dba-ae-pop-btn';
+      btnRadar.textContent = 'レーダーを設置';
+      btnRadar.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        btnFort.disabled = true;
+        btnRadar.disabled = true;
+        try{
+          await buildOnRbTileFromPopup(row, col, 'r');
+        }finally{
+          btnFort.disabled = false;
+          btnRadar.disabled = false;
+        }
+      });
+      pop.appendChild(btnRadar);
+    }
+
     const ttl2 = document.createElement('div');
     ttl2.className = 'dba-ae-pop-title';
     ttl2.textContent = key ? `装備候補：${key}` : '装備候補';
@@ -5247,6 +5614,8 @@
       pop.appendChild(b);
     }
 
+    
+    
     placePopupNearPoint(pop, clientX, clientY);
     return true;
   }
@@ -5791,6 +6160,12 @@
       saveRosterStore(store);
       // ★オート装備候補（セル長押しリスト）からも同名を削除
       try{ removePresetFromAutoEquipCandidates(n); }catch(_e){}
+        // ★現在装備中として扱うプリセット名が同名ならクリア
+        try{
+          if(sanitizeText(loadCurrentPresetName()) === n){
+            saveCurrentPresetName('');
+          }
+        }catch(_e){}
       return true;
     }
     return false;
@@ -5804,11 +6179,23 @@
   }
 
   async function equipById(id){
-    if(id == null) return true;
+    if(id == null) return { ok:true, missing:false };
     const url = makeEquipUrl(id);
     const res = await fetch(url, { method:'GET', credentials:'include', cache:'no-store' });
     if(!res.ok) throw new Error(`equip failed: ${res.status}`);
-    return true;
+    const bodyText = await res.text();
+    if(isItemMissingResponseText(bodyText)){
+      return {
+        ok: false,
+        missing: true,
+        text: bodyText
+      };
+    }
+    return {
+      ok: true,
+      missing: false,
+      text: bodyText
+    };
   }
 
   async function equipPresetByName(name){
@@ -5817,12 +6204,27 @@
     const triple = roster && roster.presets ? roster.presets[n] : null;
     if(!triple) throw new Error('preset not found');
     // 順番：武器→防具→首
-    await equipById(triple[0]);
-    await equipById(triple[1]);
-    await equipById(triple[2]);
+    {
+      const r = await equipById(triple[0]);
+      if(r && r.missing){
+        return await handleMissingPresetDuringEquip(n);
+      }
+    }
+    {
+      const r = await equipById(triple[1]);
+      if(r && r.missing){
+        return await handleMissingPresetDuringEquip(n);
+      }
+    }
+    {
+      const r = await equipById(triple[2]);
+      if(r && r.missing){
+        return await handleMissingPresetDuringEquip(n);
+      }
+    }
     // ★「現在装備中として扱うプリセット名」を保存（オート装備の判定に使う）
     saveCurrentPresetName(n);
-    return true;
+    return { ok:true, missing:false, deleted:false };
   }
 
   // =========================
@@ -6043,7 +6445,10 @@
           try{
             // 装備ロスター専用の結果モーダルで表示
             openRosterResultModalWithNode(`装備切替中…\n${nm}\n${presetMetaText(presets[nm])}`, '装備ロスター');
-            await equipPresetByName(nm);
+            const result = await equipPresetByName(nm);
+            if(result && result.missing){
+              return;
+            }
             openRosterResultModalWithNode(`装備切替完了\n${nm}`, '装備ロスター');
           }catch(_e2){
             openRosterResultModalWithNode(`装備切替に失敗しました\n${nm}`, '装備ロスター');
