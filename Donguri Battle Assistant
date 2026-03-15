@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Donguri Battle Assistant
 // @namespace    https://donguri.5ch.io/
-// @version      1.1.4.3
+// @version      1.1.6.0
 // @description  5ちゃんねるのどんぐりシステムから派生したゲームの操作性を改善するためのユーザースクリプト
 // @author       福呼び草
 // @assistant    ChatGPT (OpenAI)
@@ -16,7 +16,12 @@
 (function() {
   'use strict';
 
-  console.log('[DBA] BOOT', 'ver=', (typeof DBA_VERSION !== 'undefined' ? DBA_VERSION : '(meta)'), 'href=', location.href);
+  // =========================
+  // スクリプト自身のバージョン（スクリプト情報表示用）
+  // =========================
+  const DBA_VERSION = '1.1.6.0';
+
+  console.log('[DBA] BOOT', 'ver=', DBA_VERSION, 'href=', location.href);
 
   // =========================
   // URL / ドメイン集中管理
@@ -80,7 +85,7 @@
   // ▽ここから▽ CSS 定義ゾーン（集中管理）
   // ============================================================
   const CSS = `
-    :root{
+    :root {
       --dba-fn-bg: #f0f0f0;
       --dba-fn-fg: #111;
       --dba-fn-border: #000;
@@ -90,7 +95,7 @@
     }
 
     /* ファンクションセクション本体 */
-    #dba-function-section{
+    #dba-function-section {
       position: fixed;
       top: 0;
       left: 0;
@@ -115,11 +120,11 @@
     }
 
     /* fnbar：上段（<header>情報）／中段（progress）／下段（ボタン群） */
-    #dba-fn-header-host{
+    #dba-fn-header-host {
       width: 100%;
       min-width: 0;
     }
-    #dba-fn-header-info{
+    #dba-fn-header-info {
       width: 100%;
       min-width: 0;
       display: flex;
@@ -133,13 +138,13 @@
       border: 0 none #000;
       background: trasparent;
     }
-    .dba-fn-header-info__title{
+    .dba-fn-header-info__title {
       font-size: 1.1em;
       font-weight: 900;
       line-height: 1.2;
       white-space: nowrap;
     }
-    .dba-fn-header-info__mode{
+    .dba-fn-header-info__mode {
       display: inline-flex;
       align-items: center;
       justify-content: flex-start;
@@ -151,7 +156,7 @@
       line-height: 1.2;
       white-space: nowrap;
     }
-    .dba-fn-header-info__team{
+    .dba-fn-header-info__team {
       display: inline-flex;
       align-items: center;
       justify-content: flex-start;
@@ -163,14 +168,14 @@
       font-weight: 800;
       line-height: 1.2;
     }
-    .dba-fn-header-info__team-label{
+    .dba-fn-header-info__team-label {
       white-space: nowrap;
     }
-    .dba-fn-header-info__team-name{
+    .dba-fn-header-info__team-name {
       margin-right: 6px;
       white-space: nowrap;
     }
-    .dba-fn-header-info__team-dot{
+    .dba-fn-header-info__team-dot {
       display: inline-block;
       width: 18px;
       height: 18px;
@@ -182,10 +187,10 @@
       box-sizing: border-box;
       flex: 0 0 auto;
     }
-    .dba-fn-header-info__anim-bracket{
+    .dba-fn-header-info__anim-bracket {
       white-space: nowrap;
     }
-    .dba-fn-header-info__links{
+    .dba-fn-header-info__links {
       display: inline-flex;
       align-items: center;
       justify-content: flex-start;
@@ -197,21 +202,21 @@
       font-weight: 700;
       line-height: 1.2;
     }
-    .dba-fn-header-info__links a{
+    .dba-fn-header-info__links a {
       color: #0040c0;
       text-decoration: underline;
       text-underline-offset: 2px;
       white-space: nowrap;
     }
-    .dba-fn-header-info__links a:hover{
+    .dba-fn-header-info__links a:hover {
       color: #0000e0;
     }
 
-    #dba-fn-progress-host{
+    #dba-fn-progress-host {
       width: 100%;
       min-width: 0;
     }
-    #dba-fn-buttons-row{
+    #dba-fn-buttons-row {
       display: flex;
       align-items: center;
       justify-content: flex-start;
@@ -221,12 +226,12 @@
     }
 
     /* 既存ページを隠さないため、上に余白を確保 */
-    html.dba-has-fnbar body{
+    html.dba-has-fnbar body {
       padding-top: calc(var(--dba-fn-height) + 4px) !important;
     }
 
     /* ===== トップページ「経過時間」プログレス表示（teambattle側へ移植） ===== */
-    #dba-top-progress{
+    #dba-top-progress {
       margin: 0;                /* ★fnbar内に入るので外側マージンは0 */
       padding: 6px 8px;         /* ★fnbar内向けに少し圧縮 */
       border: 0 none #000;
@@ -235,14 +240,14 @@
       box-sizing: border-box;
     }
     /* 3ペイン（左：進捗 / 中央：ボタン / 右：同期情報） */
-    #dba-top-progress .dba-top-progress__panes{
+    #dba-top-progress .dba-top-progress__panes {
       display: flex;
       gap: 8px;
       align-items: stretch;
       justify-content: space-between;
       min-width: 0; /* はみ出し抑止 */
     }
-    #dba-top-progress .dba-top-progress__paneM{
+    #dba-top-progress .dba-top-progress__paneM {
       flex: 0 0 auto;
       min-width: 130px;
       max-width: 180px;
@@ -255,11 +260,11 @@
       justify-content: center;
       gap: 6px;
     }
-    #dba-top-progress .dba-top-progress__paneL{
+    #dba-top-progress .dba-top-progress__paneL {
       flex: 1 1 auto;
       min-width: 0; /* はみ出し抑止 */
     }
-    #dba-top-progress .dba-top-progress__paneR{
+    #dba-top-progress .dba-top-progress__paneR {
       flex: 0 0 auto;
       min-width: 240px;
       max-width: 420px;
@@ -269,12 +274,12 @@
       display: none; /* 通常は非表示 */
     }
     /* 同期情報ONで右ペイン表示 */
-    #dba-top-progress[data-showinfo="1"] .dba-top-progress__paneR{
+    #dba-top-progress[data-showinfo="1"] .dba-top-progress__paneR {
       display: block;
     }
     /* ★中央ペイン：横並びボタン（右のマージン系は無効化） */
     #dba-top-progress .dba-top-progress__paneM #dba-top-progress-sync-info,
-    #dba-top-progress .dba-top-progress__paneM #dba-top-progress-sync-now{
+    #dba-top-progress .dba-top-progress__paneM #dba-top-progress-sync-now {
       margin-left: 0;
       width: calc(50% - 4px);
       border-radius: 10px;
@@ -283,12 +288,12 @@
       white-space: normal;
       text-align: center;
     }
-    #dba-top-progress .dba-top-progress__paneM #dba-top-progress-sync-now[disabled]{
+    #dba-top-progress .dba-top-progress__paneM #dba-top-progress-sync-now[disabled] {
       opacity: 0.6;
       cursor: not-allowed;
     }
     /* ★「第xx期」＋プログレスバー＋ボタンを1行にまとめる */
-    #dba-top-progress .dba-top-progress__termRow{
+    #dba-top-progress .dba-top-progress__termRow {
       font-weight: 900;
       margin: 0 0 6px 0;
       text-align: left;
@@ -300,7 +305,7 @@
       min-width: 0; /* 子要素（term/bar）が縮められるように */
     }
     /* 「第xx期」テキストが長い時は省略（はみ出し抑止） */
-    #dba-top-progress-title{
+    #dba-top-progress-title {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -308,23 +313,23 @@
       display: inline-block;
     }
     /* 「今すぐ同期」ボタン（第xx期の右） */
-    #dba-top-progress-sync-now{
+    #dba-top-progress-sync-now {
       margin-left: 1.2em; /* 1～2em 程度 */
     }
-    #dba-top-progress-sync-now[disabled]{
+    #dba-top-progress-sync-now[disabled] {
       opacity: 0.6;
       cursor: not-allowed;
     }
     /* 「同期情報」ボタン（スイッチ） */
-    #dba-top-progress-sync-info{
+    #dba-top-progress-sync-info {
       margin-left: 0.6em;
     }
-    #dba-top-progress-sync-info[data-on="1"]{
+    #dba-top-progress-sync-info[data-on="1"] {
       background: #33a033;
       color: #fff;
     }
     /* ★termRow内で横に伸びるバー */
-    #dba-top-progress .progress-bar{
+    #dba-top-progress .progress-bar {
       height: 18px;
       background: #ccc;
       border-radius: 10px;
@@ -335,7 +340,7 @@
       flex: 1 1 auto;    /* ★横に伸びる */
       min-width: 140px;  /* ★極端に潰れないよう最低幅 */
     }
-    #dba-top-progress .progress-bar > div{
+    #dba-top-progress .progress-bar > div {
       height: 100%;
       background: #428bca;
       width: 0%;
@@ -346,7 +351,7 @@
       font-weight: 800;
     }
     /* ===== 期の下：試合進捗（第n試合/総数 + 1試合内バー） ===== */
-    #dba-top-progress .dba-top-progress__matchRow{
+    #dba-top-progress .dba-top-progress__matchRow {
       display: flex;
       align-items: center;
       justify-content: flex-start;
@@ -354,19 +359,19 @@
       margin-top: 6px;
       min-width: 0;
     }
-    #dba-top-progress .dba-top-progress__matchLabel{
+    #dba-top-progress .dba-top-progress__matchLabel {
       font-weight: 900;
       white-space: nowrap;
       flex: 0 0 auto;
     }
-    #dba-top-progress .dba-top-progress__matchRight{
+    #dba-top-progress .dba-top-progress__matchRight {
       display: flex;
       flex-direction: column;
       gap: 4px;
       flex: 1 1 auto;
       min-width: 0;
     }
-    #dba-top-progress .dba-top-progress__matchTime{
+    #dba-top-progress .dba-top-progress__matchTime {
       font-weight: 900;
       font-size: 0.95em;
       opacity: 0.9;
@@ -375,14 +380,14 @@
       white-space: nowrap;
     }
     /* 試合バー */
-    #dba-top-progress .progress-bar.dba-match-progress{
+    #dba-top-progress .progress-bar.dba-match-progress {
       height: 18x;
       font-size: 15px;
       margin-top: 0;
       border-radius: 10px;
     }
     /* 右ペイン：同期情報（縦に1行ずつ） */
-    #dba-top-progress .dba-top-progress__infoLine{
+    #dba-top-progress .dba-top-progress__infoLine {
       font-size: 0.92em;
       font-weight: 800;
       opacity: 0.88;
@@ -393,7 +398,7 @@
     }
 
     /* ===== バトルマップ透明レイヤー（将来の拡張用土台） ===== */
-    #dba-battlemap-layer{
+    #dba-battlemap-layer {
       position: fixed;
       left: 0;
       top: 0;
@@ -403,19 +408,19 @@
       pointer-events: none; /* 現段階ではページ既存操作を妨げない */
       background: transparent;
     }
-    #dba-battlemap-layer-grid{
+    #dba-battlemap-layer-grid {
       width: 100%;
       height: 100%;
       display: grid;
       background: transparent;
       box-sizing: border-box;
     }
-    .dba-layer-cell{
+    .dba-layer-cell {
       position: relative;
       background: transparent;
       box-sizing: border-box;
     }
-    .dba-layer-cell__content{
+    .dba-layer-cell__content {
       position: absolute;
       inset: 0;
       display: flex;
@@ -442,7 +447,7 @@
     }
 
     /* 汎用ボタン（機能系ボタン共通） */
-    .dba-btn-fn{
+    .dba-btn-fn {
       appearance: none;
       margin:4px;
       padding: 8px 4px;
@@ -459,28 +464,28 @@
       transition: transform 0.05s ease, box-shadow 0.15s ease, background 0.15s ease;
     }
     /* ラピッド攻撃：ON状態の視認性 */
-    .dba-btn-fn[data-on="1"]{
+    .dba-btn-fn[data-on="1"] {
       background: #33a033;
       color: #fff;
     }
-    .dba-btn-fn:hover{
+    .dba-btn-fn:hover {
       background: #0000e0;
       box-shadow: 0 2px 6px rgba(0,0,0,0.16);
     }
     /* ON状態hoverは“青”に上書きされないようにする */
-    .dba-btn-fn[data-on="1"]:hover{
+    .dba-btn-fn[data-on="1"]:hover {
       background: #2a8c2a;
     }
-    .dba-btn-fn:active{
+    .dba-btn-fn:active {
       transform: translateY(1px);
       box-shadow: 0 1px 2px rgba(0,0,0,0.12);
     }
-    .dba-btn-fn:focus{
+    .dba-btn-fn:focus {
       outline: 2px solid #ea0000;
       outline-offset: 2px;
     }
     /* ===== モーダル（標準） ===== */
-    .dba-m-std{
+    .dba-m-std {
       border: 4px solid #080;
       border-radius: 12px;
       padding: 0;
@@ -491,10 +496,10 @@
       color: #111;
       box-shadow: 0 12px 40px rgba(0,0,0,0.35);
     }
-    .dba-m-std::backdrop{
+    .dba-m-std::backdrop {
       background: rgba(0,0,0,0.55);
     }
-    .dba-m-std .dba-modal__top{
+    .dba-m-std .dba-modal__top {
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -503,18 +508,18 @@
       border-bottom: 1px solid #000;
       background: #f0f0f0;
     }
-    .dba-m-std .dba-modal__title{
+    .dba-m-std .dba-modal__title {
       font-size: 1.25em;
       font-weight: 700;
       margin: 0;
       padding: 0;
     }
-    .dba-m-std .dba-modal__mid{
+    .dba-m-std .dba-modal__mid {
       padding: 12px;
       overflow: auto;
       max-height: calc(min(80vh, calc(100vh - 24px)) - 110px);
     }
-    .dba-m-std .dba-modal__bot{
+    .dba-m-std .dba-modal__bot {
       display: flex;
       justify-content: center;
       gap: 10px;
@@ -524,17 +529,17 @@
     }
 
     /* ===== セル詳細モーダル（サイズ最適化） ===== */
-    #dba-m-cell-detail.dba-m-std{
+    #dba-m-cell-detail.dba-m-std {
       width: min(760px, calc(100vw - 24px));
       max-height: min(88vh, calc(100vh - 24px));
     }
-    #dba-m-cell-detail.dba-m-std .dba-modal__mid{
+    #dba-m-cell-detail.dba-m-std .dba-modal__mid {
       /* 標準(80vh)の計算を、セル詳細(88vh)に合わせて上書き */
       max-height: calc(min(88vh, calc(100vh - 24px)) - 110px);
     }
 
     /* ===== 戦闘結果モーダル（サイズ最適化 + スクロール） ===== */
-    #dba-m-battle-result.dba-m-std{
+    #dba-m-battle-result.dba-m-std {
       width: min(820px, calc(100vw - 24px));
       /* 長い時はここで上限、短い時は content に合わせて自然に縮む */
       max-height: min(88vh, calc(100vh - 24px));
@@ -543,23 +548,23 @@
     }
 
     /* 戦闘結果モーダル：トップ欄を「左=タイトル / 中央=チェック / 右=×」にする */
-    #dba-m-battle-result.dba-m-std .dba-modal__top{
+    #dba-m-battle-result.dba-m-std .dba-modal__top {
       display: grid;
       grid-template-columns: auto 1fr auto;
       align-items: center;
       column-gap: 10px;
     }
-    #dba-m-battle-result.dba-m-std .dba-modal__title{
+    #dba-m-battle-result.dba-m-std .dba-modal__title {
       justify-self: start;
     }
-    .dba-br-top-center{
+    .dba-br-top-center {
       justify-self: center;
       display: inline-flex;
       align-items: center;
     }
 
     /* 戦闘結果：オプションボタン */
-    .dba-br-btn-opt{
+    .dba-br-btn-opt {
       appearance: none;
       border: 2px solid #000;
       border-radius: 10px;
@@ -573,32 +578,32 @@
       color: #000;
       box-shadow: 0 1px 2px rgba(0,0,0,0.12);
     }
-    .dba-br-btn-opt:hover{ filter: brightness(0.97); }
-    .dba-br-btn-opt:active{ transform: translateY(1px); }
+    .dba-br-btn-opt:hover { filter: brightness(0.97); }
+    .dba-br-btn-opt:active { transform: translateY(1px); }
 
     /* 戦闘結果：クリック透過モード（Close/Option以外は透過） */
-    #dba-m-battle-result.dba-m-std.dba-br-pass{
+    #dba-m-battle-result.dba-m-std.dba-br-pass {
       opacity: 0.55;
       pointer-events: none; /* 基本はクリックを下に通す */
     }
     /* 透過中でも「Close」「オプション」だけはクリック可 */
     #dba-m-battle-result.dba-m-std.dba-br-pass #dba-br-btn-option,
-    #dba-m-battle-result.dba-m-std.dba-br-pass .dba-btn-close{
+    #dba-m-battle-result.dba-m-std.dba-br-pass .dba-btn-close {
       pointer-events: auto;
     }
     /* ★透過中でも Close/Option は不透過（親opacityの影響を打ち消す） */
     #dba-m-battle-result.dba-m-std.dba-br-pass #dba-br-btn-option,
-    #dba-m-battle-result.dba-m-std.dba-br-pass .dba-btn-close{
+    #dba-m-battle-result.dba-m-std.dba-br-pass .dba-btn-close {
       opacity: 1 !important;
       filter: none !important;
     }
     /* 透過中は × を完全に消す（見た目＋クリック判定なし） */
-    #dba-m-battle-result.dba-m-std.dba-br-pass .dba-btn-x{
+    #dba-m-battle-result.dba-m-std.dba-br-pass .dba-btn-x {
       display: none !important;
     }
 
     /* ===== 戦闘結果：透過ON時の表示は dialog を使わずフロートパネルで表示 ===== */
-    #dba-br-float{
+    #dba-br-float {
       position: fixed;
       top: calc(var(--dba-fn-height) + 0px);  /* フロートパネルの表示位置（高さ） */
       left: 12px;
@@ -617,26 +622,26 @@
       overflow: hidden;
       pointer-events: none; /* まずは全体を透過 */
     }
-    #dba-br-float[data-open="1"]{ display: block; }
+    #dba-br-float[data-open="1"] { display: block; }
     #dba-br-float .dba-modal__top,
     #dba-br-float .dba-modal__mid,
-    #dba-br-float .dba-modal__bot{
+    #dba-br-float .dba-modal__bot {
       pointer-events: none; /* パネル自体は透過（ボタンのみ例外） */
     }
     #dba-br-float #dba-br-float-btn-option,
-    #dba-br-float .dba-btn-close{
+    #dba-br-float .dba-btn-close {
       pointer-events: auto; /* Option/Closeだけ押せる */
       opacity: 1 !important; /* 不透過 */
     }
     /* フロート内は × は表示しない（透過要件に合わせる） */
-    #dba-br-float .dba-btn-x{ display:none !important; }
-    #dba-br-float .dba-modal__mid{
+    #dba-br-float .dba-btn-x { display:none !important; }
+    #dba-br-float .dba-modal__mid {
       overflow: auto;
       max-height: calc(min(88vh, calc(100vh - 24px)) - 110px);
       scrollbar-gutter: stable both-edges;
     }
 
-    #dba-m-battle-result.dba-m-std .dba-modal__mid{
+    #dba-m-battle-result.dba-m-std .dba-modal__mid {
       /* 常にスクロール可能（短い時はスクロールは出ない） */
       overflow: auto;
       /* 上限は max-height で決まる。短文なら高さは自然に小さくなる */
@@ -646,7 +651,7 @@
     }
 
     /* 戦闘結果テキストをそのまま読みやすく表示 */
-    .dba-battle-result-text{
+    .dba-battle-result-text {
       white-space: pre-wrap;
       overflow-wrap: anywhere;
       word-break: break-word;
@@ -657,7 +662,7 @@
     }
 
     /* ===== 戦闘結果：タイトル欄の「末尾2行のみ表示」チェック ===== */
-    .dba-br-tail2-chk{
+    .dba-br-tail2-chk {
       display: inline-flex;
       gap: 8px;
       align-items: center;
@@ -671,7 +676,7 @@
       background: #fafafa;
       white-space: nowrap;
     }
-    .dba-br-tail2-chk input[type="checkbox"]{
+    .dba-br-tail2-chk input[type="checkbox"] {
       width: 18px;
       height: 18px;
       cursor: pointer;
@@ -679,7 +684,7 @@
     }
 
     /* ===== モーダル（アラート） ===== */
-    #dba-m-alert.dba-m-alert{
+    #dba-m-alert.dba-m-alert {
       border: 4px solid #e00;
       border-radius: 12px;
       padding: 0;
@@ -689,16 +694,16 @@
       color: #000;
       box-shadow: 0 12px 40px rgba(0,0,0,0.35);
     }
-    #dba-m-alert.dba-m-alert::backdrop{
+    #dba-m-alert.dba-m-alert::backdrop {
       background: rgba(0,0,0,0.55);
     }
-    #dba-m-alert .dba-alert__mid{
+    #dba-m-alert .dba-alert__mid {
       padding: 14px 12px;
       font-size: 1.15em;
       font-weight: 700;
       line-height: 1.3em;
     }
-    #dba-m-alert .dba-alert__bot{
+    #dba-m-alert .dba-alert__bot {
       display: flex;
       justify-content: center;
       gap: 10px;
@@ -710,10 +715,11 @@
     /* ===== モーダル用ボタン（標準化） ===== */
     .dba-btn-ok,
     .dba-btn-apply,
+    .dba-btn-del,
     .dba-btn-close,
-    .dba-btn-x{
+    .dba-btn-x {
       appearance: none;
-      width: 4em;
+      width: fit-content;
       border: 2px solid #000;
       border-radius: 12px;
       margin: 4px 8px;
@@ -730,126 +736,50 @@
     }
     .dba-btn-ok:hover,
     .dba-btn-apply:hover,
+    .dba-btn-del:hover,
     .dba-btn-close:hover,
-    .dba-btn-x:hover{
+    .dba-btn-x:hover {
       filter: brightness(0.97);
       box-shadow: 0 2px 6px rgba(0,0,0,0.16);
     }
     .dba-btn-ok:active,
     .dba-btn-apply:active,
+    .dba-btn-del:active,
     .dba-btn-close:active,
-    .dba-btn-x:active{
+    .dba-btn-x:active {
       transform: translateY(1px);
       box-shadow: 0 1px 2px rgba(0,0,0,0.12);
     }
-    .dba-btn-ok{ background:#2280e0; color:#fff; }
-    .dba-btn-apply{ background:#33a033; color:#fff; }
-    .dba-btn-close{ background:#e02222; color:#fff; }
-    .dba-btn-x{
+    .dba-btn-ok {
+      width: 4em;
+      background: #3399ee;
+      color: #fff;
+      }
+    .dba-btn-apply {
+      width: 4em;
+      background: #50aa50;
+      color: #fff;
+      }
+    .dba-btn-del {
+      background: #d02f2f;
+      color: #fff;
+      }
+    .dba-btn-close {
+      width: 4em;
+      background: #ea4a4a;
+      color: #fff;
+      }
+    .dba-btn-x {
       width: 32px;
       height: 32px;
       padding: 0;
       border-radius: 16px;
-      background:#e02222;
-      color:#fff;
+      background: #e02222;
+      color: #fff;
       font-size: 1.4rem;
       line-height: 1.4rem;
     }
-
-    /* ===== 「設定」modal ===== */
-    .dba-setting-row{
-      display: block;
-      padding: 8px 10px;
-      border: 1px solid #00000022;
-      border-radius: 10px;
-      background: #fff;
-      margin-bottom: 10px;
-      box-sizing: border-box;
-    }
-    .dba-setting-row label{
-      text-align: left;
-      font-weight: 700;
-    }
-    .dba-setting-row input[type="number"]{
-      width: 50px;
-      box-sizing: border-box;
-      padding: 4px 6px;
-      border: 1px solid #00000055;
-      border-radius: 10px;
-      font-size: 1em;
-      text-align: right;
-    }
-    .dba-setting-row input[type="range"]{
-      width: 100%;
-      box-sizing: border-box;
-    }
-    .dba-setting-block-title{
-      text-align: left;
-      font-size: 0.95em;
-      margin: 0 0 8px 0;
-    }
-    .dba-setting-cellsize-list{
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-    .dba-setting-cellsize-line{
-      display: flex;
-      flex-wrap: nowrap;
-      align-items: center;
-      justify-content: flex-start;
-      gap: 4px;
-      text-align: left;
-      white-space: nowrap;
-    }
-    .dba-setting-cellsize-name{
-      min-width: 10.5em;
-      max-width: 12em;
-      font-weight: 700;
-      text-align: left;
-    }
-    .dba-setting-cellsize-unit{
-      white-space: nowrap;
-    }
-    .dba-setting-cellsize-sep{
-      white-space: nowrap;
-      margin: 0 2px;
-    }
-
-    /* ===== 装備ロスター ===== */
-    #dba-m-roster.dba-m-std{
-      width: min(920px, calc(100vw - 24px));
-      max-height: min(88vh, calc(100vh - 24px));
-      overflow: hidden;
-    }
-    #dba-m-roster.dba-m-std .dba-modal__mid{
-      max-height: calc(min(88vh, calc(100vh - 24px)) - 110px);
-      overflow: auto;
-    }
-    .dba-roster-head{
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 10px;
-      align-items: center;
-      border-bottom: 2px solid #999999;
-      padding-bottom: 8px;
-    }
-    .dba-roster-title{
-      font-size: 1.15em;
-      font-weight: 800;
-      text-align: left;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .dba-roster-head-btns{
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      justify-content: flex-end;
-      flex-wrap: wrap;
-    }
-    .dba-btn-mini{
+    .dba-btn-mini {
       appearance: none;
       border: 2px solid #000;
       border-radius: 10px;
@@ -863,12 +793,125 @@
       color: #000;
       box-shadow: 0 1px 2px rgba(0,0,0,0.12);
     }
-    .dba-btn-mini:hover{ filter: brightness(0.97); }
-    .dba-btn-mini:active{ transform: translateY(1px); }
-    .dba-btn-mini--danger{ background:#f3d0d0; }
-    .dba-btn-mini--ok{ background:#cfe3ff; }
+    .dba-btn-mini:hover { filter: brightness(0.97); }
+    .dba-btn-mini:active { transform: translateY(1px); }
+    .dba-btn-mini--danger { background:#f3d0d0; }
+    .dba-btn-mini--ok { background:#cfe3ff; }
 
-    .dba-btn-progress-mini{
+
+    /* ===== 「設定」modal ===== */
+    .dba-setting-row {
+      display: block;
+      padding: 8px 10px;
+      border: 1px solid #00000022;
+      border-radius: 10px;
+      background: #fff;
+      margin-bottom: 10px;
+      box-sizing: border-box;
+    }
+    .dba-setting-row label {
+      text-align: left;
+      font-weight: 700;
+    }
+    .dba-setting-row input[type="number"] {
+      width: 60px;
+      box-sizing: border-box;
+      padding: 4px 6px;
+      border: 1px solid #00000055;
+      border-radius: 10px;
+      font-size: 1em;
+      text-align: right;
+    }
+    .dba-setting-row input[type="range"] {
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .dba-setting-block-title {
+      text-align: left;
+      font-size: 1em;
+      font-weight: 700;
+      margin: 0 0 8px 0;
+    }
+    .dba-setting-deflist {
+      display: grid;
+      grid-template-columns: 8em 1fr;
+      gap: 6px 10px;
+      margin: 0;
+      text-align: left;
+      align-items: start;
+    }
+    .dba-setting-deflist dt {
+      margin: 0;
+      font-weight: 700;
+    }
+    .dba-setting-deflist dd {
+      margin: 0;
+      font-weight: 400;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .dba-setting-cellsize-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .dba-setting-cellsize-line {
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 4px;
+      text-align: left;
+      white-space: nowrap;
+    }
+    .dba-setting-cellsize-name {
+      min-width: 10.5em;
+      max-width: 12em;
+      font-weight: 700;
+      text-align: left;
+    }
+    .dba-setting-cellsize-unit {
+      white-space: nowrap;
+    }
+    .dba-setting-cellsize-sep {
+      white-space: nowrap;
+      margin: 0 2px;
+    }
+
+    /* ===== 装備ロスター ===== */
+    #dba-m-roster.dba-m-std {
+      width: min(920px, calc(100vw - 24px));
+      max-height: min(88vh, calc(100vh - 24px));
+      overflow: hidden;
+    }
+    #dba-m-roster.dba-m-std .dba-modal__mid {
+      max-height: calc(min(88vh, calc(100vh - 24px)) - 110px);
+      overflow: auto;
+    }
+    .dba-roster-head {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      border-bottom: 2px solid #999999;
+      padding-bottom: 8px;
+    }
+    .dba-roster-title {
+      font-size: 1.15em;
+      font-weight: 800;
+      text-align: left;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .dba-roster-head-btns {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+    }
+    .dba-btn-progress-mini {
       appearance: none;
       width: 4.5em !important;
       border: 2px solid #000;
@@ -883,24 +926,24 @@
       color: #000;
       box-shadow: 0 1px 2px rgba(0,0,0,0.12);
     }
-    .dba-btn-progress-mini:hover{ filter: brightness(0.97); }
-    .dba-btn-progress-mini:active{ transform: translateY(1px); }
+    .dba-btn-progress-mini:hover { filter: brightness(0.97); }
+    .dba-btn-progress-mini:active { transform: translateY(1px); }
 
-    .dba-roster-row2{
+    .dba-roster-row2 {
       display: flex;
       gap: 10px;
       align-items: center;
       justify-content: flex-start;
       margin: 12px 0;
     }
-    .dba-roster-list{
+    .dba-roster-list {
       border: 1px solid #000;
       border-radius: 12px;
       background: #fff;
       padding: 8px;
       overflow: hidden;
     }
-    .dba-roster-item{
+    .dba-roster-item {
       display: grid;
       grid-template-columns: 1fr auto;
       gap: 10px;
@@ -912,19 +955,19 @@
       cursor: pointer;
       user-select: none;
     }
-    .dba-roster-item:hover{ background: #f7f7f7; }
-    .dba-roster-item[data-selected="1"]{
+    .dba-roster-item:hover { background: #f7f7f7; }
+    .dba-roster-item[data-selected="1"] {
       outline: 3px solid #ea0000;
       outline-offset: 0px;
       background: #fff2f2;
     }
-    .dba-roster-item__name{
+    .dba-roster-item__name {
       font-weight: 800;
       text-align: left;
       overflow-wrap: anywhere;
       word-break: break-word;
     }
-    .dba-roster-item__meta{
+    .dba-roster-item__meta {
       font-size: 0.9em;
       font-weight: 700;
       opacity: 0.9;
@@ -932,7 +975,7 @@
     }
 
     /* 装備変更結果（ロスター）テキスト表示 */
-    .dba-roster-result-text{
+    .dba-roster-result-text {
       white-space: pre-wrap;
       overflow-wrap: anywhere;
       word-break: break-word;
@@ -943,12 +986,12 @@
     }
 
     /* ===== プリセット並び替えモーダル ===== */
-    #dba-m-roster-sort.dba-m-std{
+    #dba-m-roster-sort.dba-m-std {
       width: min(760px, calc(100vw - 24px));
       max-height: min(88vh, calc(100vh - 24px));
       overflow: hidden;
     }
-    #dba-m-roster-sort.dba-m-std .dba-modal__mid{
+    #dba-m-roster-sort.dba-m-std .dba-modal__mid {
       max-height: calc(min(88vh, calc(100vh - 24px)) - 110px);
       overflow: hidden; /* リスト側でスクロール */
       display: flex;
@@ -956,13 +999,13 @@
       gap: 10px;
       min-height: 0;
     }
-    .dba-sort-hint{
+    .dba-sort-hint {
       font-weight: 800;
       text-align: left;
       margin: 0;
       padding: 0;
     }
-    .dba-sort-list{
+    .dba-sort-list {
       border: 1px solid #000;
       border-radius: 12px;
       background: #fff;
@@ -974,18 +1017,18 @@
       position: relative; /* 挿入ラインの absolute 基準 */
     }
     /* 挿入予定位置の赤いライン */
-    .dba-sort-insert-line{
+    .dba-sort-insert-line {
       position: absolute;
       left: 6px;
       right: 6px;
       height: 0;
-      border-top: 3px solid #ea0000;
+      border-top: 4px solid #ea0000;
       border-radius: 999px;
       pointer-events: none;
       z-index: 5;
       display: none;
     }
-    .dba-sort-item{
+    .dba-sort-item {
       display: grid;
       grid-template-columns: 28px 1fr auto;
       gap: 10px;
@@ -997,29 +1040,29 @@
       user-select: none;
       background: #fff;
     }
-    .dba-sort-handle{
+    .dba-sort-handle {
       font-weight: 900;
       text-align: center;
       cursor: grab;
       opacity: 0.9;
     }
-    .dba-sort-item[draggable="true"]{ cursor: grab; }
-    .dba-sort-item.dba-sort-dragging{
+    .dba-sort-item[draggable="true"] { cursor: grab; }
+    .dba-sort-item.dba-sort-dragging {
       opacity: 0.55;
       border-style: dashed;
     }
-    .dba-sort-item.dba-sort-over{
+    .dba-sort-item.dba-sort-over {
       outline: 3px solid #ea0000;
       outline-offset: 0px;
       background: #fff2f2;
     }
-    .dba-sort-name{
+    .dba-sort-name {
       font-weight: 900;
       text-align: left;
       overflow-wrap: anywhere;
       word-break: break-word;
     }
-    .dba-sort-meta{
+    .dba-sort-meta {
       font-size: 0.9em;
       font-weight: 800;
       opacity: 0.85;
@@ -1027,44 +1070,44 @@
     }
 
     /* ===== 装備プリセット追加モーダル ===== */
-    #dba-m-roster-add.dba-m-std{
+    #dba-m-roster-add.dba-m-std {
       width: min(760px, calc(100vw - 24px));
       max-height: min(88vh, calc(100vh - 24px));
       overflow: hidden;
     }
-    #dba-m-roster-add.dba-m-std .dba-modal__mid{
+    #dba-m-roster-add.dba-m-std .dba-modal__mid {
       max-height: calc(min(88vh, calc(100vh - 24px)) - 110px);
       overflow: auto;
     }
     /* ===== 装備プリセット再編集モーダル ===== */
-    #dba-m-roster-edit.dba-m-std{
+    #dba-m-roster-edit.dba-m-std {
       width: min(760px, calc(100vw - 24px));
       max-height: min(88vh, calc(100vh - 24px));
       overflow: hidden;
     }
-    #dba-m-roster-edit.dba-m-std .dba-modal__mid{
+    #dba-m-roster-edit.dba-m-std .dba-modal__mid {
       max-height: calc(min(88vh, calc(100vh - 24px)) - 110px);
       overflow: auto;
     }
-    .dba-add-wrap{
+    .dba-add-wrap {
       display: grid;
       grid-template-columns: 160px 1fr;
       gap: 10px;
       align-items: start;
     }
-    .dba-add-left{
+    .dba-add-left {
       display: flex;
       flex-direction: column;
       gap: 10px;
       align-items: stretch;
     }
-    .dba-add-right{
+    .dba-add-right {
       display: flex;
       flex-direction: column;
       gap: 10px;
       align-items: stretch;
     }
-    .dba-add-sel{
+    .dba-add-sel {
       border: 1px solid #000;
       border-radius: 12px;
       background: #fff;
@@ -1074,7 +1117,7 @@
       text-align: left;
       overflow-wrap: anywhere;
     }
-    .dba-add-name{
+    .dba-add-name {
       width: 100%;
       box-sizing: border-box;
       padding: 10px 12px;
@@ -1083,7 +1126,7 @@
       font-size: 1em;
       font-weight: 700;
     }
-    .dba-add-bot{
+    .dba-add-bot {
       display: flex;
       gap: 12px;
       justify-content: flex-start;
@@ -1092,23 +1135,23 @@
     }
 
     /* ===== アイテム選択（バッグ表） ===== */
-    #dba-m-pick-item.dba-m-std{
+    #dba-m-pick-item.dba-m-std {
       width: min(1100px, calc(100vw - 24px));
       max-height: min(90vh, calc(100vh - 24px));
       overflow: hidden;
     }
-    #dba-m-pick-item.dba-m-std .dba-modal__mid{
+    #dba-m-pick-item.dba-m-std .dba-modal__mid {
       max-height: calc(min(90vh, calc(100vh - 24px)) - 110px);
       overflow: auto;
     }
-    .dba-pick-hint{
+    .dba-pick-hint {
       font-weight: 700;
       margin: 0 0 10px 0;
       text-align: left;
     }
 
     /* ===== アイテム選択：レアリティフィルタ ===== */
-    .dba-pick-filterbar{
+    .dba-pick-filterbar {
       display: flex;
       gap: 8px;
       flex-wrap: wrap;
@@ -1120,7 +1163,7 @@
       border-radius: 12px;
       background: #fff;
     }
-    .dba-pick-filterbtn{
+    .dba-pick-filterbtn {
       appearance: none;
       border: 2px solid #000;
       border-radius: 10px;
@@ -1134,22 +1177,22 @@
       color: #000;
       box-shadow: 0 1px 2px rgba(0,0,0,0.12);
     }
-    .dba-pick-filterbtn:hover{ filter: brightness(0.97); }
-    .dba-pick-filterbtn:active{ transform: translateY(1px); }
-    .dba-pick-filterbtn[data-active="1"]{
+    .dba-pick-filterbtn:hover { filter: brightness(0.97); }
+    .dba-pick-filterbtn:active { transform: translateY(1px); }
+    .dba-pick-filterbtn[data-active="1"] {
       outline: 3px solid #ea0000;
       outline-offset: 0px;
       background: #fff2f2;
     }
-    .dba-pick-filterbtn--all{ background:#e8e8e8; }
-    .dba-pick-filterbtn--n{ background:#ffffff; }
-    .dba-pick-filterbtn--r{ background:#3fa435; color:#fff; }
-    .dba-pick-filterbtn--sr{ background:#2175d9; color:#fff; }
-    .dba-pick-filterbtn--ssr{ background:#a633d6; color:#fff; }
-    .dba-pick-filterbtn--ur{ background:#f45d01; color:#fff; }
+    .dba-pick-filterbtn--all { background:#e8e8e8; }
+    .dba-pick-filterbtn--n { background:#ffffff; }
+    .dba-pick-filterbtn--r { background:#3fa435; color:#fff; }
+    .dba-pick-filterbtn--sr { background:#2175d9; color:#fff; }
+    .dba-pick-filterbtn--ssr { background:#a633d6; color:#fff; }
+    .dba-pick-filterbtn--ur { background:#f45d01; color:#fff; }
 
     /* ===== アイテム選択：MOD 0 フィルタ ===== */
-    .dba-pick-filterchk{
+    .dba-pick-filterchk {
       display: inline-flex;
       gap: 8px;
       align-items: center;
@@ -1162,21 +1205,21 @@
       border: 1px solid #00000022;
       background: #fafafa;
     }
-    .dba-pick-filterchk input[type="checkbox"]{
+    .dba-pick-filterchk input[type="checkbox"] {
       width: 18px;
       height: 18px;
       cursor: pointer;
       accent-color: #ea0000;
     }
-    .dba-pick-filterchk[data-disabled="1"]{
+    .dba-pick-filterchk[data-disabled="1"] {
       opacity: 0.45;
       cursor: not-allowed;
     }
-    .dba-pick-filterchk[data-disabled="1"] input{
+    .dba-pick-filterchk[data-disabled="1"] input {
       cursor: not-allowed;
     }
 
-    .dba-pick-row-selected{
+    .dba-pick-row-selected {
       /* tr 自体に背景が乗らない実装もあるため、td 側も別途指定する */
       background: rgba(255,0,0,0.22) !important;
       outline: 3px solid rgba(255,0,0,0.75) !important;
@@ -1184,17 +1227,17 @@
     }
     /* 多くのテーブルは td に背景が乗っているため、td にも強制適用する */
     .dba-pick-row-selected > td,
-    .dba-pick-row-selected > th{
+    .dba-pick-row-selected > th {
       background: rgba(255,0,0,0.22) !important;
       /* “赤いフィルタ”っぽく見せるため、内側に薄赤のシェードも追加 */
       box-shadow: inset 0 0 0 9999px rgba(255,0,0,0.10) !important;
     }
     /* クリック対象が a 等でも選択が分かりやすいように */
-    .dba-pick-row-selected a{
+    .dba-pick-row-selected a {
       color: #000 !important;
       font-weight: 800;
     }
-    .dba-backup-textarea{
+    .dba-backup-textarea {
       width: 100%;
       box-sizing: border-box;
       min-height: 240px;
@@ -1207,7 +1250,7 @@
       line-height: 1.25em;
     }
       /* ===== オート装備（候補ポップアップ / 設定） ===== */
-    #dba-auto-equip-pop{
+    #dba-auto-equip-pop {
       position: fixed;
       z-index: 999998; /* fnbar(999999)より下 */
       display: none;
@@ -1222,13 +1265,13 @@
       padding: 8px;
       box-sizing: border-box;
     }
-    #dba-auto-equip-pop[data-open="1"]{ display: block; }
-    .dba-ae-pop-title{
+    #dba-auto-equip-pop[data-open="1"] { display: block; }
+    .dba-ae-pop-title {
       font-weight: 900;
       margin: 0 0 6px 0;
       text-align: left;
     }
-    .dba-ae-pop-btn{
+    .dba-ae-pop-btn {
       width: 100%;
       text-align: left;
       appearance: none;
@@ -1242,15 +1285,15 @@
       background: #eee;
       color: #000;
     }
-    .dba-ae-pop-btn:hover{ filter: brightness(0.97); }
-    .dba-ae-pop-btn:active{ transform: translateY(1px); }
+    .dba-ae-pop-btn:hover { filter: brightness(0.97); }
+    .dba-ae-pop-btn:active { transform: translateY(1px); }
 
-    #dba-m-auto-equip.dba-m-std{
+    #dba-m-auto-equip.dba-m-std {
       width: min(980px, calc(100vw - 24px));
       max-height: min(88vh, calc(100vh - 24px));
       overflow: hidden;
     }
-    #dba-m-auto-equip.dba-m-std .dba-modal__mid{
+    #dba-m-auto-equip.dba-m-std .dba-modal__mid {
       max-height: calc(min(88vh, calc(100vh - 24px)) - 110px);
       /* ★ここが重要：mid全体スクロールを抑止して、内部（左右ゾーン）でスクロールさせる */
       overflow: hidden;
@@ -1258,14 +1301,14 @@
       flex-direction: column;
       gap: 10px;
     }
-    .dba-ae-topbtns{
+    .dba-ae-topbtns {
       display: flex;
       gap: 10px;
       align-items: center;
       justify-content: flex-start;
       margin: 0 0 10px 0;
     }
-    .dba-ae-autoclose{
+    .dba-ae-autoclose {
       margin-left: auto; /* 右寄せ */
       display: inline-flex;
       align-items: center;
@@ -1278,13 +1321,13 @@
       border: 1px solid #00000022;
       background: #fafafa;
     }
-    .dba-ae-autoclose input[type="checkbox"]{
+    .dba-ae-autoclose input[type="checkbox"] {
       width: 18px;
       height: 18px;
       cursor: pointer;
       accent-color: #ea0000;
     }
-    .dba-ae-autoclose input[type="number"]{
+    .dba-ae-autoclose input[type="number"] {
       width: 72px;
       box-sizing: border-box;
       padding: 6px 8px;
@@ -1293,14 +1336,14 @@
       font-size: 1em;
       font-weight: 800;
     }
-    .dba-ae-tabs{
+    .dba-ae-tabs {
       display: flex;
       gap: 8px;
       align-items: stretch;
       justify-content: flex-start;
       margin: 10px 0 8px 0;
     }
-    .dba-ae-tab{
+    .dba-ae-tab {
       flex: 1 1 0;
       appearance: none;
       border: 2px solid #000;
@@ -1313,12 +1356,12 @@
       background: #e8e8e8;
       color: #000;
     }
-    .dba-ae-tab[data-active="1"]{
+    .dba-ae-tab[data-active="1"] {
       outline: 3px solid #ea0000;
       outline-offset: 0px;
       background: #fff2f2;
     }
-    .dba-ae-wrap{
+    .dba-ae-wrap {
       display: grid;
       grid-template-columns: 100px 1fr;
       gap: 10px;
@@ -1327,7 +1370,7 @@
       flex: 1 1 auto;  /* #dba-m-auto-equip .dba-modal__mid（flex）配下で残り領域を占有 */
       min-height: 0;   /* これが無いと子が溢れて mid がスクロールしやすい */
     }
-    .dba-ae-leftpane{
+    .dba-ae-leftpane {
       display: flex;
       flex-direction: column;
       gap: 8px;
@@ -1338,14 +1381,14 @@
       max-height: 100%;
       scrollbar-gutter: stable both-edges;
     }
-    .dba-ae-rpane{
+    .dba-ae-rpane {
       display: grid;
       grid-template-columns: 1fr 100px 1fr;
       gap: 10px;
       align-items: stretch;
       min-height: 0; /* ★子（左右box）が親高さ以内に収まれるように */
     }
-    .dba-ae-box{
+    .dba-ae-box {
       border: 1px solid #000;
       border-radius: 12px;
       background: #fff;
@@ -1357,12 +1400,12 @@
       max-height: 100%;
       scrollbar-gutter: stable both-edges;
     }
-    .dba-ae-box-title{
+    .dba-ae-box-title {
       font-weight: 900;
       margin: 0 0 8px 0;
       text-align: left;
     }
-    .dba-ae-item{
+    .dba-ae-item {
       padding: 8px 10px;
       border-radius: 10px;
       border: 1px solid #00000022;
@@ -1373,13 +1416,13 @@
       overflow-wrap: anywhere;
       word-break: break-word;
     }
-    .dba-ae-item:hover{ background:#f7f7f7; }
-    .dba-ae-item[data-selected="1"]{
+    .dba-ae-item:hover { background:#f7f7f7; }
+    .dba-ae-item[data-selected="1"] {
       outline: 3px solid #ea0000;
       outline-offset: 0px;
       background: #fff2f2;
     }
-    .dba-ae-midbtns{
+    .dba-ae-midbtns {
       display: flex;
       flex-direction: column;
       /* 中央ゾーン：ボタン間隔 30px */
@@ -1390,7 +1433,7 @@
     }
 
     /* ===== オート装備：オプションモーダル ===== */
-    .dba-ae-opt-row{
+    .dba-ae-opt-row {
       display: flex;
       align-items: center;
       justify-content: flex-start;
@@ -1403,7 +1446,7 @@
       font-weight: 800;
       text-align: left;
     }
-    .dba-ae-opt-row input[type="number"]{
+    .dba-ae-opt-row input[type="number"] {
       width: 84px;
       box-sizing: border-box;
       padding: 6px 8px;
@@ -1414,7 +1457,7 @@
     }
 
     /* ===== 装備ロスター：ロスター切替ポップアップ（ボタン近く） ===== */
-    #dba-roster-switch-pop{
+    #dba-roster-switch-pop {
       position: fixed;
       z-index: 999998; /* fnbar(999999)より下 */
       display: none;
@@ -1429,8 +1472,8 @@
       padding: 8px;
       box-sizing: border-box;
     }
-    #dba-roster-switch-pop[data-open="1"]{ display: block; }
-    .dba-rs-pop-title{
+    #dba-roster-switch-pop[data-open="1"] { display: block; }
+    .dba-rs-pop-title {
       font-weight: 900;
       margin: 0 0 6px 0;
       text-align: left;
@@ -1438,7 +1481,7 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    .dba-rs-pop-btn{
+    .dba-rs-pop-btn {
       width: 100%;
       text-align: left;
       appearance: none;
@@ -1455,33 +1498,33 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .dba-rs-pop-btn:hover{ filter: brightness(0.97); }
-    .dba-rs-pop-btn:active{ transform: translateY(1px); }
-    .dba-rs-pop-btn[data-active="1"]{
+    .dba-rs-pop-btn:hover { filter: brightness(0.97); }
+    .dba-rs-pop-btn:active { transform: translateY(1px); }
+    .dba-rs-pop-btn[data-active="1"] {
       outline: 3px solid #ea0000;
       outline-offset: 0px;
       background: #fff2f2;
     }
-    .dba-rs-pop-btn--new{
+    .dba-rs-pop-btn--new {
       background: #cfe3ff;
     }
 
     /* ===== 長押しゲージ（クリック/長押しで機能分岐する時の視覚フィードバック） ===== */
-    #dba-lp-gauge{
+    #dba-lp-gauge {
       position: fixed;
       left: 0;
       top: 0;
-      width: 56px;
-      height: 56px;
+      width: 46px;
+      height: 46px;
       transform: translate(-50%, -50%);
       pointer-events: none;
       z-index: 1000000; /* fnbar(999999)より上に出す */
       opacity: 0;
       transition: opacity 0.12s ease;
     }
-    #dba-lp-gauge[data-on="1"]{ opacity: 1; }
+    #dba-lp-gauge[data-on="1"] { opacity: 1; }
 
-    #dba-lp-gauge .dba-lp-gauge__ring{
+    #dba-lp-gauge .dba-lp-gauge__ring {
       width: 100%;
       height: 100%;
       border-radius: 50%;
@@ -1677,6 +1720,28 @@
   const DBA_TOP_PROGRESS_CYCLE_MS = 60 * 60 * 1000; // 1サイクル=約1時間（ユーザー説明に基づく）
   const LS_TOP_SYNCINFO_SHOW_KEY = 'dba.topElapsedProgress.showInfo.v1'; // 0/1
   const LS_SHOW_ORIGINAL_HEADER_KEY = 'dba.showOriginalHeader.v1'; // 0/1
+  const LS_PICK_HIDE_MOD0_PREFIX = 'dba.pick.hideModZero.v1.'; // weapon / armor / necklace
+
+  function makePickHideModZeroKey(kind){
+    const k = (kind === 'weapon' || kind === 'armor' || kind === 'necklace') ? kind : 'unknown';
+    return `${LS_PICK_HIDE_MOD0_PREFIX}${k}`;
+  }
+
+  function loadPickHideModZero(kind){
+    try{
+      const raw = localStorage.getItem(makePickHideModZeroKey(kind));
+      if(raw == null) return false; // デフォルトOFF
+      return raw === '1';
+    }catch(_e){
+      return false;
+    }
+  }
+
+  function savePickHideModZero(kind, on){
+    try{
+      localStorage.setItem(makePickHideModZeroKey(kind), on ? '1' : '0');
+    }catch(_e){}
+  }
 
   function loadTopSyncInfoShow(){
     try{
@@ -5862,7 +5927,7 @@
     const btnWipe = document.createElement('button');
     btnWipe.type = 'button';
     btnWipe.className = 'dba-btn-mini dba-btn-mini--danger';
-    btnWipe.textContent = '全削除';
+    btnWipe.textContent = 'ロスター削除';
 
     const btnBackup = document.createElement('button');
     btnBackup.type = 'button';
@@ -6738,8 +6803,8 @@
       bot.className = 'dba-modal__bot';
       const wipe = document.createElement('button');
       wipe.type = 'button';
-      wipe.className = 'dba-btn-close';
-      wipe.textContent = '全削除';
+      wipe.className = 'dba-btn-del';
+      wipe.textContent = '装備ロスターを削除';
       const back = document.createElement('button');
       back.type = 'button';
       back.className = 'dba-btn-ok';
@@ -8555,7 +8620,7 @@
 
     let selectedRow = null;
     let activeRarity = 'ALL';
-    let hideModZero = false;
+    let hideModZero = loadPickHideModZero(kind);
     let modColIdx = -1;
 
     // 表を取得して表示
@@ -8635,6 +8700,7 @@
       const chk = document.createElement('input');
       chk.type = 'checkbox';
       chk.id = 'dba-pick-chk-mod0';
+      chk.checked = !!hideModZero;
 
       const chkText = document.createElement('span');
       chkText.textContent = 'MOD 0 は表示しない';
@@ -8652,9 +8718,13 @@
         chk.addEventListener('change', (e) => {
           e.stopPropagation();
           hideModZero = !!chk.checked;
+          savePickHideModZero(kind, hideModZero);
           applyPickFilters();
         });
       }
+
+      // 初期状態をUIへ反映
+      chk.checked = !!hideModZero;
 
       // 選択ハンドラ
       for(const tr of Array.from(imported.querySelectorAll('tbody tr'))){
@@ -10000,7 +10070,7 @@
       resetBtn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        const def = getDefaultCellSizeForMode(modeKey);
+        const def = DEFAULT_SETTINGS.cellSize[modeKey] || DEFAULT_SETTINGS.cellSize.rb;
         wInput.value = String(def.width);
         hInput.value = String(def.height);
         dirty = true;
@@ -10024,7 +10094,8 @@
       box.className = 'dba-setting-row';
 
       const t = document.createElement('div');
-      t.style.fontWeight = '900';
+      t.style.fontSize = '1em';
+      t.style.fontWeight = '700';
       t.style.textAlign = 'left';
       t.style.marginBottom = '8px';
       t.textContent = 'ショートカット';
@@ -10070,7 +10141,11 @@
 
       const title = document.createElement('div');
       title.className = 'dba-setting-block-title';
-      title.textContent = 'セルサイズ調整：各モードのバトルマップのセル width ／ height を px で設定できます。';
+      title.appendChild(document.createTextNode('セルサイズ調整'));
+      const sub = document.createElement('span');
+      sub.style.fontWeight = '400';
+      sub.textContent = '：各モードのバトルマップのセル width ／ height を px で設定できます。';
+      title.appendChild(sub);
 
       const list = document.createElement('div');
       list.className = 'dba-setting-cellsize-list';
@@ -10147,6 +10222,37 @@
       lab.appendChild(input);
       lab.appendChild(txt);
       row.appendChild(lab);
+      mid.appendChild(row);
+    })();
+
+    // スクリプト情報
+    (function mkScriptInfoBlock(){
+      const row = document.createElement('div');
+      row.className = 'dba-setting-row';
+
+      const title = document.createElement('div');
+      title.className = 'dba-setting-block-title';
+      title.textContent = 'スクリプト情報';
+
+      const dl = document.createElement('dl');
+      dl.className = 'dba-setting-deflist';
+
+      const addDef = (dtText, ddText) => {
+        const dt = document.createElement('dt');
+        dt.textContent = dtText;
+        const dd = document.createElement('dd');
+        dd.textContent = ddText;
+        dl.appendChild(dt);
+        dl.appendChild(dd);
+      };
+
+      addDef('スクリプト名', 'Donguri Battle Assistant');
+      addDef('バージョン', DBA_VERSION);
+      addDef('作者名', '福呼び草');
+      addDef('アシスタント', 'ChatGPT');
+
+      row.appendChild(title);
+      row.appendChild(dl);
       mid.appendChild(row);
     })();
 
