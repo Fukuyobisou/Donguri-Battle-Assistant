@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Donguri Battle Assistant
 // @namespace    https://donguri.5ch.io/
-// @version      2.0.1.0
+// @version      2.0.4.1
 // @description  5ちゃんねるのどんぐりシステムから派生したゲームの操作性を改善するためのユーザースクリプト
 // @author       福呼び草
 // @assistant    ChatGPT (OpenAI)
@@ -19,7 +19,7 @@
   // =========================
   // スクリプト自身のバージョン（スクリプト情報表示用）
   // =========================
-  const DBA_VERSION = '2.0.1.0';
+  const DBA_VERSION = '2.0.4.1';
 
   console.log('[DBA] BOOT', 'ver=', DBA_VERSION, 'href=', location.href);
 
@@ -490,11 +490,18 @@
       border-radius: 12px;
       padding: 0;
       margin: auto;
-      width: min(640px, calc(100vw - 24px));
-      max-height: min(80vh, calc(100vh - 24px));
+      width: min(640px, 100svw);
+      max-height: min(80svh, calc(100vh));
+      display: flex;
+      flex-direction: column;
+      box-sizing: border-box;
+      overflow: hidden;
       background: #f8f8f8;
       color: #111;
       box-shadow: 0 12px 40px rgba(0,0,0,0.35);
+    }
+    .dba-m-std:not([open]) {
+      display: none !important;
     }
     .dba-m-std::backdrop {
       background: rgba(0,0,0,0.55);
@@ -515,15 +522,21 @@
       padding: 0;
     }
     .dba-m-std .dba-modal__mid {
+      flex: 1 1 auto;
+      min-height: 0;
       padding: 12px;
       overflow: auto;
       max-height: calc(min(80vh, calc(100vh - 24px)) - 110px);
     }
     .dba-m-std .dba-modal__bot {
       display: flex;
+      flex: 0 0 auto;
       justify-content: center;
       gap: 10px;
-      padding: 10px 12px;
+      padding: 12px 12px 16px;
+      min-height: 72px;
+      box-sizing: border-box;
+      overflow: visible;
       border-top: 1px solid #000;
       background: #f0f0f0;
     }
@@ -640,6 +653,9 @@
       max-height: calc(min(88vh, calc(100vh - 24px)) - 110px);
       scrollbar-gutter: stable both-edges;
     }
+    #dba-br-float .dba-modal__mid[data-dba-wheel-scrollable="1"] {
+      overscroll-behavior: contain;
+    }
 
     #dba-m-battle-result.dba-m-std .dba-modal__mid {
       /* 常にスクロール可能（短い時はスクロールは出ない） */
@@ -693,6 +709,9 @@
       background: #f0f0cc;
       color: #000;
       box-shadow: 0 12px 40px rgba(0,0,0,0.35);
+    }
+    .dba-m-alert:not([open]) {
+      display: none !important;
     }
     .dba-m-alert::backdrop {
       background: rgba(0,0,0,0.55);
@@ -823,6 +842,32 @@
     .dba-setting-row label {
       text-align: left;
       font-weight: 700;
+    }
+    .dba-setting-checkline {
+      display: flex;
+      align-items: flex-start;
+      justify-content: flex-start;
+      gap: 8px;
+      text-align: left;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .dba-setting-checkline input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      margin: 2px 0 0 0;
+      flex: 0 0 auto;
+      cursor: pointer;
+      accent-color: #ea0000;
+    }
+    .dba-setting-checktext {
+      display: block;
+      min-width: 0;
+      flex: 1 1 auto;
+      line-height: 1.4;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      white-space: normal;
     }
     .dba-setting-row input[type="number"] {
       width: 60px;
@@ -1723,6 +1768,7 @@
   const LS_BR_ALIGN_KEY = 'dba.battleResult.align.v1'; // left / center / right
   const LS_BR_PASS_KEY  = 'dba.battleResult.passThrough.v1'; // 0/1 クリック透過
   const LS_BR_TOP_KEY   = 'dba.battleResult.topOffsetPx.v1'; // number 上端からの距離(px)
+  const LS_BR_WIDTH_KEY = 'dba.battleResult.widthPx.v1'; // number 横幅(px)
   const LS_BR_HIDE_CLOSE_KEY = 'dba.battleResult.hideClose.v1'; // 0/1 「戦闘結果」ウインドウのCloseボタン非表示
   const LS_BR_HIDE_OPT_KEY   = 'dba.battleResult.hideOption.v1'; // 0/1 「戦闘結果」ウインドウのオプションボタン非表示
 
@@ -2588,6 +2634,8 @@
       hc: { width: 72, height: 64 },
       l:  { width: 72, height: 64 }
     },
+    // 攻撃後の自動差分取得
+    postBattle: { autoDiffSync: false },
     // レイヤー文字濃度（範囲：0〜100）
     layer: { textOpacity: 100 },
     // オリジナルHTMLの<header>要素を表示するか
@@ -2684,6 +2732,24 @@
   function saveBattleResultTopOffsetPx(px){
     const n = clampInt(px, 0, 2000);
     try{ localStorage.setItem(LS_BR_TOP_KEY, String(n)); }catch(_e){}
+  }
+
+  // 戦闘結果ウインドウの width のデフォルト値：300px
+  function loadBattleResultWidthPx(){
+    try{
+      const raw = localStorage.getItem(LS_BR_WIDTH_KEY);
+    if(raw == null) return 300;
+      const n = Number.parseInt(raw, 10);
+      if(!Number.isFinite(n)) return 300;
+      return clampInt(n, 120, 2000);
+    }catch(_e){
+      return 300;
+    }
+  }
+
+  function saveBattleResultWidthPx(px){
+    const n = clampInt(px, 120, 2000);
+    try{ localStorage.setItem(LS_BR_WIDTH_KEY, String(n)); }catch(_e){}
   }
 
   function loadRapidAttackEnabled(){
@@ -2942,6 +3008,52 @@
     return makeTeamChallengeUrl(mode);
   }
 
+  const DBA_POST_BATTLE_DIFF_SYNC = {
+    running: false,
+    pending: false
+  };
+
+  function hasBattleLogText(text){
+    const t = sanitizeText(text || '');
+    if(!t) return false;
+    return (
+      t.includes('アリーナチャレンジ開始') ||
+      t.includes('ターン') ||
+      t.includes('が勝った') ||
+      t.includes('チャレンジに成功') ||
+      t.includes('アリーナリーダー') ||
+      t.includes('リーダーになった') ||
+      t.includes('リーダーになりました') ||
+      t.includes('あなたはリーダー')
+    );
+  }
+
+  async function scheduleBattleInfoDiffSyncAfterBattleLog(){
+    const s = loadSettings();
+    if(!s?.postBattle?.autoDiffSync) return false;
+
+    const btn = document.getElementById('dba-btn-battleinfo');
+    if(!btn) return false;
+
+    if(DBA_POST_BATTLE_DIFF_SYNC.running){
+      DBA_POST_BATTLE_DIFF_SYNC.pending = true;
+      return true;
+    }
+
+    DBA_POST_BATTLE_DIFF_SYNC.running = true;
+    try{
+      do{
+        DBA_POST_BATTLE_DIFF_SYNC.pending = false;
+        await updateOnlyChangedCellsFromTopPage();
+      }while(DBA_POST_BATTLE_DIFF_SYNC.pending);
+      return true;
+    }catch(_e){
+      return false;
+    }finally{
+      DBA_POST_BATTLE_DIFF_SYNC.running = false;
+    }
+  }
+
   async function rapidAttackAt(row, col){
     // セル詳細を経由せず、teamchallenge に直接 POST
     // ※占領済み/空きセルの分岐はサーバー側が判断（＝「このエリアを捕らえよ」or「エリアに挑む」相当）
@@ -2964,7 +3076,11 @@
 
     // 返却がHTMLではなく短文だけのケースにも対応（既存 battle-result と同じ方針）
     if(!ct.includes('text/html')){
-      openBattleResultModalWithNode(bodyText || '結果を表示できませんでした。', 'ラピッド攻撃');
+      const resultText = bodyText || '結果を表示できませんでした。';
+      openBattleResultModalWithNode(resultText, 'ラピッド攻撃');
+      if(hasBattleLogText(resultText)){
+        scheduleBattleInfoDiffSyncAfterBattleLog().catch(()=>{});
+      }
       return;
     }
 
@@ -2972,10 +3088,20 @@
     const block = extractBattleResultBlock(doc);
     if(block){
       const text = (doc.body && doc.body.innerText) ? doc.body.innerText : sanitizeText(block.textContent || '');
-      openBattleResultModalWithNode(text || '結果を表示できませんでした。', 'ラピッド攻撃');
+      const resultText = text || '結果を表示できませんでした。';
+      openBattleResultModalWithNode(resultText, 'ラピッド攻撃');
+      if(hasBattleLogText(resultText)){
+        scheduleBattleInfoDiffSyncAfterBattleLog().catch(()=>{});
+      }
       return;
     }
-    openBattleResultModalWithNode((doc.body && doc.body.innerText) ? doc.body.innerText : '結果を表示できませんでした。', 'ラピッド攻撃');
+    {
+      const resultText = (doc.body && doc.body.innerText) ? doc.body.innerText : '結果を表示できませんでした。';
+      openBattleResultModalWithNode(resultText, 'ラピッド攻撃');
+      if(hasBattleLogText(resultText)){
+        scheduleBattleInfoDiffSyncAfterBattleLog().catch(()=>{});
+      }
+    }
   }
 
   function clampInt(n, min, max){
@@ -3027,6 +3153,9 @@
       if(obj && obj.layer){
         out.layer.textOpacity = sanitizeOpacity(obj.layer.textOpacity);
       }
+      if(obj && obj.postBattle){
+        out.postBattle.autoDiffSync = !!obj.postBattle.autoDiffSync;
+      }
       if(obj && obj.header){
         out.header.showOriginalHeader = !!obj.header.showOriginalHeader;
       }else{
@@ -3056,6 +3185,7 @@
             height: sanitizeCellPx(s?.cellSize?.l?.height, DEFAULT_SETTINGS.cellSize.l.height)
           }
         },
+        postBattle: { autoDiffSync: !!s?.postBattle?.autoDiffSync },
         layer: { textOpacity: sanitizeOpacity(s?.layer?.textOpacity) },
         header: { showOriginalHeader: !!s?.header?.showOriginalHeader }
       };
@@ -3686,6 +3816,7 @@
     box.appendChild(pre);
 
     root.dataset.open = '1';
+    const mid = root.querySelector('.dba-modal__mid'); if(mid instanceof HTMLElement) mid.dataset.dbaWheelScrollable = '1';
     applyBattleResultOptionsToFloat(); // 位置など（透過機能に紐づけない）
   }
 
@@ -3695,6 +3826,67 @@
     root.dataset.open = '0';
   }
 
+  function getBattleResultFloatScrollableMid(){
+    const root = document.getElementById('dba-br-float');
+    if(!root || root.dataset.open !== '1') return null;
+    const mid = root.querySelector('.dba-modal__mid');
+    if(!(mid instanceof HTMLElement)) return null;
+    return mid;
+  }
+
+  function isPointInsideRect(x, y, rect){
+    return !!rect && x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+  }
+
+  function canScrollBattleResultFloatMid(mid, deltaY){
+    if(!(mid instanceof HTMLElement)) return false;
+    const scrollRange = mid.scrollHeight - mid.clientHeight;
+    if(scrollRange <= 0) return false;
+
+    if(deltaY > 0){
+      return mid.scrollTop < scrollRange;
+    }
+    if(deltaY < 0){
+      return mid.scrollTop > 0;
+    }
+    return false;
+  }
+
+  function handleBattleResultFloatWheel(evt){
+    if(!loadBattleResultPassThrough()) return;
+
+    const mid = getBattleResultFloatScrollableMid();
+    if(!mid) return;
+
+    const root = document.getElementById('dba-br-float');
+    if(!root) return;
+
+    const rect = root.getBoundingClientRect();
+    const x = Number(evt.clientX || 0);
+    const y = Number(evt.clientY || 0);
+
+    // フロート上でホイールされた時だけ拾う
+    if(!isPointInsideRect(x, y, rect)) return;
+
+    const deltaY = Number(evt.deltaY || 0);
+    if(!canScrollBattleResultFloatMid(mid, deltaY)) return;
+
+    evt.preventDefault();
+    evt.stopPropagation();
+
+    mid.scrollTop += deltaY;
+  }
+
+  function ensureBattleResultFloatWheelBridge(){
+    if(document.documentElement.dataset.dbaBrFloatWheelBridge === '1') return;
+    document.documentElement.dataset.dbaBrFloatWheelBridge = '1';
+
+    document.addEventListener('wheel', handleBattleResultFloatWheel, {
+      capture: true,
+      passive: false
+    });
+  }
+
   function applyBattleResultOptionsToFloat(){
     const root = document.getElementById('dba-br-float');
     if(!root) return;
@@ -3702,6 +3894,10 @@
     // 上端からの距離（fnbar の下 + 指定px）
     const topPx = loadBattleResultTopOffsetPx();
     root.style.top = `calc(var(--dba-fn-height) + ${topPx}px)`;
+
+    // 横幅
+    const widthPx = loadBattleResultWidthPx();
+    root.style.width = `min(${widthPx}px, calc(100vw - 24px))`;
 
     // Closeボタンの表示/非表示
     try{
@@ -3737,6 +3933,10 @@
   function applyBattleResultOptionsToModal(){
     const dlg = document.getElementById('dba-m-battle-result');
     if(!dlg) return;
+
+    // 横幅
+    const widthPx = loadBattleResultWidthPx();
+    dlg.style.width = `min(${widthPx}px, calc(100vw - 24px))`;
 
     // 配置（dialogの左右余白で寄せる）
     const align = loadBattleResultAlign();
@@ -3881,6 +4081,35 @@
     topOffsetRow.appendChild(topOffsetUnit);
     placeWrap.appendChild(topOffsetRow);
 
+    // ウィンドウの横幅（数値）
+    const widthRow = document.createElement('div');
+    widthRow.style.marginTop = '10px';
+    widthRow.style.display = 'flex';
+    widthRow.style.alignItems = 'center';
+    widthRow.style.justifyContent = 'flex-start';
+    widthRow.style.gap = '8px';
+    widthRow.style.fontWeight = '800';
+    widthRow.style.textAlign = 'left';
+
+    const widthLab = document.createElement('span');
+    widthLab.textContent = 'ウィンドウの横幅';
+
+    const widthInp = document.createElement('input');
+    widthInp.type = 'number';
+    widthInp.min = '120';
+    widthInp.max = '2000';
+    widthInp.step = '1';
+    widthInp.id = 'dba-br-opt-width';
+    widthInp.style.width = '92px';
+
+    const widthUnit = document.createElement('span');
+    widthUnit.textContent = 'px';
+
+    widthRow.appendChild(widthLab);
+    widthRow.appendChild(widthInp);
+    widthRow.appendChild(widthUnit);
+    placeWrap.appendChild(widthRow);
+
     mid.appendChild(placeWrap);
 
     // (3) クリック透過
@@ -3960,6 +4189,8 @@
     }
     const topInp = dlg.querySelector('#dba-br-opt-top');
     if(topInp) topInp.value = String(loadBattleResultTopOffsetPx());
+    const widthInp0 = dlg.querySelector('#dba-br-opt-width');
+    if(widthInp0) widthInp0.value = String(loadBattleResultWidthPx());
 
     // 変更イベント
     tail2Chk.addEventListener('change', (e) => {
@@ -4000,6 +4231,17 @@
       });
     }
 
+    // 横幅
+    const widthInp2 = dlg.querySelector('#dba-br-opt-width');
+    if(widthInp2){
+      widthInp2.addEventListener('change', (e) => {
+        e.stopPropagation();
+        saveBattleResultWidthPx(widthInp2.value);
+        applyBattleResultOptionsToModal();
+        applyBattleResultOptionsToFloat();
+      });
+    }
+
     dlg.addEventListener('change', (e) => {
       const t = e.target;
       if(!(t instanceof HTMLInputElement)) return;
@@ -4031,6 +4273,8 @@
     }
     const topInp = dlg.querySelector('#dba-br-opt-top');
     if(topInp) topInp.value = String(loadBattleResultTopOffsetPx());
+    const widthInp = dlg.querySelector('#dba-br-opt-width');
+    if(widthInp) widthInp.value = String(loadBattleResultWidthPx());
 
     try{ dlg.showModal(); }catch(_e){ dlg.setAttribute('open',''); }
   }
@@ -4128,6 +4372,8 @@
 
   function openBattleResultModalWithNode(nodeOrText, titleText){
     buildBattleResultModal();
+    buildBattleResultModal();
+    ensureBattleResultFloatWheelBridge();
     const dlg = document.getElementById('dba-m-battle-result');
     const box = document.getElementById('dba-battle-result-box');
     const title = dlg ? dlg.querySelector('.dba-modal__title') : null;
@@ -4575,7 +4821,11 @@
 
     // 返却が HTML ではなく、短いテキスト（例：「リーダーになった」）だけのケースに備える
     if(!ct.includes('text/html')){
-      openBattleResultModalWithNode(bodyText || '結果を表示できませんでした。', '戦闘結果');
+      const resultText = bodyText || '結果を表示できませんでした。';
+      openBattleResultModalWithNode(resultText, '戦闘結果');
+      if(hasBattleLogText(resultText)){
+        scheduleBattleInfoDiffSyncAfterBattleLog().catch(()=>{});
+      }
       return;
     }
 
@@ -4589,17 +4839,33 @@
       const text = sanitizeText(imported.textContent || '');
       // 中身が薄い場合は body のテキストを表示
       if(text.length < 8){
-        openBattleResultModalWithNode((doc.body && doc.body.innerText) ? doc.body.innerText : '結果を表示できませんでした。', '戦闘結果');
+        const resultText = (doc.body && doc.body.innerText) ? doc.body.innerText : '結果を表示できませんでした。';
+        openBattleResultModalWithNode(resultText, '戦闘結果');
+        if(hasBattleLogText(resultText)){
+          scheduleBattleInfoDiffSyncAfterBattleLog().catch(()=>{});
+        }
         return;
       }
 
       // できるだけ「結果本文」っぽく見せるため、imported をテキスト表示に寄せる（縦長にも対応）
       // （DOMそのまま表示が崩れる場合があるので、まずはテキストで確実に見せる）
-      openBattleResultModalWithNode((doc.body && doc.body.innerText) ? doc.body.innerText : imported.textContent, '戦闘結果');
+      {
+        const resultText = (doc.body && doc.body.innerText) ? doc.body.innerText : imported.textContent;
+        openBattleResultModalWithNode(resultText, '戦闘結果');
+        if(hasBattleLogText(resultText)){
+          scheduleBattleInfoDiffSyncAfterBattleLog().catch(()=>{});
+        }
+      }
       return;
     }
 
-    openBattleResultModalWithNode((doc.body && doc.body.innerText) ? doc.body.innerText : '結果を表示できませんでした。', '戦闘結果');
+    {
+      const resultText = (doc.body && doc.body.innerText) ? doc.body.innerText : '結果を表示できませんでした。';
+      openBattleResultModalWithNode(resultText, '戦闘結果');
+      if(hasBattleLogText(resultText)){
+        scheduleBattleInfoDiffSyncAfterBattleLog().catch(()=>{});
+      }
+    }
   }
 
   function findFirstTableAfterHeader(doc){
@@ -6050,6 +6316,33 @@
     saveRosterStore(store);
   }
 
+  function rebuildPresetMapByOrder(presets, presetOrder){
+    const src = (presets && typeof presets === 'object') ? presets : {};
+    const order = Array.isArray(presetOrder) ? presetOrder : [];
+
+    const out = {};
+    const seen = new Set();
+
+    for(const nm of order){
+      const name = sanitizeText(nm);
+      if(!name) continue;
+      if(seen.has(name)) continue;
+      if(!Object.prototype.hasOwnProperty.call(src, name)) continue;
+      out[name] = src[name];
+      seen.add(name);
+    }
+
+    for(const nm of Object.keys(src)){
+      const name = sanitizeText(nm);
+      if(!name) continue;
+      if(seen.has(name)) continue;
+      out[name] = src[nm];
+      seen.add(name);
+    }
+
+    return out;
+  }
+
   function overwriteRosterFromObject(obj){
     // バックアップ用：active roster の全体を上書き（最低限 title/presets を使用）
     const { store, roster } = getActiveRoster();
@@ -7250,12 +7543,16 @@
   // ---- 装備ロスター バックアップ helper ----
   function buildRosterBackupJsonObject(roster){
     const r = roster || {};
+    const orderedPresets = rebuildPresetMapByOrder(
+      (r.presets && typeof r.presets === 'object') ? r.presets : {},
+      Array.isArray(r.presetOrder) ? r.presetOrder : []
+    );
     return {
       gen: DBA_SAVE_GEN_CURRENT,
       title: sanitizeText(r.title || ''),
       createdAt: normalizeRosterDateTimeValue(r.createdAt, ''),
       updatedAt: normalizeRosterDateTimeValue(r.updatedAt, ''),
-      presets: (r.presets && typeof r.presets === 'object') ? r.presets : {},
+      presets: orderedPresets,
       autoEquip: (r.autoEquip && typeof r.autoEquip === 'object')
         ? r.autoEquip
         : { candidates: {}, lastPreset: '' }
@@ -8766,8 +9063,12 @@
         e.preventDefault(); e.stopPropagation();
         stopAutoScroll();
         try{
-          // 上書き保存（表示順配列のみ更新）
+          // 上書き保存（表示順配列＋presets のキー順も更新）
           roster.presetOrder = names.slice();
+          roster.presets = rebuildPresetMapByOrder(
+            roster && roster.presets ? roster.presets : {},
+            roster.presetOrder
+          );
           roster.updatedAt = nowIso();
           store.rosters[store.activeId] = roster;
           saveRosterStore(store);
@@ -9380,6 +9681,345 @@
     return raw;
   }
 
+  function patchRbBattlemapScriptForDbaApi(scriptText){
+    const src = String(scriptText || '');
+    if(!src) return src;
+    if(mode !== 'rb') return src;
+    if(src.includes('window.__DBA_RB_API')) return src;
+    if(!src.includes('const GRID_SIZE') || !src.includes('function drawStatic()') || !src.includes('const buildingsPayload')) return src;
+
+    let patched = src;
+
+    patched = patched.replace(
+      'const HAS_CAPITAL = !!(fow && fow.hasCapital);',
+      'let HAS_CAPITAL = !!(fow && fow.hasCapital);'
+    );
+
+    const injected = `
+      function dbaClearPlainObject(obj){
+        if(!obj || typeof obj !== 'object') return;
+        for(const k in obj){
+          if(Object.prototype.hasOwnProperty.call(obj, k)) delete obj[k];
+        }
+      }
+
+      function dbaReplacePlainObject(dst, src){
+        dbaClearPlainObject(dst);
+        if(!src || typeof src !== 'object') return;
+        for(const k of Object.keys(src)){
+          dst[k] = src[k];
+        }
+      }
+
+      function dbaReplaceSet(dst, values){
+        if(!dst || typeof dst.clear !== 'function') return;
+        dst.clear();
+        if(!Array.isArray(values)) return;
+        for(const v of values){
+          dst.add(String(v));
+        }
+      }
+
+      function dbaFogStateAt(r,c){
+        if(!fow) return 2;
+        if(!HAS_CAPITAL) return 2;
+        const k = String(r) + '-' + String(c);
+        if(visibleSet.has(k)) return 2;
+        if(exploredSet.has(k)) return 1;
+        return 0;
+      }
+
+      function dbaClearFogCellWithCtx(ctx, r, c){
+        if(!ctx) return;
+        const dx = c * CELL;
+        const dy = r * CELL;
+        ctx.clearRect(dx, dy, CELL, CELL);
+      }
+
+      function dbaClearFogCell(r,c){
+        dbaClearFogCellWithCtx(fctx, r, c);
+      }
+
+      function dbaPaintFogCellWithCtx(ctx, r, c){
+        if(!ctx) return;
+        dbaClearFogCellWithCtx(ctx, r, c);
+        const s = dbaFogStateAt(r,c);
+        if(s===2) return;
+
+        const n = (s===0 ? FOG_CLOUD_PUFFS_UNKNOWN : FOG_CLOUD_PUFFS_EXPLORED);
+        const a = (s===0 ? 0.12 : 0.07);
+        const baseSeed = u32((r+1)*73856093 ^ (c+1)*19349663 ^ (GRID_SIZE*83492791) ^ (CELL*2654435761));
+
+        for(let i=0;i<n;i++){
+          const r1 = rand01(baseSeed ^ u32(i*0x9e3779b1));
+          const r2 = rand01(baseSeed ^ u32(i*0x85ebca6b));
+          const r3 = rand01(baseSeed ^ u32(i*0xc2b2ae35));
+
+          const x   = c*CELL + r1*CELL;
+          const y   = r*CELL + r2*CELL;
+          const rad = r3*(CELL*0.7);
+
+          ctx.beginPath();
+          ctx.arc(x,y,rad,0,Math.PI*2);
+          ctx.fillStyle = 'rgba(0,0,0,' + String(a) + ')';
+          ctx.fill();
+        }
+      }
+
+      function dbaPaintFogCell(r,c){
+        dbaPaintFogCellWithCtx(fctx, r, c);
+      }
+
+      function dbaClearBaseCellWithCtx(ctx, r, c){
+        if(!ctx) return;
+        const dx = c * CELL;
+        const dy = r * CELL;
+        ctx.clearRect(dx, dy, CELL, CELL);
+      }
+
+      function dbaClearBaseCell(r,c){
+        dbaClearBaseCellWithCtx(bctx, r, c);
+      }
+
+      function dbaPaintBaseCellWithCtx(ctx, r, c){
+        if(!ctx) return;
+        if(r<0 || c<0 || r>=GRID_SIZE || c>=GRID_SIZE) return;
+
+        const k = String(r) + '-' + String(c);
+        const dx = c * CELL;
+        const dy = r * CELL;
+
+        dbaClearBaseCellWithCtx(ctx, r, c);
+
+        const tidx = terrainMap[k] ?? 0;
+        const tsx = tidx * 128;
+        ctx.drawImage(terrainImg, tsx, 0, 128, 128, dx, dy, CELL, CELL);
+
+        if(showTint){
+          const t = teamMap[k] || 0;
+          const fill = tintForTeam(t);
+          if(fill){
+            ctx.fillStyle = fill;
+            ctx.fillRect(dx, dy, CELL, CELL);
+          }
+        }
+
+        const s = dbaFogStateAt(r,c);
+        const b = buildingsMap[k];
+        if(b && s !== 0){
+          const WALLS_COL = 3;
+          const RADAR_COL = 4;
+          const col = (b.kind==='f' ? WALLS_COL : RADAR_COL);
+          const ownerTeam = teamMap[k] || 0;
+          const ownerRow = (ownerTeam===2 ? 1 : (ownerTeam===1 ? 2 : 0));
+
+          if(s===1){
+            ctx.save();
+            ctx.globalAlpha = 0.60;
+            ctx.drawImage(buildingImg, col * 128, 0, 128, 128, dx, dy, CELL, CELL);
+            ctx.restore();
+          }else{
+            ctx.drawImage(buildingImg, col * 128, ownerRow * 128, 128, 128, dx, dy, CELL, CELL);
+          }
+        }
+
+        if(capitalSet.has(k)){
+          const OUTPOST_COL = 0;
+          const COMMAND_COL = 1;
+          const HQ_COL      = 2;
+          function capColForTeam(team){
+            const WEAK = 0.20;
+            const OK   = 0.55;
+            if(team===1){
+              const f = ownership.redFrac;
+              if(f < WEAK) return OUTPOST_COL;
+              if(f < OK)   return COMMAND_COL;
+              return HQ_COL;
+            }
+            if(team===2){
+              const f = ownership.blueFrac;
+              if(f < WEAK) return OUTPOST_COL;
+              if(f < OK)   return COMMAND_COL;
+              return HQ_COL;
+            }
+            return HQ_COL;
+          }
+
+          const team = teamMap[k] || 0;
+          const row = (team===2 ? 1 : (team===1 ? 2 : 0));
+          const col = capColForTeam(team);
+          ctx.drawImage(buildingImg, col * 128, row * 128, 128, 128, dx, dy, CELL, CELL);
+        }
+      }
+
+      function dbaPaintBaseCell(r,c){
+        dbaPaintBaseCellWithCtx(bctx, r, c);
+      }
+
+      function dbaCreateCanvasBufferLike(canvasId){
+        try{
+          const src = document.getElementById(canvasId);
+          if(!src || !src.width || !src.height) return null;
+          const cv = document.createElement('canvas');
+          cv.width = src.width;
+          cv.height = src.height;
+          const ctx = cv.getContext('2d');
+          if(!ctx) return null;
+          ctx.drawImage(src, 0, 0);
+          return { canvas: cv, ctx: ctx };
+        }catch(_e){
+          return null;
+        }
+      }
+
+      function dbaNormalizeChangedMeta(changedMeta){
+        const out = Object.create(null);
+        if(!Array.isArray(changedMeta)) return out;
+        for(const it of changedMeta){
+          if(!it) continue;
+          const r = Number(it.row);
+          const c = Number(it.col);
+          if(!Number.isFinite(r) || !Number.isFinite(c)) continue;
+          const k = String(r) + '-' + String(c);
+          out[k] = {
+            base: !!it.base,
+            fog: !!it.fog,
+            overlay: !!it.overlay
+          };
+        }
+        return out;
+      }
+
+      function dbaApplySnapshot(nextSnap, changedCells, changedMeta){
+        try{
+          if(!nextSnap || typeof nextSnap !== 'object') return false;
+          if(Number(nextSnap.rows) !== GRID_SIZE || Number(nextSnap.cols) !== GRID_SIZE) return false;
+          if(!!nextSnap.hasCapital !== !!HAS_CAPITAL) return false;
+
+          const beforeRed = ownership.redTiles;
+          const beforeBlue = ownership.blueTiles;
+
+          dbaReplacePlainObject(teamMap, dbaBuildTeamMapFromCellColors(nextSnap.cellColors || Object.create(null)));
+          dbaReplaceSet(capitalSet, Array.isArray(nextSnap.capitalKeys) ? nextSnap.capitalKeys : []);
+          dbaReplacePlainObject(terrainMap, nextSnap.terrainMap || Object.create(null));
+          dbaReplacePlainObject(buildingsMap, nextSnap.buildingsMap || Object.create(null));
+          dbaReplaceSet(visibleSet, Array.isArray(nextSnap.visibleKeys) ? nextSnap.visibleKeys : []);
+          dbaReplaceSet(exploredSet, Array.isArray(nextSnap.exploredKeys) ? nextSnap.exploredKeys : []);
+
+          if(fow && typeof fow === 'object'){
+            fow.hasCapital = !!nextSnap.hasCapital;
+            fow.visible = Array.isArray(nextSnap.visibleList) ? nextSnap.visibleList.slice() : [];
+            fow.explored = Array.isArray(nextSnap.exploredList) ? nextSnap.exploredList.slice() : [];
+          }
+
+          HAS_CAPITAL = !!nextSnap.hasCapital;
+          recomputeOwnership();
+
+          const paint = new Set();
+          if(Array.isArray(changedCells)){
+            for(const rc of changedCells){
+              if(!rc) continue;
+              const r = Number(rc.row);
+              const c = Number(rc.col);
+              if(!Number.isFinite(r) || !Number.isFinite(c)) continue;
+              paint.add(String(r) + '-' + String(c));
+            }
+          }
+
+          if(beforeRed !== ownership.redTiles || beforeBlue !== ownership.blueTiles){
+            for(const k of capitalSet){
+              paint.add(String(k));
+            }
+          }
+
+          const paintList = Array.from(paint);
+          const metaMap = dbaNormalizeChangedMeta(changedMeta);
+          const baseBuf = (paintList.length > 0) ? dbaCreateCanvasBufferLike('gridBase') : null;
+          const fogBuf  = (paintList.length > 0) ? dbaCreateCanvasBufferLike('gridFog')  : null;
+          const useBufferedBlit = !!(baseBuf && baseBuf.ctx && fogBuf && fogBuf.ctx);
+          let needBaseCommit = false;
+          let needFogCommit = false;
+          let needOverlayRedraw = false;
+
+          for(const k of paintList){
+            const m = String(k).match(/^(\\d+)-(\\d+)$/);
+            if(!m) continue;
+            const r = Number(m[1]);
+            const c = Number(m[2]);
+            const meta = metaMap[k] || { base:true, fog:true, overlay:true };
+
+            const doBase = !!meta.base;
+            const doFog = !!meta.fog;
+            const doOverlay = !!meta.overlay;
+
+            if(doBase) needBaseCommit = true;
+            if(doFog) needFogCommit = true;
+            if(doOverlay) needOverlayRedraw = true;
+
+            if(useBufferedBlit){
+              if(doBase){
+                dbaPaintBaseCellWithCtx(baseBuf.ctx, r, c);
+              }
+              if(doFog){
+                dbaPaintFogCellWithCtx(fogBuf.ctx, r, c);
+              }
+            }else{
+              if(doBase){
+                dbaPaintBaseCell(r,c);
+              }
+              if(doFog){
+                dbaPaintFogCell(r,c);
+              }
+            }
+          }
+
+          if(useBufferedBlit){
+            if(needBaseCommit){
+              bctx.clearRect(0, 0, baseBuf.canvas.width, baseBuf.canvas.height);
+              bctx.drawImage(baseBuf.canvas, 0, 0);
+            }
+            if(needFogCommit){
+              fctx.clearRect(0, 0, fogBuf.canvas.width, fogBuf.canvas.height);
+              fctx.drawImage(fogBuf.canvas, 0, 0);
+            }
+          }
+
+          fogDirty = false;
+          if(needOverlayRedraw){
+            drawOverlay(performance.now());
+          }
+          return true;
+        }catch(_e){
+          return false;
+        }
+      }
+
+      window.__DBA_RB_API = {
+        version: 2,
+        applySnapshot: dbaApplySnapshot
+      };
+    `;
+
+    if(/\}\)\(\);\s*$/.test(patched)){
+      patched = patched.replace(/\}\)\(\);\s*$/, injected + '\n})();');
+    }
+    return patched;
+  }
+
+  function prepareImportedBattlemapScripts(root){
+    if(mode !== 'rb' || !root) return;
+    const scripts = Array.from(root.querySelectorAll('script'));
+    for(const sc of scripts){
+      const txt = String(sc.textContent || '');
+      if(!txt) continue;
+      if(!txt.includes('const GRID_SIZE')) continue;
+      if(!txt.includes('function drawStatic()')) continue;
+      if(!txt.includes('const buildingsPayload')) continue;
+      sc.textContent = patchRbBattlemapScriptForDbaApi(txt);
+      break;
+    }
+  }
+
   function reactivateScriptsWithin(root){
     if(!root) return 0;
     const scripts = Array.from(root.querySelectorAll('script'));
@@ -9468,6 +10108,7 @@
       refreshHeaderAndTeamTablesFromFetchedDoc(doc, { topUrl });
 
       const imported = document.importNode(fetchedRoot, true);
+      prepareImportedBattlemapScripts(imported);
       parent.replaceChild(imported, curRoot);
 
       const reactivated = reactivateScriptsWithin(imported);
@@ -9758,6 +10399,11 @@
     if(cell) cell.textContent = text;
   }
 
+  function getLayerCellText(row, col){
+    const cell = document.querySelector(`#dba-battlemap-layer-grid .dba-layer-cell[data-row="${row}"][data-col="${col}"] .dba-layer-cell__content`);
+    return cell ? String(cell.textContent || '') : '';
+  }
+
   function clearLayerTexts(){
     for(const el of document.querySelectorAll('#dba-battlemap-layer-grid .dba-layer-cell__content')){
       el.textContent = '';
@@ -9769,12 +10415,11 @@
   //  - explored / visible をそれぞれ配列としてJSON.parseし、座標を union する
   //  - 返り値: [{row, col}, ...]
   // =========================
-  function extractRbKnownCoordsFromDoc(doc){
+  function extractRbFowStateFromDoc(doc){
     try{
-      if(mode !== 'rb') return [];
-      if(!doc) return [];
+      if(mode !== 'rb') return { visible: [], explored: [], hasCapital: false };
+      if(!doc) return { visible: [], explored: [], hasCapital: false };
 
-      // window.__FOW が含まれる <script> を探す
       const scripts = Array.from(doc.querySelectorAll('script'));
       let src = '';
       for(const s of scripts){
@@ -9784,16 +10429,34 @@
           break;
         }
       }
-      if(!src) return [];
+      if(!src) return { visible: [], explored: [], hasCapital: false };
 
-      // explored / visible をそれぞれ抜く（両方ある想定だが、片方欠けても動く）
-      // - explored:  "explored":[ ... ],"hasCapital"
-      // - visible :  "visible":[ ... ]};  （末尾は }; でも }}; でもよいよう緩く拾う）
       const mx = src.match(/"explored"\s*:\s*(\[[\s\S]*?\])\s*,\s*"hasCapital"/);
+      const mh = src.match(/"hasCapital"\s*:\s*(true|false)/);
       const mv = src.match(/"visible"\s*:\s*(\[[\s\S]*?\])\s*}\s*;?/);
 
       const explored = (mx && mx[1]) ? JSON.parse(mx[1]) : [];
       const visible  = (mv && mv[1]) ? JSON.parse(mv[1]) : [];
+      const hasCapital = !!(mh && mh[1] === 'true');
+
+      return {
+        visible: Array.isArray(visible) ? visible : [],
+        explored: Array.isArray(explored) ? explored : [],
+        hasCapital
+      };
+    }catch(_e){
+      return { visible: [], explored: [], hasCapital: false };
+    }
+  }
+
+  function extractRbKnownCoordsFromDoc(doc){
+    try{
+      if(mode !== 'rb') return [];
+      if(!doc) return [];
+
+      const fow = extractRbFowStateFromDoc(doc);
+      const explored = fow.explored;
+      const visible  = fow.visible;
       if(!Array.isArray(explored) || !Array.isArray(visible)) return [];
 
       const out = [];
@@ -9820,6 +10483,74 @@
       return out;
     }catch(_e){
       return [];
+    }
+  }
+
+  function normalizeRcList(list){
+    const rows = [];
+    if(!Array.isArray(list)) return rows;
+    for(const rc of list){
+      if(!Array.isArray(rc) || rc.length < 2) continue;
+      const r = Number(rc[0]);
+      const c = Number(rc[1]);
+      if(!Number.isFinite(r) || !Number.isFinite(c)) continue;
+      rows.push([r, c]);
+    }
+    rows.sort((a,b) => (a[0] - b[0]) || (a[1] - b[1]));
+    return rows;
+  }
+
+  function normalizeBuildingsPayload(payload){
+    try{
+      const arr = payload && payload.buildings;
+      if(!Array.isArray(arr)) return '';
+      const rows = [];
+      for(const it of arr){
+        if(!it) continue;
+        const rc = it.rc;
+        if(!Array.isArray(rc) || rc.length < 2) continue;
+        const r = Number(rc[0]);
+        const c = Number(rc[1]);
+        if(!Number.isFinite(r) || !Number.isFinite(c)) continue;
+        const b = it.b || {};
+        const kind = String(b.buildingType ?? b.t ?? '').trim();
+        const owner = String(b.buildingOwner ?? b.owner ?? '').trim();
+        rows.push({ r, c, kind, owner });
+      }
+      rows.sort((a,b) =>
+        (a.r - b.r) ||
+        (a.c - b.c) ||
+        (a.kind < b.kind ? -1 : (a.kind > b.kind ? 1 : 0)) ||
+        (a.owner < b.owner ? -1 : (a.owner > b.owner ? 1 : 0))
+      );
+      return JSON.stringify(rows);
+    }catch(_e){
+      return '';
+    }
+  }
+
+  function buildingsKeyToMap(buildingsKey){
+    const map = Object.create(null);
+    const keys = new Set();
+    try{
+      const s = String(buildingsKey || '');
+      if(!s) return { map, keys };
+      const rows = JSON.parse(s);
+      if(!Array.isArray(rows)) return { map, keys };
+      for(const it of rows){
+        if(!it) continue;
+        const r = Number(it.r);
+        const c = Number(it.c);
+        const kind = String(it.kind ?? '').trim();
+        const owner = String(it.owner ?? '').trim();
+        if(!Number.isFinite(r) || !Number.isFinite(c)) continue;
+        const k = `${r}-${c}`;
+        keys.add(k);
+        map[k] = `${kind}|${owner}`;
+      }
+      return { map, keys };
+    }catch(_e){
+      return { map, keys };
     }
   }
 
@@ -10047,7 +10778,13 @@
       cols: 0,
       cellColors: Object.create(null),
       capitalSet: new Set(),
-      terrainsKey: '' // RBのみ
+      terrainsKey: '', // RBのみ
+      visibleList: [],
+      exploredList: [],
+      visibleSet: new Set(),
+      exploredSet: new Set(),
+      hasCapital: false,
+      buildingsKey: ''
     };
 
     if(mode === 'rb'){
@@ -10056,6 +10793,8 @@
       const litColors = extractConstLiteral(t, 'cellColors');
       const litCap = extractConstLiteral(t, 'capitalList') || extractConstLiteral(t, 'capitalMap');
       const litTerr = extractConstLiteral(t, 'terrainsPayload');
+      const litBuildings = extractConstLiteral(t, 'buildingsPayload');
+      const fowState = extractRbFowStateFromDoc(doc);
 
       let size = 0;
       try{ size = Number(parseJsValueLiteral(litSize)); }catch(_e){ size = 0; }
@@ -10066,6 +10805,12 @@
       try{ out.cellColors = normalizeCellColors(parseJsValueLiteral(litColors)); }catch(_e){ out.cellColors = Object.create(null); }
       try{ out.capitalSet = normalizeCapitalSet(parseJsValueLiteral(litCap)); }catch(_e){ out.capitalSet = new Set(); }
       try{ out.terrainsKey = normalizeTerrainsPayload(parseJsValueLiteral(litTerr)); }catch(_e){ out.terrainsKey = ''; }
+      try{ out.buildingsKey = normalizeBuildingsPayload(parseJsValueLiteral(litBuildings)); }catch(_e){ out.buildingsKey = ''; }
+      out.visibleList = normalizeRcList(fowState.visible);
+      out.exploredList = normalizeRcList(fowState.explored);
+      out.visibleSet = new Set(out.visibleList.map((rc) => `${rc[0]}-${rc[1]}`));
+      out.exploredSet = new Set(out.exploredList.map((rc) => `${rc[0]}-${rc[1]}`));
+      out.hasCapital = !!fowState.hasCapital;
       return out;
     }
 
@@ -10164,6 +10909,202 @@
     return changed;
   }
 
+  function buildRbPatchedApiSnapshot(snap){
+    const terrainObj = Object.create(null);
+    const terr = terrainsKeyToMap(snap?.terrainsKey || '');
+    for(const k of terr.keys){
+      terrainObj[k] = terr.map[k];
+    }
+
+    const buildingObj = Object.create(null);
+    const bld = buildingsKeyToMap(snap?.buildingsKey || '');
+    for(const k of bld.keys){
+      const raw = String(bld.map[k] || '');
+      const p = raw.split('|');
+      buildingObj[k] = {
+        kind: String(p[0] || ''),
+        owner: String(p[1] || '')
+      };
+    }
+
+    return {
+      rows: Number(snap?.rows || 0),
+      cols: Number(snap?.cols || 0),
+      hasCapital: !!snap?.hasCapital,
+      cellColors: Object.assign(Object.create(null), snap?.cellColors || {}),
+      capitalKeys: Array.from(snap?.capitalSet || []).sort(),
+      terrainMap: terrainObj,
+      buildingsMap: buildingObj,
+      visibleKeys: Array.from(snap?.visibleSet || []).sort(),
+      exploredKeys: Array.from(snap?.exploredSet || []).sort(),
+      visibleList: Array.isArray(snap?.visibleList) ? snap.visibleList.map((rc) => [Number(rc[0]), Number(rc[1])]) : [],
+      exploredList: Array.isArray(snap?.exploredList) ? snap.exploredList.map((rc) => [Number(rc[0]), Number(rc[1])]) : []
+    };
+  }
+
+  function getHcLCellElement(row, col){
+    return document.querySelector(`.grid .cell[data-row="${row}"][data-col="${col}"]`);
+  }
+
+  function applyHcLCellVisualPatch(row, col, color, hasCapital){
+    const cell = getHcLCellElement(row, col);
+    if(!cell) return false;
+
+    const bg = (color == null || color === '') ? '#ffffff00' : String(color);
+    cell.style.backgroundColor = bg;
+    cell.style.outline = hasCapital ? '2px solid gold' : '';
+    return true;
+  }
+
+  function applyHcLBattlemapPartialUpdate(newSnap, changed){
+    try{
+      if(mode === 'rb') return false;
+      if(!newSnap || typeof newSnap !== 'object') return false;
+      if(!Array.isArray(changed) || changed.length === 0) return true;
+
+      let okCount = 0;
+      for(const rc of changed){
+        if(!rc) continue;
+        const row = Number(rc.row);
+        const col = Number(rc.col);
+        if(!Number.isFinite(row) || !Number.isFinite(col)) continue;
+
+        const key = `${row}-${col}`;
+        const color = (newSnap.cellColors && Object.prototype.hasOwnProperty.call(newSnap.cellColors, key))
+          ? newSnap.cellColors[key]
+          : null;
+        const hasCapital = !!(newSnap.capitalSet && newSnap.capitalSet.has(key));
+
+        if(applyHcLCellVisualPatch(row, col, color, hasCapital)){
+          okCount++;
+        }
+      }
+
+      return okCount === changed.length;
+    }catch(_e){
+      return false;
+    }
+  }
+
+  function buildRbChangedCellMeta(curSnap, newSnap, changed){
+    const out = [];
+    const list = Array.isArray(changed) ? changed : [];
+
+    const curTerr = terrainsKeyToMap(curSnap?.terrainsKey || '');
+    const newTerr = terrainsKeyToMap(newSnap?.terrainsKey || '');
+    const curBld  = buildingsKeyToMap(curSnap?.buildingsKey || '');
+    const newBld  = buildingsKeyToMap(newSnap?.buildingsKey || '');
+
+    const curCap = (curSnap?.capitalSet instanceof Set)
+      ? curSnap.capitalSet
+      : new Set(Array.isArray(curSnap?.capitalList) ? curSnap.capitalList.map(([r,c]) => `${r}-${c}`) : []);
+    const newCap = (newSnap?.capitalSet instanceof Set)
+      ? newSnap.capitalSet
+      : new Set(Array.isArray(newSnap?.capitalList) ? newSnap.capitalList.map(([r,c]) => `${r}-${c}`) : []);
+
+    const curVis = (curSnap?.visibleSet instanceof Set)
+      ? curSnap.visibleSet
+      : new Set(Array.isArray(curSnap?.visibleList) ? curSnap.visibleList.map(([r,c]) => `${r}-${c}`) : []);
+    const newVis = (newSnap?.visibleSet instanceof Set)
+      ? newSnap.visibleSet
+      : new Set(Array.isArray(newSnap?.visibleList) ? newSnap.visibleList.map(([r,c]) => `${r}-${c}`) : []);
+
+    const curExp = (curSnap?.exploredSet instanceof Set)
+      ? curSnap.exploredSet
+      : new Set(Array.isArray(curSnap?.exploredList) ? curSnap.exploredList.map(([r,c]) => `${r}-${c}`) : []);
+    const newExp = (newSnap?.exploredSet instanceof Set)
+      ? newSnap.exploredSet
+      : new Set(Array.isArray(newSnap?.exploredList) ? newSnap.exploredList.map(([r,c]) => `${r}-${c}`) : []);
+
+    for(const rc of list){
+      if(!rc) continue;
+      const row = Number(rc.row);
+      const col = Number(rc.col);
+      if(!Number.isFinite(row) || !Number.isFinite(col)) continue;
+
+      const key = `${row}-${col}`;
+
+      const colorChanged = String((curSnap?.cellColors && curSnap.cellColors[key]) || '') !== String((newSnap?.cellColors && newSnap.cellColors[key]) || '');
+      const terrainChanged = Number(curTerr.map[key] ?? -1) !== Number(newTerr.map[key] ?? -1);
+      const buildingChanged = String(curBld.map[key] || '') !== String(newBld.map[key] || '');
+      const capitalChanged = curCap.has(key) !== newCap.has(key);
+      const visibleChanged = curVis.has(key) !== newVis.has(key);
+      const exploredChanged = curExp.has(key) !== newExp.has(key);
+
+      const needBase = !!(colorChanged || terrainChanged || buildingChanged || capitalChanged);
+      const needFog = !!(visibleChanged || exploredChanged || capitalChanged);
+      const needOverlay = !!colorChanged;
+
+      out.push({
+        row,
+        col,
+        base: needBase,
+        fog: needFog,
+        overlay: needOverlay
+      });
+    }
+
+    return out;
+  }
+
+  function applyRbBattlemapPartialUpdate(newSnap, changed){
+    try{
+      if(mode !== 'rb') return false;
+      const api = window.__DBA_RB_API;
+      if(!api || typeof api.applySnapshot !== 'function') return false;
+      const curSnap = getBattlemapSnapshotFromDoc(document);
+      const changedMeta = buildRbChangedCellMeta(curSnap, newSnap, changed);
+      return !!api.applySnapshot(
+        buildRbPatchedApiSnapshot(newSnap),
+        Array.isArray(changed) ? changed : [],
+        changedMeta
+      );
+    }catch(_e){
+      return false;
+    }
+  }
+
+  function buildDetailFetchJobsForChangedCells(curSnap, newSnap, changed){
+    const list = Array.isArray(changed) ? changed : [];
+    if(list.length === 0) return [];
+
+    // HC / L は changed がそのまま detail 更新対象
+    if(mode !== 'rb'){
+      return list.slice();
+    }
+
+    // RB は base / fog / overlay を見て、detail を取りに行く必要があるセルだけに絞る
+    const metaList = buildRbChangedCellMeta(curSnap, newSnap, list);
+    const metaMap = new Map();
+    for(const it of metaList){
+      if(!it) continue;
+      metaMap.set(`${it.row}-${it.col}`, it);
+    }
+
+    const out = [];
+    for(const job of list){
+      if(!job) continue;
+      const row = Number(job.row);
+      const col = Number(job.col);
+      if(!Number.isFinite(row) || !Number.isFinite(col)) continue;
+
+      const key = `${row}-${col}`;
+      const meta = metaMap.get(key) || { base:true, fog:true, overlay:true };
+      const currentText = sanitizeText(getLayerCellText(row, col));
+      const textEmpty = !currentText;
+
+      // detail 取得が必要な条件
+      // - overlay変化: 文字表示そのものの変化候補
+      // - base変化   : regulation / holder に関わる可能性
+      // - 現在の文字が空: fog変化だけでも、新規表示のため取得する
+      if(meta.overlay || meta.base || textEmpty){
+        out.push({ row, col });
+      }
+    }
+
+    return out;
+  }
+
   async function updateOnlyChangedCellsFromTopPage(){
     const btn = document.getElementById('dba-btn-battleinfo');
     if(btn){
@@ -10213,6 +11154,10 @@
         const terrLocal = terrainsKeyToMap(curSnap.terrainsKey || '');
         const terrServer = terrainsKeyToMap(newSnap.terrainsKey || '');
 
+        // (B-2) buildingsPayload
+        const bldLocal = buildingsKeyToMap(curSnap.buildingsKey || '');
+        const bldServer = buildingsKeyToMap(newSnap.buildingsKey || '');
+
         // -----------------------
         // (2) GRID_SIZE 同じ かつ terrainsPayload の「既知座標数」が
         //     ローカル > サーバー なら長押しへ
@@ -10239,16 +11184,47 @@
         }
 
         // -----------------------
-        // (4) __FOW：サーバー既知 & ローカル未知 → その座標だけ更新
+        // (3-2) hasCapital が変化した場合は、Fog の意味が全体で変わりうるため安全側で全更新
+        // -----------------------
+        if(!!curSnap.hasCapital !== !!newSnap.hasCapital){
+          if(btn) btn.textContent = '全更新（hasCapital変化）…';
+          await scanAllCellsAndRender();
+          return;
+        }
+
+        // -----------------------
+        // (4) __FOW：visible/explored の差分座標を更新
         // -----------------------
         const need = new Set(); // k='r-c'
+        for(const k of fowLocalSet){
+          if(!fowServerSet.has(k)) need.add(k);
+        }
         for(const k of fowServerSet){
           if(!fowLocalSet.has(k)) need.add(k);
+        }
+        for(const k of new Set([
+          ...Array.from(curSnap.visibleSet || []),
+          ...Array.from(newSnap.visibleSet || [])
+        ])){
+          const v1 = curSnap.visibleSet ? curSnap.visibleSet.has(k) : false;
+          const v2 = newSnap.visibleSet ? newSnap.visibleSet.has(k) : false;
+          if(v1 !== v2) need.add(k);
+        }
+        for(const k of new Set([
+          ...Array.from(curSnap.exploredSet || []),
+          ...Array.from(newSnap.exploredSet || [])
+        ])){
+          const e1 = curSnap.exploredSet ? curSnap.exploredSet.has(k) : false;
+          const e2 = newSnap.exploredSet ? newSnap.exploredSet.has(k) : false;
+          if(e1 !== e2) need.add(k);
         }
 
         // -----------------------
         // (5) terrainsPayload：サーバー既知 & ローカル未知 → その座標だけ更新
         // -----------------------
+        for(const k of terrLocal.keys){
+          if(!terrServer.keys.has(k)) need.add(k);
+        }
         for(const k of terrServer.keys){
           if(!terrLocal.keys.has(k)) need.add(k);
         }
@@ -10278,6 +11254,18 @@
           if(c1 !== c2) need.add(k);
         }
 
+        // -----------------------
+        // (8) buildings：建物の追加/削除/種類変更/所有者変更
+        // -----------------------
+        const buildingKeys = new Set();
+        for(const k of bldLocal.keys) buildingKeys.add(k);
+        for(const k of bldServer.keys) buildingKeys.add(k);
+        for(const k of buildingKeys){
+          const b1 = (k in bldLocal.map) ? bldLocal.map[k] : null;
+          const b2 = (k in bldServer.map) ? bldServer.map[k] : null;
+          if(b1 !== b2) need.add(k);
+        }
+
         // jobs へ変換（安定化ソート）
         jobs = [];
         for(const k of need){
@@ -10293,13 +11281,27 @@
 
       const changed = jobs || [];
 
-      // ★追加要件： (2-3) に該当する場合は、差分セルの詳細取得に加えて
-      // 「バトルマップの最新版への差し替え（最新データを使っての再描画）」も実施する
-      // - ここでは既に取得済みの doc を再利用し、余計な再fetchを避ける
-      // - 差分が0の時は差し替え不要（軽量化）
       if(changed.length > 0){
-        if(btn) btn.textContent = 'マップ差し替え中…';
-        const refreshed = await refreshBattlemapFromFetchedDoc(doc, { topUrl });
+        let refreshed = false;
+
+        // RB は 2回目以降、注入済み API があれば変更セルだけ canvas を再描画
+        // API 未注入時は従来どおり全体差し替えし、その差し替えの中で API も埋め込む
+        if(mode === 'rb'){
+          refreshed = applyRbBattlemapPartialUpdate(newSnap, changed);
+          if(!refreshed){
+            if(btn) btn.textContent = 'マップ差し替え中…';
+            refreshed = await refreshBattlemapFromFetchedDoc(doc, { topUrl });
+          }
+        }else{
+          // HC / L は DOM セル構造なので、
+          // 差分セルの backgroundColor / outline だけを書き換えて全体差し替えを避ける。
+          refreshed = applyHcLBattlemapPartialUpdate(newSnap, changed);
+          if(!refreshed){
+            if(btn) btn.textContent = 'マップ差し替え中…';
+            refreshed = await refreshBattlemapFromFetchedDoc(doc, { topUrl });
+          }
+        }
+
         if(btn){
           btn.textContent = refreshed
             ? `差分更新中…(${changed.length})`
@@ -10326,8 +11328,19 @@
       if(btn && btn.textContent.indexOf('差分更新中…') !== 0)
         btn.textContent = `差分更新中…(${changed.length})`;
 
+      const detailJobs = buildDetailFetchJobsForChangedCells(curSnap, newSnap, changed);
+
+      if(detailJobs.length === 0){
+        if(btn){
+          btn.disabled = false;
+          btn.dataset.dbaBusy = '0';
+          btn.textContent = '戦況情報';
+        }
+        return;
+      }
+
       const CONCURRENCY = 9;
-      await mapLimit(changed, CONCURRENCY, async (job, idx) => {
+      await mapLimit(detailJobs, CONCURRENCY, async (job, idx) => {
         const { row, col } = job;
         try{
           const { holder, reg } = await fetchCellDetail(row, col);
@@ -10337,7 +11350,7 @@
         }
         if(btn && (idx % 10 === 0)){
           const done = idx + 1;
-          btn.textContent = `差分更新中…(${done}/${changed.length})`;
+          btn.textContent = `差分更新中…(${done}/${detailJobs.length})`;
         }
         return true;
       });
@@ -10540,6 +11553,29 @@
       mid.appendChild(box);
     })();
 
+    // 攻撃後の自動差分取得
+    (function mkPostBattleAutoDiffBlock(){
+      const row = document.createElement('div');
+      row.className = 'dba-setting-row';
+
+      const lab = document.createElement('label');
+      lab.className = 'dba-setting-checkline';
+
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.checked = !!settings?.postBattle?.autoDiffSync;
+      input.dataset.postBattleAutoDiff = '1';
+
+      const txt = document.createElement('span');
+      txt.className = 'dba-setting-checktext';
+      txt.textContent = '攻撃した後に自動で「戦況情報（差分取得）」を行う。\n※画面のちらつきが発生しやすくなります。';
+
+      lab.appendChild(input);
+      lab.appendChild(txt);
+      row.appendChild(lab);
+      mid.appendChild(row);
+    })();
+
     (function mkCellSizeBlock(){
       const row = document.createElement('div');
       row.className = 'dba-setting-row';
@@ -10728,6 +11764,7 @@
         rb: { width: 32, height: 32 },
         hc: { width: 30, height: 30 },
         l:  { width: 30, height: 30 },
+        postBattleAutoDiff: false,
         layerTextOpacity: 100,
         showOriginalHeader: false
       };
@@ -10736,6 +11773,8 @@
         const axis = inp.dataset.axis;
         out[k][axis] = Number.parseInt(inp.value, 10);
       }
+      const pb = dlg.querySelector('input[type="checkbox"][data-post-battle-auto-diff="1"]');
+      if(pb) out.postBattleAutoDiff = !!pb.checked;
       const op = dlg.querySelector('input[type="range"][data-layer-opacity="1"]');
       if(op) out.layerTextOpacity = Number.parseInt(op.value, 10);
       const hd = dlg.querySelector('input[type="checkbox"][data-show-original-header="1"]');
@@ -10749,6 +11788,10 @@
         const axis = inp.dataset.axis;
         const eff = getEffectiveCellSizeForMode(k, s);
         inp.value = String(axis === 'width' ? eff.width : eff.height);
+      }
+      const pb = dlg.querySelector('input[type="checkbox"][data-post-battle-auto-diff="1"]');
+      if(pb){
+        pb.checked = !!s?.postBattle?.autoDiffSync;
       }
       const op = dlg.querySelector('input[type="range"][data-layer-opacity="1"]');
       if(op){
@@ -10781,6 +11824,7 @@
       cur.cellSize.hc.height = sanitizeCellPx(v.hc.height, DEFAULT_SETTINGS.cellSize.hc.height);
       cur.cellSize.l.width   = sanitizeCellPx(v.l.width,   DEFAULT_SETTINGS.cellSize.l.width);
       cur.cellSize.l.height  = sanitizeCellPx(v.l.height,  DEFAULT_SETTINGS.cellSize.l.height);
+      cur.postBattle.autoDiffSync = !!v.postBattleAutoDiff;
       cur.layer.textOpacity = sanitizeOpacity(v.layerTextOpacity);
       cur.header.showOriginalHeader = !!v.showOriginalHeader;
 
