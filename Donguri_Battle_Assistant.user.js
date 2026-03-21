@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Donguri Battle Assistant
 // @namespace    https://donguri.5ch.io/
-// @version      3.0.0.1
+// @version      3.1.0.4
 // @description  5ちゃんねるのどんぐりシステムから派生したゲームの操作性を改善するためのユーザースクリプト
 // @author       福呼び草
 // @assistant    ChatGPT (OpenAI)
@@ -19,7 +19,7 @@
   // =========================
   // スクリプト自身のバージョン（スクリプト情報表示用）
   // =========================
-  const DBA_VERSION = '3.0.0.1';
+  const DBA_VERSION = '3.1.0.4';
 
   console.log('[DBA] BOOT', 'ver=', DBA_VERSION, 'href=', location.href);
 
@@ -423,6 +423,14 @@
       z-index: 999990; /* fnbar(999999)より下、マップより上 */
       pointer-events: none; /* 現段階ではページ既存操作を妨げない */
       background: transparent;
+      overflow: hidden;
+      contain: layout paint style;
+      isolation: isolate;
+      transform: translateZ(0);
+      backface-visibility: hidden;
+    }
+    #dba-battlemap-layer[data-syncing="1"] .dba-layer-cell__content {
+      visibility: hidden;
     }
     #dba-battlemap-layer-grid {
       width: 100%;
@@ -430,18 +438,24 @@
       display: grid;
       background: transparent;
       box-sizing: border-box;
+      contain: layout paint style;
     }
     .dba-layer-cell {
       position: relative;
       background: transparent;
       box-sizing: border-box;
+      overflow: hidden;
+      contain: layout paint style;
+      min-width: 0;
+      min-height: 0;
     }
     .dba-layer-cell__content {
       position: absolute;
-      inset: 0;
-      display: flex;
-      align-items: flex-start;
-      justify-content: flex-start;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
       font-size: 0.95rem; /* レイヤー上のセルのフォントサイズ */
       font-weight: 700;
       letter-spacing: -0.08rem;
@@ -457,6 +471,10 @@
       overflow-wrap: anywhere;    /* 長い単語も折り返し */
       word-break: break-word;     /* 互換用 */
       text-align: left;
+      transform: translateZ(0);
+      backface-visibility: hidden;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
       text-shadow:
         0 0 4px rgba(255,255,255,1),
         0 0 8px rgba(255,255,255,0.75);
@@ -2706,6 +2724,19 @@
     }
   }
 
+  const DBA_TOP_PROGRESS_RENDER_CACHE = {
+    pct: null,
+    matchLabel: '',
+    matchTime: '',
+    matchPct: null,
+    title: '',
+    syncDisabled: null,
+    syncHtml: '',
+    infoBtnOn: '',
+    infoSync: '',
+    infoAuto: ''
+  };
+
   function renderTopProgress(){
     const inner = document.getElementById('dba-top-progress-inner');
     const title = document.getElementById('dba-top-progress-title');
@@ -2719,10 +2750,14 @@
     const matchInner = document.getElementById('dba-top-progress-match-inner');
 
     if(!inner) return;
+    let needsHeightSync = false;
 
     const pct = estimateTopElapsedProgressPct();
-    inner.style.width = `${pct}%`;
-    inner.textContent = `${pct}%`;
+    if(DBA_TOP_PROGRESS_RENDER_CACHE.pct !== pct){
+      DBA_TOP_PROGRESS_RENDER_CACHE.pct = pct;
+      inner.style.width = `${pct}%`;
+      inner.textContent = `${pct}%`;
+    }
 
     // ===== 期内の「試合番号」&「1試合内進捗」 =====
     try{
@@ -2768,60 +2803,93 @@
       const m = Math.floor(remainSec / 60);
       const s = Math.floor(remainSec % 60);
       const matchPct = (matchSec <= 0) ? 0 : Math.max(0, Math.min(100, (inSec / matchSec) * 100));
+      const matchLabelText = `第 ${matchNo} 試合／${totalMatches}`;
+      const matchTimeText = `残り時間： ${m}分${s}秒 （およそ±20秒？の誤差あり）`;
 
       if(matchLabel){
-        matchLabel.textContent = `第 ${matchNo} 試合／${totalMatches}`;
+        if(DBA_TOP_PROGRESS_RENDER_CACHE.matchLabel !== matchLabelText){
+          DBA_TOP_PROGRESS_RENDER_CACHE.matchLabel = matchLabelText;
+          matchLabel.textContent = matchLabelText;
+        }
       }
       if(matchTime){
-        matchTime.textContent = `残り時間： ${m}分${s}秒 （およそ±20秒？の誤差あり）`;
+        if(DBA_TOP_PROGRESS_RENDER_CACHE.matchTime !== matchTimeText){
+          DBA_TOP_PROGRESS_RENDER_CACHE.matchTime = matchTimeText;
+          matchTime.textContent = matchTimeText;
+        }
       }
       if(matchInner){
         const mp = Math.floor(matchPct);
-        matchInner.style.width = `${mp}%`;
-        matchInner.textContent = `${mp}%`;
+        if(DBA_TOP_PROGRESS_RENDER_CACHE.matchPct !== mp){
+          DBA_TOP_PROGRESS_RENDER_CACHE.matchPct = mp;
+          matchInner.style.width = `${mp}%`;
+          matchInner.textContent = `${mp}%`;
+        }
       }
     }catch(_e){}
 
     // 期（第 xxxx 期）表示を最新保存値で更新
     if(title){
       const d0 = loadTopElapsedProgress();
-      title.textContent = (d0 && d0.term) ? d0.term : '第 ? 期';
+      const titleText = (d0 && d0.term) ? d0.term : '第 ? 期';
+      if(DBA_TOP_PROGRESS_RENDER_CACHE.title !== titleText){
+        DBA_TOP_PROGRESS_RENDER_CACHE.title = titleText;
+        title.textContent = titleText;
+        needsHeightSync = true;
+      }
     }
 
     // 「今すぐ同期」ボタン状態
     if(btnSync){
       const inflight = !!DBA_TOP_PROGRESS_AUTOSYNC.inFlight;
-      btnSync.disabled = inflight;
-      btnSync.innerHTML = inflight ? '同期中…' : '今すぐ<br>同期';
+      const syncHtml = inflight ? '同期中…' : '今すぐ<br>同期';
+      if(DBA_TOP_PROGRESS_RENDER_CACHE.syncDisabled !== inflight){
+        DBA_TOP_PROGRESS_RENDER_CACHE.syncDisabled = inflight;
+        btnSync.disabled = inflight;
+      }
+      if(DBA_TOP_PROGRESS_RENDER_CACHE.syncHtml !== syncHtml){
+        DBA_TOP_PROGRESS_RENDER_CACHE.syncHtml = syncHtml;
+        btnSync.innerHTML = syncHtml;
+        needsHeightSync = true;
+      }
     }
 
     // 「同期情報」スイッチ状態（見た目だけ同期）
     if(btnInfo && wrap){
       const on = (wrap.dataset.showinfo === '1');
-      btnInfo.dataset.on = on ? '1' : '0';
+      const onText = on ? '1' : '0';
+      if(DBA_TOP_PROGRESS_RENDER_CACHE.infoBtnOn !== onText){
+        DBA_TOP_PROGRESS_RENDER_CACHE.infoBtnOn = onText;
+        btnInfo.dataset.on = onText;
+        needsHeightSync = true;
+      }
     }
 
     // 右ペイン（同期情報）更新
     const data = loadTopElapsedProgress();
     const now = Date.now();
     if(infoSync){
-      if(!data){
-        infoSync.textContent = '最終同期（手動＆自動）： --- 秒前';
-      }else{
-        const sec = Math.floor(Math.max(0, now - data.fetchedAt) / 1000);
-        infoSync.textContent = `最終同期（手動＆自動）： ${sec} 秒前`;
+      const infoSyncText = !data
+        ? '最終同期（手動＆自動）： --- 秒前'
+        : `最終同期（手動＆自動）： ${Math.floor(Math.max(0, now - data.fetchedAt) / 1000)} 秒前`;
+      if(DBA_TOP_PROGRESS_RENDER_CACHE.infoSync !== infoSyncText){
+        DBA_TOP_PROGRESS_RENDER_CACHE.infoSync = infoSyncText;
+        infoSync.textContent = infoSyncText;
       }
     }
     if(infoAuto){
-      if(DBA_TOP_PROGRESS_AUTOSYNC.lastAutoAt > 0){
-        const sec = Math.floor(Math.max(0, now - DBA_TOP_PROGRESS_AUTOSYNC.lastAutoAt) / 1000);
-        infoAuto.textContent = `最終補正（自動）： ${sec} 秒前`;
-      }else{
-        infoAuto.textContent = '最終補正（自動）： --- 秒前';
+      const infoAutoText = (DBA_TOP_PROGRESS_AUTOSYNC.lastAutoAt > 0)
+        ? `最終補正（自動）： ${Math.floor(Math.max(0, now - DBA_TOP_PROGRESS_AUTOSYNC.lastAutoAt) / 1000)} 秒前`
+        : '最終補正（自動）： --- 秒前';
+      if(DBA_TOP_PROGRESS_RENDER_CACHE.infoAuto !== infoAutoText){
+        DBA_TOP_PROGRESS_RENDER_CACHE.infoAuto = infoAutoText;
+        infoAuto.textContent = infoAutoText;
       }
     }
-    // progress内容で高さが変わる可能性があるため、fnbar高さを再同期
-    try{ scheduleFnbarHeightSync(); }catch(_e){}
+    // レイアウトに影響する更新があった時だけ fnbar 高さを再同期
+    if(needsHeightSync){
+      try{ scheduleFnbarHeightSync(); }catch(_e){}
+    }
   }
 
   // =========================
@@ -2998,6 +3066,11 @@
     },
     // 攻撃後の自動差分取得
     postBattle: { autoDiffSync: false },
+    // 一定回数ごとにページ再読込して軽量化
+    lightRefresh: {
+      enabled: false,
+      battleCount: 20
+    },
     // レッドvsブルー：各セルにレギュレーションを表示するか
     rbLayer: { showCellRegulation: false },
     // レイヤー文字濃度（範囲：0〜100）
@@ -3392,6 +3465,58 @@
     );
   }
 
+  const DBA_LIGHT_REFRESH_STATE = {
+    battleCount: 0,
+    timer: 0,
+    running: false
+  };
+
+  function resetLightRefreshCounter(){
+    DBA_LIGHT_REFRESH_STATE.battleCount = 0;
+    if(DBA_LIGHT_REFRESH_STATE.timer){
+      clearTimeout(DBA_LIGHT_REFRESH_STATE.timer);
+      DBA_LIGHT_REFRESH_STATE.timer = 0;
+    }
+    DBA_LIGHT_REFRESH_STATE.running = false;
+  }
+
+  function scheduleLightRefreshAfterBattleLog(){
+    const s = loadSettings();
+    if(!s?.lightRefresh?.enabled) return false;
+    if(DBA_LIGHT_REFRESH_STATE.running) return true;
+
+    DBA_LIGHT_REFRESH_STATE.battleCount += 1;
+    const threshold = sanitizeLightRefreshBattleCount(s?.lightRefresh?.battleCount);
+    if(DBA_LIGHT_REFRESH_STATE.battleCount < threshold){
+      return false;
+    }
+
+    DBA_LIGHT_REFRESH_STATE.battleCount = 0;
+    DBA_LIGHT_REFRESH_STATE.running = true;
+
+    try{
+      const btn = document.getElementById('dba-btn-settings');
+      if(btn){
+        btn.dataset.dbaLightRefresh = '1';
+        btn.textContent = '軽量化再読込…';
+      }
+    }catch(_e){}
+
+    DBA_LIGHT_REFRESH_STATE.timer = setTimeout(() => {
+      try{
+        const url = makeTeambattleUrl({
+          m: mode,
+          dba_light_refresh: Date.now()
+        });
+        location.replace(url);
+      }catch(_e){
+        location.reload();
+      }
+    }, 600);
+
+    return true;
+  }
+
   async function scheduleBattleInfoDiffSyncAfterBattleLog(){
     const s = loadSettings();
     if(!s?.postBattle?.autoDiffSync) return false;
@@ -3443,6 +3568,7 @@
       const resultText = bodyText || '結果を表示できませんでした。';
       openBattleResultModalWithNode(resultText, 'ラピッド攻撃');
       if(hasBattleLogText(resultText)){
+        scheduleLightRefreshAfterBattleLog();
         scheduleBattleInfoDiffSyncAfterBattleLog().catch(()=>{});
       }
       return;
@@ -3455,6 +3581,7 @@
       const resultText = text || '結果を表示できませんでした。';
       openBattleResultModalWithNode(resultText, 'ラピッド攻撃');
       if(hasBattleLogText(resultText)){
+        scheduleLightRefreshAfterBattleLog();
         scheduleBattleInfoDiffSyncAfterBattleLog().catch(()=>{});
       }
       return;
@@ -3463,6 +3590,7 @@
       const resultText = (doc.body && doc.body.innerText) ? doc.body.innerText : '結果を表示できませんでした。';
       openBattleResultModalWithNode(resultText, 'ラピッド攻撃');
       if(hasBattleLogText(resultText)){
+        scheduleLightRefreshAfterBattleLog();
         scheduleBattleInfoDiffSyncAfterBattleLog().catch(()=>{});
       }
     }
@@ -3491,6 +3619,14 @@
     return x;
   }
 
+  function sanitizeLightRefreshBattleCount(v){
+    const x = Number.parseInt(v, 10);
+    if(!Number.isFinite(x)) return DEFAULT_SETTINGS.lightRefresh.battleCount;
+    if(x < 1) return 1;
+    if(x > 9999) return 9999;
+    return x;
+  }
+
   function loadSettings(){
     try{
       const raw = localStorage.getItem(LS_KEY);
@@ -3516,6 +3652,10 @@
       }
       if(obj && obj.postBattle){
         out.postBattle.autoDiffSync = !!obj.postBattle.autoDiffSync;
+      }
+      if(obj && obj.lightRefresh){
+        out.lightRefresh.enabled = !!obj.lightRefresh.enabled;
+        out.lightRefresh.battleCount = sanitizeLightRefreshBattleCount(obj.lightRefresh.battleCount);
       }
       if(obj && obj.rbLayer){
         out.rbLayer.showCellRegulation = !!obj.rbLayer.showCellRegulation;
@@ -3553,6 +3693,10 @@
           }
         },
         postBattle: { autoDiffSync: !!s?.postBattle?.autoDiffSync },
+        lightRefresh: {
+          enabled: !!s?.lightRefresh?.enabled,
+          battleCount: sanitizeLightRefreshBattleCount(s?.lightRefresh?.battleCount)
+        },
         rbLayer: { showCellRegulation: !!s?.rbLayer?.showCellRegulation },
         layer: { textOpacity: sanitizeOpacity(s?.layer?.textOpacity) },
         header: { showOriginalHeader: !!s?.header?.showOriginalHeader }
@@ -5192,6 +5336,7 @@
       const resultText = bodyText || '結果を表示できませんでした。';
       openBattleResultModalWithNode(resultText, '戦闘結果');
       if(hasBattleLogText(resultText)){
+        scheduleLightRefreshAfterBattleLog();
         scheduleBattleInfoDiffSyncAfterBattleLog().catch(()=>{});
       }
       return;
@@ -5210,6 +5355,7 @@
         const resultText = (doc.body && doc.body.innerText) ? doc.body.innerText : '結果を表示できませんでした。';
         openBattleResultModalWithNode(resultText, '戦闘結果');
         if(hasBattleLogText(resultText)){
+          scheduleLightRefreshAfterBattleLog();
           scheduleBattleInfoDiffSyncAfterBattleLog().catch(()=>{});
         }
         return;
@@ -5221,6 +5367,7 @@
         const resultText = (doc.body && doc.body.innerText) ? doc.body.innerText : imported.textContent;
         openBattleResultModalWithNode(resultText, '戦闘結果');
         if(hasBattleLogText(resultText)){
+          scheduleLightRefreshAfterBattleLog();
           scheduleBattleInfoDiffSyncAfterBattleLog().catch(()=>{});
         }
       }
@@ -5231,6 +5378,7 @@
       const resultText = (doc.body && doc.body.innerText) ? doc.body.innerText : '結果を表示できませんでした。';
       openBattleResultModalWithNode(resultText, '戦闘結果');
       if(hasBattleLogText(resultText)){
+        scheduleLightRefreshAfterBattleLog();
         scheduleBattleInfoDiffSyncAfterBattleLog().catch(()=>{});
       }
     }
@@ -5574,9 +5722,61 @@
   // =========================
   let dbaLayerInited = false;
   let dbaLayerRAF = 0;
-  let dbaLayerLastKey = '';
+  let dbaLayerLastStructKey = '';
   let dbaLayerResizeObs = null;
   let dbaLayerMutObs = null;
+  let dbaLayerCellContentMap = new Map();
+  let dbaLayerLastRectKey = '';
+  let dbaLayerLastGridStyleKey = '';
+  // light reload 時にセル内テキストの再表示待機フレーム数
+  const DBA_LAYER_TEXT_SHOW_DELAY_FRAMES = 6;
+  let dbaLayerShowRAFs = [];
+
+  function cancelBattlemapLayerShowReserve(){
+    if(!Array.isArray(dbaLayerShowRAFs)) dbaLayerShowRAFs = [];
+    for(const rafId of dbaLayerShowRAFs){
+      if(rafId){
+        cancelAnimationFrame(rafId);
+      }
+    }
+    dbaLayerShowRAFs = [];
+  }
+
+  function beginBattlemapLayerTextFreeze(){
+    const root = document.getElementById('dba-battlemap-layer');
+    if(!root) return;
+    cancelBattlemapLayerShowReserve();
+    root.dataset.syncing = '1';
+  }
+
+  function endBattlemapLayerTextFreeze(){
+    const root = document.getElementById('dba-battlemap-layer');
+    if(!root) return;
+    cancelBattlemapLayerShowReserve();
+
+    const waitFrames = clampInt(DBA_LAYER_TEXT_SHOW_DELAY_FRAMES, 1, 60);
+    let rest = waitFrames;
+
+    const step = () => {
+      const rafId = requestAnimationFrame(() => {
+        const idx = dbaLayerShowRAFs.indexOf(rafId);
+        if(idx >= 0) dbaLayerShowRAFs.splice(idx, 1);
+
+        rest -= 1;
+        if(rest > 0){
+          step();
+          return;
+        }
+
+        const root2 = document.getElementById('dba-battlemap-layer');
+        if(!root2) return;
+        root2.dataset.syncing = '0';
+      });
+      dbaLayerShowRAFs.push(rafId);
+    };
+
+    step();
+  }
 
   function ensureBattlemapLayerDOM(){
     if(document.getElementById('dba-battlemap-layer')) return;
@@ -5591,7 +5791,9 @@
   function rebuildLayerCells(rows, cols){
     const grid = document.getElementById('dba-battlemap-layer-grid');
     if(!grid) return;
+    beginBattlemapLayerTextFreeze();
     grid.textContent = '';
+    dbaLayerCellContentMap = new Map();
     const frag = document.createDocumentFragment();
     for(let r=0;r<rows;r++){
       for(let c=0;c<cols;c++){
@@ -5603,6 +5805,7 @@
         content.className = 'dba-layer-cell__content';
         content.textContent = ''; // 将来：ここに文字列/絵文字を配置
         cell.appendChild(content);
+        dbaLayerCellContentMap.set(`${r},${c}`, content);
         frag.appendChild(cell);
       }
     }
@@ -5620,8 +5823,58 @@
       cols: colN,
       gtc: cs.gridTemplateColumns,
       gtr: cs.gridTemplateRows,
-      gap: cs.gap || `${cs.rowGap || '0px'} ${cs.columnGap || '0px'}`
+      gap: cs.gap || `${cs.rowGap || '0px'} ${cs.columnGap || '0px'}`,
+      rowGap: cs.rowGap || '0px',
+      colGap: cs.columnGap || '0px'
     };
+  }
+
+  function parseCssPx(value){
+    const n = Number.parseFloat(String(value || '').trim());
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  function buildStableGridTrackList(totalPx, count){
+    const n = Math.max(0, Number(count) || 0);
+    const total = Math.max(0, Math.round(Number(totalPx) || 0));
+    if(n <= 0) return '';
+    if(n === 1) return `${total}px`;
+
+    const base = Math.floor(total / n);
+    let rem = total - (base * n);
+    const out = [];
+    for(let i=0;i<n;i++){
+      const add = rem > 0 ? 1 : 0;
+      out.push(`${base + add}px`);
+      if(rem > 0) rem--;
+    }
+    return out.join(' ');
+  }
+
+  function getStableLayerTargetMetrics(target){
+    if(!target) return null;
+    const rect = target.getBoundingClientRect();
+    const left = Math.round(rect.left);
+    const top = Math.round(rect.top);
+    const width = Math.max(
+      0,
+      Math.round(
+        target.clientWidth ||
+        target.offsetWidth ||
+        rect.width ||
+        0
+      )
+    );
+    const height = Math.max(
+      0,
+      Math.round(
+        target.clientHeight ||
+        target.offsetHeight ||
+        rect.height ||
+        0
+      )
+    );
+    return { left, top, width, height };
   }
 
   function syncBattlemapLayer(){
@@ -5631,6 +5884,7 @@
 
     let target = null;
     let spec = null;
+    let layoutChanged = false;
 
     if(mode === 'rb'){
       target = document.getElementById('gridWrap');
@@ -5651,25 +5905,55 @@
       if(!spec.rows || !spec.cols) return false;
     }
 
-    const rect = target.getBoundingClientRect();
+    const metrics = getStableLayerTargetMetrics(target);
+    if(!metrics) return false;
     // rectがゼロのときはまだ描画途中
-    if(rect.width <= 1 || rect.height <= 1) return false;
+    if(metrics.width <= 1 || metrics.height <= 1) return false;
 
     // 位置・サイズ追従（position:fixed）
-    root.style.left = rect.left + 'px';
-    root.style.top = rect.top + 'px';
-    root.style.width = rect.width + 'px';
-    root.style.height = rect.height + 'px';
+    const rectKey = [
+      metrics.left,
+      metrics.top,
+      metrics.width,
+      metrics.height
+    ].join('|');
+    if(rectKey !== dbaLayerLastRectKey){
+      layoutChanged = true;
+      dbaLayerLastRectKey = rectKey;
+      root.style.left = metrics.left + 'px';
+      root.style.top = metrics.top + 'px';
+      root.style.width = metrics.width + 'px';
+      root.style.height = metrics.height + 'px';
+    }
+
+    const colGapPx = Math.max(0, Math.round(parseCssPx(spec.colGap || '0px')));
+    const rowGapPx = Math.max(0, Math.round(parseCssPx(spec.rowGap || '0px')));
+    const tracksTotalW = Math.max(0, metrics.width - (Math.max(0, spec.cols - 1) * colGapPx));
+    const tracksTotalH = Math.max(0, metrics.height - (Math.max(0, spec.rows - 1) * rowGapPx));
+    const stableGtc = buildStableGridTrackList(tracksTotalW, spec.cols);
+    const stableGtr = buildStableGridTrackList(tracksTotalH, spec.rows);
+    const stableGap = `${rowGapPx}px ${colGapPx}px`;
 
     // グリッド仕様追従
-    grid.style.gridTemplateColumns = spec.gtc;
-    grid.style.gridTemplateRows = spec.gtr;
-    grid.style.gap = spec.gap;
+    const gridStyleKey = `${stableGtc}|${stableGtr}|${stableGap}`;
+    if(gridStyleKey !== dbaLayerLastGridStyleKey){
+      layoutChanged = true;
+      dbaLayerLastGridStyleKey = gridStyleKey;
+      grid.style.gridTemplateColumns = stableGtc;
+      grid.style.gridTemplateRows = stableGtr;
+      grid.style.gap = stableGap;
+    }
 
-    const key = `${mode}:${spec.rows}x${spec.cols}:${spec.gtc}|${spec.gtr}|${spec.gap}`;
-    if(key !== dbaLayerLastKey){
-      dbaLayerLastKey = key;
+    const structKey = `${mode}:${spec.rows}x${spec.cols}`;
+    if(structKey !== dbaLayerLastStructKey){
+      layoutChanged = true;
+      dbaLayerLastStructKey = structKey;
       rebuildLayerCells(spec.rows, spec.cols);
+    }
+
+    if(layoutChanged){
+      beginBattlemapLayerTextFreeze();
+      endBattlemapLayerTextFreeze();
     }
 
     return true;
@@ -5679,7 +5963,10 @@
     if(dbaLayerRAF) return;
     dbaLayerRAF = requestAnimationFrame(() => {
       dbaLayerRAF = 0;
-      syncBattlemapLayer();
+      const ok = syncBattlemapLayer();
+      if(!ok){
+        endBattlemapLayerTextFreeze();
+      }
     });
   }
 
@@ -5713,7 +6000,10 @@
         dbaLayerResizeObs.observe(target);
       }
       dbaLayerMutObs = new MutationObserver(() => scheduleBattlemapLayerSync());
-      dbaLayerMutObs.observe(document.documentElement, { childList: true, subtree: true, attributes: true });
+      dbaLayerMutObs.observe(document.body || document.documentElement, {
+        childList: true,
+        subtree: true
+      });
     };
 
     if(document.body) start();
@@ -6248,8 +6538,8 @@
       pop.appendChild(b);
     }
 
-    
-    
+
+
     placePopupNearPoint(pop, clientX, clientY);
     return true;
   }
@@ -10217,7 +10507,7 @@
   // バトルマップ差し替え（トップページから取得→マップ部分だけ再構成）
   //  - 目的：スクロールや更新時のちらつきを抑えつつ、最新マップへ更新してから詳細取得へ進む
   //  - 注意：DOMParser由来の <script> は inert（非実行）なので、差し替え後に再生成して実行する
-  // 
+  //
   // header + チーム情報2テーブル差し替え（トップページHTMLから）
   //  - 戦況情報ボタン（クリック/長押し）実行時に、ページ上部の表示も最新化する
   //  - 対象：
@@ -11557,17 +11847,17 @@
   }
 
   function setLayerCellText(row, col, text){
-    const cell = document.querySelector(`#dba-battlemap-layer-grid .dba-layer-cell[data-row="${row}"][data-col="${col}"] .dba-layer-cell__content`);
+    const cell = dbaLayerCellContentMap.get(`${row},${col}`) || null;
     if(cell) cell.textContent = text;
   }
 
   function getLayerCellText(row, col){
-    const cell = document.querySelector(`#dba-battlemap-layer-grid .dba-layer-cell[data-row="${row}"][data-col="${col}"] .dba-layer-cell__content`);
+    const cell = dbaLayerCellContentMap.get(`${row},${col}`) || null;
     return cell ? String(cell.textContent || '') : '';
   }
 
   function clearLayerTexts(){
-    for(const el of document.querySelectorAll('#dba-battlemap-layer-grid .dba-layer-cell__content')){
+    for(const el of dbaLayerCellContentMap.values()){
       el.textContent = '';
     }
   }
@@ -12867,6 +13157,66 @@
       mid.appendChild(row);
     })();
 
+    // 一定回数ごとの軽量化再読込
+    (function mkLightRefreshBlock(){
+      const row = document.createElement('div');
+      row.className = 'dba-setting-row';
+
+      const lab = document.createElement('label');
+      lab.className = 'dba-setting-checkline';
+
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.checked = !!settings?.lightRefresh?.enabled;
+      input.dataset.lightRefreshEnabled = '1';
+
+      const txt = document.createElement('span');
+      txt.className = 'dba-setting-checktext';
+      txt.textContent = 'セル攻撃の戦闘ログを一定回数受信するごとに、ページを再読込して軽量化する。';
+
+      lab.appendChild(input);
+      lab.appendChild(txt);
+      row.appendChild(lab);
+
+      const sub = document.createElement('div');
+      sub.style.marginTop = '8px';
+      sub.style.display = 'flex';
+      sub.style.alignItems = 'center';
+      sub.style.justifyContent = 'flex-start';
+      sub.style.gap = '6px';
+      sub.style.flexWrap = 'wrap';
+      sub.style.textAlign = 'left';
+
+      const pre = document.createElement('span');
+      pre.textContent = '戦闘ログ';
+
+      const cnt = document.createElement('input');
+      cnt.type = 'number';
+      cnt.min = '1';
+      cnt.max = '9999';
+      cnt.step = '1';
+      cnt.value = String(sanitizeLightRefreshBattleCount(settings?.lightRefresh?.battleCount));
+      cnt.dataset.lightRefreshBattleCount = '1';
+
+      const suf = document.createElement('span');
+      suf.textContent = '回ごと';
+
+      const note = document.createElement('div');
+      note.style.width = '100%';
+      note.style.fontSize = '0.92em';
+      note.style.lineHeight = '1.35';
+      note.style.opacity = '0.9';
+      note.textContent = '※ブラウザ拡張のように Firefox 全体の Cache を直接消すのではなく、ページ再読込でページ内状態を掃除する代替策です。';
+
+      sub.appendChild(pre);
+      sub.appendChild(cnt);
+      sub.appendChild(suf);
+      sub.appendChild(note);
+
+      row.appendChild(sub);
+      mid.appendChild(row);
+    })();
+
     (function mkCellSizeBlock(){
       const row = document.createElement('div');
       row.className = 'dba-setting-row';
@@ -13056,6 +13406,8 @@
         hc: { width: 30, height: 30 },
         l:  { width: 30, height: 30 },
         postBattleAutoDiff: false,
+        lightRefreshEnabled: false,
+        lightRefreshBattleCount: DEFAULT_SETTINGS.lightRefresh.battleCount,
         rbShowCellRegulation: false,
         layerTextOpacity: 100,
         showOriginalHeader: false
@@ -13067,6 +13419,10 @@
       }
       const pb = dlg.querySelector('input[type="checkbox"][data-post-battle-auto-diff="1"]');
       if(pb) out.postBattleAutoDiff = !!pb.checked;
+      const lre = dlg.querySelector('input[type="checkbox"][data-light-refresh-enabled="1"]');
+      if(lre) out.lightRefreshEnabled = !!lre.checked;
+      const lrc = dlg.querySelector('input[type="number"][data-light-refresh-battle-count="1"]');
+      if(lrc) out.lightRefreshBattleCount = Number.parseInt(lrc.value, 10);
       const rbReg = dlg.querySelector('input[type="checkbox"][data-rb-show-cell-regulation="1"]');
       if(rbReg) out.rbShowCellRegulation = !!rbReg.checked;
       const op = dlg.querySelector('input[type="range"][data-layer-opacity="1"]');
@@ -13082,6 +13438,14 @@
         const axis = inp.dataset.axis;
         const eff = getEffectiveCellSizeForMode(k, s);
         inp.value = String(axis === 'width' ? eff.width : eff.height);
+      }
+      const lre = dlg.querySelector('input[type="checkbox"][data-light-refresh-enabled="1"]');
+      if(lre){
+        lre.checked = !!s?.lightRefresh?.enabled;
+      }
+      const lrc = dlg.querySelector('input[type="number"][data-light-refresh-battle-count="1"]');
+      if(lrc){
+        lrc.value = String(sanitizeLightRefreshBattleCount(s?.lightRefresh?.battleCount));
       }
       const pb = dlg.querySelector('input[type="checkbox"][data-post-battle-auto-diff="1"]');
       if(pb){
@@ -13123,6 +13487,8 @@
       cur.cellSize.l.width   = sanitizeCellPx(v.l.width,   DEFAULT_SETTINGS.cellSize.l.width);
       cur.cellSize.l.height  = sanitizeCellPx(v.l.height,  DEFAULT_SETTINGS.cellSize.l.height);
       cur.postBattle.autoDiffSync = !!v.postBattleAutoDiff;
+      cur.lightRefresh.enabled = !!v.lightRefreshEnabled;
+      cur.lightRefresh.battleCount = sanitizeLightRefreshBattleCount(v.lightRefreshBattleCount);
       cur.rbLayer.showCellRegulation = !!v.rbShowCellRegulation;
       cur.layer.textOpacity = sanitizeOpacity(v.layerTextOpacity);
       cur.header.showOriginalHeader = !!v.showOriginalHeader;
