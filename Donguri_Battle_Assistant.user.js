@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Donguri Battle Assistant
 // @namespace    https://donguri.5ch.io/
-// @version      2.0.4.1
+// @version      3.0.0.1
 // @description  5ちゃんねるのどんぐりシステムから派生したゲームの操作性を改善するためのユーザースクリプト
 // @author       福呼び草
 // @assistant    ChatGPT (OpenAI)
@@ -19,7 +19,7 @@
   // =========================
   // スクリプト自身のバージョン（スクリプト情報表示用）
   // =========================
-  const DBA_VERSION = '2.0.4.1';
+  const DBA_VERSION = '3.0.0.1';
 
   console.log('[DBA] BOOT', 'ver=', DBA_VERSION, 'href=', location.href);
 
@@ -156,12 +156,28 @@
       line-height: 1.2;
       white-space: nowrap;
     }
+    .dba-fn-header-info__reg {
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 0;
+      min-width: 0;
+      flex-wrap: wrap;
+      font-size: 1.1em;
+      font-weight: 800;
+      line-height: 1.2;
+    }
+    .dba-fn-header-info__reg-label,
+    .dba-fn-header-info__reg-value,
+    .dba-fn-header-info__sep {
+      white-space: nowrap;
+    }
     .dba-fn-header-info__team {
       display: inline-flex;
       align-items: center;
       justify-content: flex-start;
       gap: 0;
-      margin-left: 8px;
+      margin-left: 0;
       min-width: 0;
       flex-wrap: wrap;
       font-size: 1.1em;
@@ -446,6 +462,19 @@
         0 0 8px rgba(255,255,255,0.75);
     }
 
+    /* ===== バトルマップ直下の情報テーブル（2連table）の縦伸び抑制 ===== */
+    div[style*="display:inline-flex"] {
+      align-items: flex-start !important;
+      gap: 8px;
+    }
+    div[style*="display:inline-flex"] > table {
+      align-self: flex-start !important;
+      flex: 0 0 auto !important;
+      height: auto !important;
+      min-height: 0 !important;
+      max-height: none !important;
+    }
+
     /* 汎用ボタン（機能系ボタン共通） */
     .dba-btn-fn {
       appearance: none;
@@ -483,6 +512,49 @@
     .dba-btn-fn:focus {
       outline: 2px solid #ea0000;
       outline-offset: 2px;
+    }
+    /* ===== ファンクションボタン用ホバーヒント ===== */
+    #dba-fn-tooltip {
+      position: fixed;
+      left: 0;
+      top: 0;
+      z-index: 1000001; /* fnbar(999999)より上 */
+      display: none;
+      max-width: min(320px, calc(100vw - 24px));
+      padding: 8px 10px;
+      border: 2px solid #000;
+      border-radius: 12px;
+      background: rgba(255, 255, 225, 0.98);
+      color: #111;
+      font-size: 0.95em;
+      font-weight: 700;
+      line-height: 1.35;
+      white-space: pre-line;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.28);
+      pointer-events: none;
+      user-select: none;
+    }
+    #dba-fn-tooltip[data-open="1"] {
+      display: block;
+    }
+    #dba-fn-tooltip::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: -10px;
+      width: 0;
+      height: 0;
+      border-left: 8px solid transparent;
+      border-right: 8px solid transparent;
+      border-top: 10px solid rgba(255, 255, 225, 0.98);
+      filter: drop-shadow(0 1px 0 #000);
+    }
+    #dba-fn-tooltip[data-pos="below"]::after {
+      top: -10px;
+      bottom: auto;
+      border-top: none;
+      border-bottom: 10px solid rgba(255, 255, 225, 0.98);
     }
     /* ===== モーダル（標準） ===== */
     .dba-m-std {
@@ -942,7 +1014,18 @@
     }
     #dba-m-roster.dba-m-std .dba-modal__mid {
       max-height: calc(min(88vh, calc(100vh - 24px)) - 110px);
-      overflow: auto;
+      overflow: hidden; /* mid全体はスクロールさせず、内部のリストだけをスクロール */
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-height: 0;
+    }
+    #dba-roster-box {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      flex: 1 1 auto;
+      min-height: 0;
     }
     .dba-roster-head {
       display: grid;
@@ -991,13 +1074,39 @@
       align-items: center;
       justify-content: flex-start;
       margin: 12px 0;
+      flex: 0 0 auto;
     }
     .dba-roster-list {
       border: 1px solid #000;
       border-radius: 12px;
       background: #fff;
       padding: 8px;
-      overflow: hidden;
+      overflow: auto;
+      position: relative;
+      flex: 1 1 auto;
+      min-height: 0;
+      max-height: none;
+      scrollbar-gutter: stable both-edges;
+      overscroll-behavior: contain;
+      overscroll-behavior-y: contain;
+      -webkit-overflow-scrolling: touch;
+    }
+    .dba-roster-list--insertpick {
+      touch-action: pan-y;
+    }
+    .dba-roster-list--insertpick .dba-roster-item {
+      cursor: default;
+    }
+    .dba-roster-insert-line {
+      position: absolute;
+      left: 6px;
+      right: 6px;
+      height: 0;
+      border-top: 4px solid #ea0000;
+      border-radius: 999px;
+      pointer-events: none;
+      z-index: 5;
+      display: none;
     }
     .dba-roster-item {
       display: grid;
@@ -1734,6 +1843,124 @@
   }
 
   // =========================
+  // ファンクションボタン用ホバーヒント
+  //  - マウスカーソルを1秒以上静止で表示
+  //  - 長押しやタッチ操作は対象外
+  // =========================
+  const DBA_FN_TOOLTIP = {
+    timer: 0,
+    anchor: null,
+    text: '',
+    mouseX: 0,
+    mouseY: 0
+  };
+
+  function ensureFnTooltip(){
+    let el = document.getElementById('dba-fn-tooltip');
+    if(el) return el;
+    el = document.createElement('div');
+    el.id = 'dba-fn-tooltip';
+    el.dataset.open = '0';
+    el.dataset.pos = 'above';
+    (document.body || document.documentElement).appendChild(el);
+    return el;
+  }
+
+  function hideFnTooltip(){
+    if(DBA_FN_TOOLTIP.timer){
+      clearTimeout(DBA_FN_TOOLTIP.timer);
+      DBA_FN_TOOLTIP.timer = 0;
+    }
+    DBA_FN_TOOLTIP.anchor = null;
+    const el = document.getElementById('dba-fn-tooltip');
+    if(el){
+      el.dataset.open = '0';
+      el.textContent = '';
+    }
+  }
+
+  function showFnTooltipNearButton(btn, text){
+    if(!(btn instanceof HTMLElement)) return;
+    const el = ensureFnTooltip();
+    if(!el) return;
+
+    el.textContent = String(text || '');
+    el.dataset.open = '1';
+
+    const rect = btn.getBoundingClientRect();
+    const margin = 10;
+
+    // 一旦表示して実寸取得
+    el.style.left = '0px';
+    el.style.top = '0px';
+
+    const tipRect = el.getBoundingClientRect();
+    let left = rect.left + (rect.width / 2) - (tipRect.width / 2);
+    left = Math.max(12, Math.min(left, window.innerWidth - tipRect.width - 12));
+
+    let top = rect.top - tipRect.height - margin;
+    let pos = 'above';
+    if(top < 8){
+      top = rect.bottom + margin;
+      pos = 'below';
+    }
+
+    el.dataset.pos = pos;
+    el.style.left = `${Math.round(left)}px`;
+    el.style.top = `${Math.round(top)}px`;
+  }
+
+  function scheduleFnTooltip(btn, text){
+    if(DBA_FN_TOOLTIP.timer){
+      clearTimeout(DBA_FN_TOOLTIP.timer);
+      DBA_FN_TOOLTIP.timer = 0;
+    }
+    DBA_FN_TOOLTIP.anchor = btn;
+    DBA_FN_TOOLTIP.text = String(text || '');
+    DBA_FN_TOOLTIP.timer = setTimeout(() => {
+      DBA_FN_TOOLTIP.timer = 0;
+      if(DBA_FN_TOOLTIP.anchor !== btn) return;
+      showFnTooltipNearButton(btn, DBA_FN_TOOLTIP.text);
+    }, 1000);
+  }
+
+  function bindFnButtonTooltip(btn, text){
+    if(!(btn instanceof HTMLElement)) return;
+    const hintText = String(text || '');
+
+    btn.addEventListener('mouseenter', (e) => {
+      if(!(e instanceof MouseEvent)) return;
+      hideFnTooltip();
+      scheduleFnTooltip(btn, hintText);
+    });
+
+    btn.addEventListener('mousemove', (e) => {
+      if(!(e instanceof MouseEvent)) return;
+      const x = Number(e.clientX || 0);
+      const y = Number(e.clientY || 0);
+      const dx = Math.abs(x - DBA_FN_TOOLTIP.mouseX);
+      const dy = Math.abs(y - DBA_FN_TOOLTIP.mouseY);
+      DBA_FN_TOOLTIP.mouseX = x;
+      DBA_FN_TOOLTIP.mouseY = y;
+
+      // 「静止1秒」を満たすため、ある程度動いたらタイマーをやり直す
+      if(dx > 2 || dy > 2){
+        const el = document.getElementById('dba-fn-tooltip');
+        if(el && el.dataset.open === '1'){
+          showFnTooltipNearButton(btn, hintText);
+        }else{
+          scheduleFnTooltip(btn, hintText);
+        }
+      }
+    });
+
+    btn.addEventListener('mouseleave', hideFnTooltip);
+    btn.addEventListener('blur', hideFnTooltip);
+    btn.addEventListener('mousedown', hideFnTooltip);
+    btn.addEventListener('pointerdown', hideFnTooltip);
+  }
+
+  // =========================
   // fnbar（#dba-function-section）の高さを実測し、CSS変数へ反映
   //  - body の padding-top が常に最新のfnbar高さに追従するための仕組み
   // =========================
@@ -2063,6 +2290,119 @@
     return out;
   }
 
+  const DBA_RB_UNIFIED_REG = {
+    value: '---',
+    lastCellKey: '',
+    inFlight: null
+  };
+
+  function getRbUnifiedRegDisplayText(){
+    const v = sanitizeText(DBA_RB_UNIFIED_REG.value || '');
+    return v || '---';
+  }
+
+  function pickRbUnifiedRegProbeCell(docLike){
+    if(mode !== 'rb') return null;
+
+    let snap = null;
+    try{
+      snap = getBattlemapSnapshotFromDoc(docLike || document);
+    }catch(_e){
+      snap = null;
+    }
+
+    const tryLists = [
+      Array.isArray(snap?.visibleList) ? snap.visibleList : [],
+      Array.isArray(snap?.exploredList) ? snap.exploredList : []
+    ];
+
+    for(const list of tryLists){
+      for(const rc of list){
+        if(!Array.isArray(rc) || rc.length < 2) continue;
+        const row = Number(rc[0]);
+        const col = Number(rc[1]);
+        if(!Number.isFinite(row) || !Number.isFinite(col)) continue;
+        if(row < 0 || col < 0) continue;
+        return { row, col };
+      }
+    }
+
+    const colorKeys = Object.keys((snap && snap.cellColors) ? snap.cellColors : {});
+    if(colorKeys.length > 0){
+      const m = String(colorKeys[0] || '').match(/^(\d+)-(\d+)$/);
+      if(m){
+        return { row: Number(m[1]), col: Number(m[2]) };
+      }
+    }
+
+    const rows = Number(snap?.rows || 0);
+    const cols = Number(snap?.cols || 0);
+    if(Number.isFinite(rows) && Number.isFinite(cols) && rows > 0 && cols > 0){
+      return { row: 0, col: 0 };
+    }
+
+    return null;
+  }
+
+  async function updateRbUnifiedRegDisplay(force){
+    if(mode !== 'rb') return '---';
+
+    if(DBA_RB_UNIFIED_REG.inFlight){
+      try{
+        await DBA_RB_UNIFIED_REG.inFlight;
+      }catch(_e){}
+      return getRbUnifiedRegDisplayText();
+    }
+
+    const probe = pickRbUnifiedRegProbeCell(document);
+    if(!probe){
+      DBA_RB_UNIFIED_REG.value = '---';
+      if(document.getElementById('dba-fn-header-info')){
+        renderFnHeaderInfo();
+        scheduleFnbarHeightSync();
+      }
+      return '---';
+    }
+
+    const probeKey = `${probe.row},${probe.col}`;
+    if(
+      !force &&
+      DBA_RB_UNIFIED_REG.lastCellKey === probeKey &&
+      sanitizeText(DBA_RB_UNIFIED_REG.value || '')
+    ){
+      return getRbUnifiedRegDisplayText();
+    }
+
+    const p = (async () => {
+      try{
+        const d = await fetchCellDetail(probe.row, probe.col);
+        const reg = sanitizeText(d && d.reg ? d.reg : '');
+        DBA_RB_UNIFIED_REG.value = reg || '---';
+        DBA_RB_UNIFIED_REG.lastCellKey = probeKey;
+      }catch(_e){
+        if(!sanitizeText(DBA_RB_UNIFIED_REG.value || '')){
+          DBA_RB_UNIFIED_REG.value = '---';
+        }
+      }
+
+      if(document.getElementById('dba-fn-header-info')){
+        renderFnHeaderInfo();
+        scheduleFnbarHeightSync();
+      }
+
+      return getRbUnifiedRegDisplayText();
+    })();
+
+    DBA_RB_UNIFIED_REG.inFlight = p;
+    try{
+      return await p;
+    }finally{
+      if(DBA_RB_UNIFIED_REG.inFlight === p){
+        DBA_RB_UNIFIED_REG.inFlight = null;
+      }
+    }
+  }
+
   function normalizeAnimLinkText(text){
     const raw = String(text || '').replace(/\s+/g, ' ').trim();
     if(!raw) return { left: '[', body: 'アニメーション', right: ']' };
@@ -2122,13 +2462,35 @@
     }
     wrap.appendChild(modeLabel);
 
+    if(mode === 'rb'){
+      const reg = document.createElement('span');
+      reg.className = 'dba-fn-header-info__reg';
+
+      const regLabel = document.createElement('span');
+      regLabel.className = 'dba-fn-header-info__reg-label';
+      regLabel.textContent = 'Reg.：';
+      reg.appendChild(regLabel);
+
+      const regValue = document.createElement('span');
+      regValue.className = 'dba-fn-header-info__reg-value';
+      regValue.textContent = getRbUnifiedRegDisplayText();
+      reg.appendChild(regValue);
+
+      wrap.appendChild(reg);
+    }
+
     if(mode === 'rb' && (info.teamName || info.teamColor)){
       const team = document.createElement('span');
       team.className = 'dba-fn-header-info__team';
 
+      const sep = document.createElement('span');
+      sep.className = 'dba-fn-header-info__sep';
+      sep.textContent = ' ／ ';
+      team.appendChild(sep);
+
       const lab = document.createElement('span');
       lab.className = 'dba-fn-header-info__team-label';
-      lab.textContent = 'チームカラー：';
+      lab.textContent = 'Team：';
       team.appendChild(lab);
 
       if(info.teamName){
@@ -2636,6 +2998,8 @@
     },
     // 攻撃後の自動差分取得
     postBattle: { autoDiffSync: false },
+    // レッドvsブルー：各セルにレギュレーションを表示するか
+    rbLayer: { showCellRegulation: false },
     // レイヤー文字濃度（範囲：0〜100）
     layer: { textOpacity: 100 },
     // オリジナルHTMLの<header>要素を表示するか
@@ -3150,11 +3514,14 @@
           out.cellSize[k].height = px;
         }
       }
-      if(obj && obj.layer){
-        out.layer.textOpacity = sanitizeOpacity(obj.layer.textOpacity);
-      }
       if(obj && obj.postBattle){
         out.postBattle.autoDiffSync = !!obj.postBattle.autoDiffSync;
+      }
+      if(obj && obj.rbLayer){
+        out.rbLayer.showCellRegulation = !!obj.rbLayer.showCellRegulation;
+      }
+      if(obj && obj.layer){
+        out.layer.textOpacity = sanitizeOpacity(obj.layer.textOpacity);
       }
       if(obj && obj.header){
         out.header.showOriginalHeader = !!obj.header.showOriginalHeader;
@@ -3186,6 +3553,7 @@
           }
         },
         postBattle: { autoDiffSync: !!s?.postBattle?.autoDiffSync },
+        rbLayer: { showCellRegulation: !!s?.rbLayer?.showCellRegulation },
         layer: { textOpacity: sanitizeOpacity(s?.layer?.textOpacity) },
         header: { showOriginalHeader: !!s?.header?.showOriginalHeader }
       };
@@ -6416,7 +6784,7 @@
     return createRosterIfNeeded();
   }
 
-  function setPreset(name, triple){
+  function setPresetAt(name, triple, insertIndex){
     const { store, roster } = getActiveRoster();
     const n = sanitizeText(name);
     if(!n) throw new Error('プリセット名が空です');
@@ -6429,13 +6797,22 @@
       (triple[1] === null) ? null : Number(triple[1]),
       (triple[2] === null) ? null : Number(triple[2])
     ];
-    // 既存プリセットを上書きする場合は順序は維持、新規だけ末尾追加
+    // 既存プリセットを上書きする場合は順序は維持。
+    // 新規プリセットだけ、指定位置へ挿入する。
     if(!existed){
-      roster.presetOrder.push(n);
+      const idxRaw = Number(insertIndex);
+      const idx = Number.isFinite(idxRaw)
+        ? Math.max(0, Math.min(roster.presetOrder.length, Math.floor(idxRaw)))
+        : roster.presetOrder.length;
+      roster.presetOrder.splice(idx, 0, n);
     }
     roster.updatedAt = nowIso();
     store.rosters[store.activeId] = roster;
     saveRosterStore(store);
+  }
+
+  function setPreset(name, triple){
+    setPresetAt(name, triple, null);
   }
 
   function deletePreset(name){
@@ -6462,6 +6839,155 @@
       return true;
     }
     return false;
+  }
+
+  function calcRosterInsertIndexFromClientY(listEl, clientY){
+    if(!(listEl instanceof HTMLElement)) return 0;
+
+    const items = Array.from(listEl.querySelectorAll('.dba-roster-item'));
+    if(items.length === 0) return 0;
+
+    for(let i = 0; i < items.length; i++){
+      const rect = items[i].getBoundingClientRect();
+      const midY = rect.top + (rect.height / 2);
+      if(clientY < midY){
+        return i;
+      }
+    }
+    return items.length;
+  }
+
+  function showRosterInsertLineAtIndex(listEl, idx){
+    if(!(listEl instanceof HTMLElement)) return;
+    const line = listEl.querySelector('.dba-roster-insert-line');
+    if(!(line instanceof HTMLElement)) return;
+
+    const items = Array.from(listEl.querySelectorAll('.dba-roster-item'));
+    const listRect = listEl.getBoundingClientRect();
+    let y = 0;
+
+    if(items.length === 0){
+      y = 8;
+    }else if(idx <= 0){
+      const r0 = items[0].getBoundingClientRect();
+      y = (r0.top - listRect.top) + listEl.scrollTop;
+    }else if(idx >= items.length){
+      const last = items[items.length - 1];
+      const rl = last.getBoundingClientRect();
+      const mb = parseFloat(getComputedStyle(last).marginBottom || '0') || 0;
+      y = (rl.bottom - listRect.top) + listEl.scrollTop + mb;
+    }else{
+      const rt = items[idx].getBoundingClientRect();
+      y = (rt.top - listRect.top) + listEl.scrollTop;
+    }
+
+    listEl.dataset.dbaInsertIndex = String(idx);
+    line.style.top = `${Math.max(0, Math.floor(y))}px`;
+    line.style.display = 'block';
+  }
+
+  function updateRosterInsertLineFromClientY(listEl, clientY){
+    if(!(listEl instanceof HTMLElement)) return 0;
+    const idx = calcRosterInsertIndexFromClientY(listEl, clientY);
+    showRosterInsertLineAtIndex(listEl, idx);
+    return idx;
+  }
+
+  function canScrollElementByDelta(el, deltaY){
+    if(!(el instanceof HTMLElement)) return false;
+    const max = Math.max(0, el.scrollHeight - el.clientHeight);
+    if(max <= 0) return false;
+    if(deltaY > 0) return el.scrollTop < max;
+    if(deltaY < 0) return el.scrollTop > 0;
+    return false;
+  }
+
+  function installRosterInsertPickScrollLock(listEl){
+    if(!(listEl instanceof HTMLElement)) return () => {};
+    if(listEl.dataset.dbaInsertPickScrollLock === '1'){
+      return () => {};
+    }
+    listEl.dataset.dbaInsertPickScrollLock = '1';
+
+    let touchStartY = 0;
+
+    const onWheelCapture = (e) => {
+      const rosterDlg = document.getElementById('dba-m-roster');
+      if(!rosterDlg || rosterDlg.dataset.dbaAddPickMode !== '1') return;
+
+      const target = e.target;
+      if(!(target instanceof Node) || !listEl.contains(target)) return;
+
+      const dy = Number(e.deltaY || 0);
+
+      // list 自身がスクロール可能なら、そのスクロールだけを許可して背面伝播を止める
+      if(canScrollElementByDelta(listEl, dy)){
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        listEl.scrollTop += dy;
+        return;
+      }
+
+      // 端まで来ていても、背面 modal / page 本体へ連鎖させない
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+    };
+
+    const onTouchStartCapture = (e) => {
+      const rosterDlg = document.getElementById('dba-m-roster');
+      if(!rosterDlg || rosterDlg.dataset.dbaAddPickMode !== '1') return;
+      const t = e.touches && e.touches[0];
+      if(!t) return;
+      touchStartY = t.clientY;
+    };
+
+    const onTouchMoveCapture = (e) => {
+      const rosterDlg = document.getElementById('dba-m-roster');
+      if(!rosterDlg || rosterDlg.dataset.dbaAddPickMode !== '1') return;
+
+      const target = e.target;
+      if(!(target instanceof Node) || !listEl.contains(target)) return;
+
+      const t = e.touches && e.touches[0];
+      if(!t) return;
+
+      const deltaY = touchStartY - t.clientY;
+
+      if(canScrollElementByDelta(listEl, deltaY)){
+        // list 内だけスクロールさせ、背面の modal / page には渡さない
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        return;
+      }
+
+      // 端でも背面へスクロールを漏らさない
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+    };
+
+    const onScrollChainBlock = (e) => {
+      const rosterDlg = document.getElementById('dba-m-roster');
+      if(!rosterDlg || rosterDlg.dataset.dbaAddPickMode !== '1') return;
+      const target = e.target;
+      if(!(target instanceof Node) || !listEl.contains(target)) return;
+      e.stopPropagation();
+    };
+
+    document.addEventListener('wheel', onWheelCapture, { capture: true, passive: false });
+    document.addEventListener('touchstart', onTouchStartCapture, { capture: true, passive: true });
+    document.addEventListener('touchmove', onTouchMoveCapture, { capture: true, passive: false });
+    listEl.addEventListener('scroll', onScrollChainBlock, { capture: true, passive: true });
+
+    return () => {
+      delete listEl.dataset.dbaInsertPickScrollLock;
+      document.removeEventListener('wheel', onWheelCapture, { capture: true });
+      document.removeEventListener('touchstart', onTouchStartCapture, { capture: true });
+      document.removeEventListener('touchmove', onTouchMoveCapture, { capture: true });
+      listEl.removeEventListener('scroll', onScrollChainBlock, { capture: true });
+    };
   }
 
   function presetMetaText(triple){
@@ -6547,6 +7073,7 @@
 
     const box = document.createElement('div');
     box.id = 'dba-roster-box';
+    box.style.minHeight = '0';
     mid.appendChild(box);
 
     const bot = document.createElement('div');
@@ -6581,6 +7108,8 @@
     const delMode = !!(rosterDlg && rosterDlg.dataset.dbaDelMode === '1');
     // 再編集モード（「再編集」→対象選択 方式）
     const editMode = !!(rosterDlg && rosterDlg.dataset.dbaEditMode === '1');
+    // 追加位置選択モード（「追加」→挿入位置選択 方式）
+    const addPickMode = !!(rosterDlg && rosterDlg.dataset.dbaAddPickMode === '1');
     // ★並び替え禁止：表示順は presetOrder（追加順／バックアップ記述順）を優先
     const order = Array.isArray(roster && roster.presetOrder) ? roster.presetOrder : [];
     const seen = new Set();
@@ -6644,7 +7173,7 @@
     const btnAdd = document.createElement('button');
     btnAdd.type = 'button';
     btnAdd.className = 'dba-btn-mini dba-btn-mini--ok';
-    btnAdd.textContent = '追加';
+    btnAdd.textContent = addPickMode ? '追加位置:選択してください' : '追加';
 
     const btnEdit = document.createElement('button');
     btnEdit.type = 'button';
@@ -6673,7 +7202,7 @@
     const btnAuto = document.createElement('button');
     btnAuto.type = 'button';
     btnAuto.className = 'dba-btn-mini';
-    btnAuto.textContent = '自動候補登録';
+    btnAuto.textContent = 'オート装備設定';
 
     row2.appendChild(btnAuto);
     row2.appendChild(btnDel);
@@ -6681,7 +7210,14 @@
 
     // リスト
     const list = document.createElement('div');
-    list.className = 'dba-roster-list';
+    list.id = 'dba-roster-list';
+    list.className = addPickMode ? 'dba-roster-list dba-roster-list--insertpick' : 'dba-roster-list';
+    list.dataset.dbaInsertIndex = String(names.length);
+
+    const insertLine = document.createElement('div');
+    insertLine.className = 'dba-roster-insert-line';
+    list.appendChild(insertLine);
+
     if(names.length === 0){
       const empty = document.createElement('div');
       empty.style.padding = '10px';
@@ -6711,6 +7247,19 @@
         item.addEventListener('click', async (e) => {
           e.preventDefault();
           e.stopPropagation();
+          // 追加位置選択モード中：クリック＝その位置で追加
+          if(rosterDlg && rosterDlg.dataset.dbaAddPickMode === '1'){
+            const idx = updateRosterInsertLineFromClientY(list, e.clientY);
+            try{
+              if(typeof releaseScrollLock === 'function') releaseScrollLock();
+            }catch(_e){}
+            rosterDlg.dataset.dbaAddPickMode = '0';
+            renderRosterModalState(null);
+            openRosterAddPresetModal(() => {
+              renderRosterModalState(null);
+            }, idx);
+            return;
+          }
           // 削除モード中：クリック＝削除対象の選択（装備はしない）
           if(rosterDlg && rosterDlg.dataset.dbaDelMode === '1'){
             const ok = confirm(`プリセット「${nm}」を削除しますか？`);
@@ -6753,6 +7302,90 @@
     }
     box.appendChild(list);
 
+    if(addPickMode){
+      const releaseScrollLock = installRosterInsertPickScrollLock(list);
+
+      const touchState = {
+        active: false,
+        moved: false,
+        startX: 0,
+        startY: 0
+      };
+
+      const getTouchClientY = (evt) => {
+        if(evt && evt.touches && evt.touches[0]) return evt.touches[0].clientY;
+        if(evt && evt.changedTouches && evt.changedTouches[0]) return evt.changedTouches[0].clientY;
+        return null;
+      };
+
+      showRosterInsertLineAtIndex(list, names.length);
+
+      list.addEventListener('mousemove', (e) => {
+        updateRosterInsertLineFromClientY(list, e.clientY);
+      });
+
+      list.addEventListener('mouseleave', () => {
+        showRosterInsertLineAtIndex(list, Number(list.dataset.dbaInsertIndex || names.length));
+      });
+
+      list.addEventListener('click', (e) => {
+        if(!rosterDlg || rosterDlg.dataset.dbaAddPickMode !== '1') return;
+        if((e.target instanceof Element) && e.target.closest('.dba-roster-item')) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const idx = updateRosterInsertLineFromClientY(list, e.clientY);
+        rosterDlg.dataset.dbaAddPickMode = '0';
+        renderRosterModalState(null);
+        openRosterAddPresetModal(() => {
+          renderRosterModalState(null);
+        }, idx);
+      });
+
+      list.addEventListener('touchstart', (e) => {
+        const y = getTouchClientY(e);
+        if(y == null) return;
+        const x = (e.touches && e.touches[0]) ? e.touches[0].clientX : 0;
+        touchState.active = true;
+        touchState.moved = false;
+        touchState.startX = x;
+        touchState.startY = y;
+        updateRosterInsertLineFromClientY(list, y);
+      }, { passive: true });
+
+      list.addEventListener('touchmove', (e) => {
+        const y = getTouchClientY(e);
+        if(y == null) return;
+        const x = (e.touches && e.touches[0]) ? e.touches[0].clientX : 0;
+        if(Math.abs(x - touchState.startX) > 8 || Math.abs(y - touchState.startY) > 8){
+          touchState.moved = true;
+        }
+        updateRosterInsertLineFromClientY(list, y);
+      }, { passive: true });
+
+      list.addEventListener('touchend', (e) => {
+        if(!rosterDlg || rosterDlg.dataset.dbaAddPickMode !== '1') return;
+        const y = getTouchClientY(e);
+        if(y == null) return;
+        if(touchState.moved){
+          touchState.active = false;
+          return;
+        }
+        const idx = updateRosterInsertLineFromClientY(list, y);
+        try{ releaseScrollLock(); }catch(_e){}
+        rosterDlg.dataset.dbaAddPickMode = '0';
+        renderRosterModalState(null);
+        openRosterAddPresetModal(() => {
+          renderRosterModalState(null);
+        }, idx);
+        touchState.active = false;
+      }, { passive: true });
+
+      list.addEventListener('click', () => {
+        if(!rosterDlg || rosterDlg.dataset.dbaAddPickMode !== '1') return;
+        try{ releaseScrollLock(); }catch(_e){}
+      }, { capture: true });
+    }
+
     // --- handlers ---
     btnRename.addEventListener('click', (e) => {
       e.preventDefault(); e.stopPropagation();
@@ -6787,9 +7420,10 @@
       e.preventDefault(); e.stopPropagation();
       if(rosterDlg) rosterDlg.dataset.dbaDelMode = '0';
       if(rosterDlg) rosterDlg.dataset.dbaEditMode = '0';
-      openRosterAddPresetModal(() => {
-        renderRosterModalState(null);
-      });
+      if(!rosterDlg) return;
+      const next = (rosterDlg.dataset.dbaAddPickMode === '1') ? '0' : '1';
+      rosterDlg.dataset.dbaAddPickMode = next;
+      renderRosterModalState(null);
     });
 
     btnEdit.addEventListener('click', (e) => {
@@ -6798,6 +7432,7 @@
       if(!rosterDlg) return;
       // 再編集モードに入るときは削除モードをOFF（誤操作防止）
       rosterDlg.dataset.dbaDelMode = '0';
+      rosterDlg.dataset.dbaAddPickMode = '0';
       const next = (rosterDlg.dataset.dbaEditMode === '1') ? '0' : '1';
       rosterDlg.dataset.dbaEditMode = next;
       // 再編集モードON時は、誤操作防止のため選択状態をクリアして描画
@@ -6821,6 +7456,7 @@
       e.preventDefault(); e.stopPropagation();
       if(rosterDlg) rosterDlg.dataset.dbaDelMode = '0';
       if(rosterDlg) rosterDlg.dataset.dbaEditMode = '0';
+      if(rosterDlg) rosterDlg.dataset.dbaAddPickMode = '0';
       openAutoEquipSettingsModal();
     });
 
@@ -6830,6 +7466,7 @@
       if(!rosterDlg) return;
       // 削除モードに入るときは再編集モードをOFF（誤操作防止）
       rosterDlg.dataset.dbaEditMode = '0';
+      rosterDlg.dataset.dbaAddPickMode = '0';
       const next = (rosterDlg.dataset.dbaDelMode === '1') ? '0' : '1';
       rosterDlg.dataset.dbaDelMode = next;
       // 削除モードON時は、誤操作防止のため選択状態をクリアして描画
@@ -6845,10 +7482,16 @@
     const openNow = () => {
       buildRosterModal();
       createRosterIfNeeded();
-      renderRosterModalState(null);
       const dlg = document.getElementById('dba-m-roster');
-      if(!dlg) return;
-      try{ dlg.showModal(); }catch(_e){ dlg.setAttribute('open',''); }
+      if(dlg){
+        dlg.dataset.dbaAddPickMode = '0';
+        dlg.dataset.dbaDelMode = '0';
+        dlg.dataset.dbaEditMode = '0';
+      }
+      renderRosterModalState(null);
+      const dlg2 = document.getElementById('dba-m-roster');
+      if(!dlg2) return;
+      try{ dlg2.showModal(); }catch(_e){ dlg2.setAttribute('open',''); }
     };
     if(document.body) openNow();
     else document.addEventListener('DOMContentLoaded', openNow, { once:true });
@@ -8499,7 +9142,7 @@
     dlg.addEventListener('cancel', (e)=>{ e.preventDefault(); closeDirect(); });
   }
 
-  function openRosterAddPresetModal(onDone){
+  function openRosterAddPresetModal(onDone, insertIndex){
     const openNow = () => {
       buildRosterAddModal();
       // 状態初期化
@@ -8518,6 +9161,8 @@
       const btnN = document.getElementById('dba-add-btn-necklace');
       const btnReg = document.getElementById('dba-add-btn-register');
       const dlg = document.getElementById('dba-m-roster-add');
+      if(!dlg) return;
+      const rosterDlg = document.getElementById('dba-m-roster');
 
       function refreshLabels(){
         if(selW) selW.textContent = st.weaponLabel;
@@ -8568,7 +9213,7 @@
             return;
           }
           try{
-            setPreset(pn, [st.weaponId, st.armorId, st.necklaceId]);
+            setPresetAt(pn, [st.weaponId, st.armorId, st.necklaceId], insertIndex);
             try{ onDone && onDone(); }catch(_e2){}
             try{ dlg.close(); }catch(_e2){ dlg.removeAttribute('open'); }
           }catch(_e2){
@@ -8578,6 +9223,35 @@
       }
 
       if(dlg){
+        const onWheelCapture = (e) => {
+          if(!(dlg.open || dlg.hasAttribute('open'))) return;
+          const target = e.target;
+          if(target instanceof Node && dlg.contains(target)) return;
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+        };
+
+        const onTouchMoveCapture = (e) => {
+          if(!(dlg.open || dlg.hasAttribute('open'))) return;
+          const target = e.target;
+          if(target instanceof Node && dlg.contains(target)) return;
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+        };
+
+        document.addEventListener('wheel', onWheelCapture, { capture: true, passive: false });
+        document.addEventListener('touchmove', onTouchMoveCapture, { capture: true, passive: false });
+
+        const cleanupScrollBlock = () => {
+          document.removeEventListener('wheel', onWheelCapture, { capture: true });
+          document.removeEventListener('touchmove', onTouchMoveCapture, { capture: true });
+        };
+
+        dlg.addEventListener('close', cleanupScrollBlock, { once: true });
+        dlg.addEventListener('cancel', cleanupScrollBlock, { once: true });
+
         try{ dlg.showModal(); }catch(_e){ dlg.setAttribute('open',''); }
       }
     };
@@ -9550,6 +10224,7 @@
   //    (A) <header> ブロック
   //    (B) <div style="display:inline-flex;"> で始まる「2つの<table>」ブロック
   // =========================
+
   function tableHasThTexts(table, required){
     if(!table) return false;
     const ths = Array.from(table.querySelectorAll('thead th, th'))
@@ -9596,8 +10271,297 @@
     return null;
   }
 
-  function refreshHeaderAndTeamTablesFromFetchedDoc(doc, meta){
+  function getOwnershipInfoTableFromWrap(wrap){
+    if(!(wrap instanceof Element)) return null;
+    const tables = Array.from(wrap.querySelectorAll(':scope > table'));
+    if(tables.length < 1) return null;
+    const t1 = tables[0];
+    if(
+      tableHasThTexts(t1, ['カラー', 'チーム']) &&
+      (tableHasThTexts(t1, ['保有地域数']) || tableHasThTexts(t1, ['保有']))
+    ){
+      return t1;
+    }
+    return null;
+  }
+
+  function normalizeTeamColorCode(raw){
+    let s = sanitizeText(raw || '').replace(/^#/, '').toUpperCase();
+    if(!s) return '';
+
+    if(/^[0-9A-F]{8}$/.test(s)){
+      if(s.endsWith('00')) return '';
+      s = s.slice(0, 6);
+    }
+    if(/^[0-9A-F]{6}$/.test(s)) return s;
+    return '';
+  }
+
+  function extractTeamColorCodeFromRowColorCell(td){
+    if(!(td instanceof HTMLElement)) return '';
+
+    // 最優先：セル内テキスト（例: c0c0c0, FF0101, BadDad）
+    let code = normalizeTeamColorCode(td.textContent || '');
+    if(code) return code;
+
+    // 次点：style属性の background-color
+    const styleAttr = String(td.getAttribute('style') || '');
+    const m1 = styleAttr.match(/background-color\s*:\s*#?([0-9a-fA-F]{6,8})/i);
+    if(m1){
+      code = normalizeTeamColorCode(m1[1] || '');
+      if(code) return code;
+    }
+
+    // 念のため bgcolor 属性
+    const bg = td.getAttribute('bgcolor');
+    code = normalizeTeamColorCode(bg || '');
+    if(code) return code;
+
+    return '';
+  }
+
+  function buildLocalOwnershipCountMap(snapshot){
+    const out = Object.create(null);
+    const snap = snapshot && typeof snapshot === 'object'
+      ? snapshot
+      : getBattlemapSnapshotFromDoc(document);
+
+    const cellColors = (snap && snap.cellColors && typeof snap.cellColors === 'object')
+      ? snap.cellColors
+      : Object.create(null);
+
+    for(const v of Object.values(cellColors)){
+      const code = normalizeTeamColorCode(v);
+      if(!code) continue;
+      out[code] = Number(out[code] || 0) + 1;
+    }
+    return out;
+  }
+
+  function buildLocalOwnershipSampleCellMap(snapshot){
+    const out = Object.create(null);
+    const snap = snapshot && typeof snapshot === 'object'
+      ? snapshot
+      : getBattlemapSnapshotFromDoc(document);
+
+    const cellColors = (snap && snap.cellColors && typeof snap.cellColors === 'object')
+      ? snap.cellColors
+      : Object.create(null);
+
+    for(const [key, v] of Object.entries(cellColors)){
+      const code = normalizeTeamColorCode(v);
+      if(!code) continue;
+      if(out[code]) continue;
+
+      const m = String(key).match(/^(\d+)-(\d+)$/);
+      if(!m) continue;
+
+      out[code] = {
+        row: Number(m[1]),
+        col: Number(m[2])
+      };
+    }
+    return out;
+  }
+
+  function getCellDetailUrl(row, col){
+    return makeTeambattleUrl({
+      r: Number(row),
+      c: Number(col),
+      m: mode
+    });
+  }
+
+  function extractTeamInfoTextFromCellDetailDoc(doc){
+    if(!doc) return '';
+
+    const tables = Array.from(doc.querySelectorAll('table'));
+    for(const table of tables){
+      const ths = Array.from(table.querySelectorAll('thead th, th'))
+        .map(th => sanitizeText(th.textContent || ''));
+
+      const idx = ths.findIndex(t => t.includes('チーム情報'));
+      if(idx < 0) continue;
+
+      const row = table.querySelector('tbody tr') || table.querySelector('tr');
+      if(!row) continue;
+
+      const tds = Array.from(row.querySelectorAll('td'));
+      if(idx >= tds.length) continue;
+
+      const txt = sanitizeText(tds[idx].textContent || '');
+      if(txt) return txt;
+    }
+    return '';
+  }
+
+  async function fetchTeamInfoNameFromCell(row, col){
+    try{
+      const url = getCellDetailUrl(row, col);
+      const res = await fetch(url, {
+        method: 'GET',
+        credentials: 'include',
+        cache: 'no-store'
+      });
+      if(!res.ok) return '';
+      const html = await res.text();
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      return extractTeamInfoTextFromCellDetailDoc(doc);
+    }catch(_e){
+      return '';
+    }
+  }
+
+  function ensureOwnershipTableTbody(table){
+    let tbody = table.querySelector('tbody');
+    if(tbody) return tbody;
+
+    tbody = document.createElement('tbody');
+    const rows = Array.from(table.querySelectorAll(':scope > tr'));
+    for(const tr of rows){
+      tbody.appendChild(tr);
+    }
+    table.appendChild(tbody);
+    return tbody;
+  }
+
+  function makeOwnershipTableRow(colorCode, teamName, serverCount, localCount){
+    const tr = document.createElement('tr');
+    tr.style.backgroundColor = 'white';
+
+    const tdColor = document.createElement('td');
+    tdColor.style.textAlign = 'center';
+    tdColor.style.backgroundColor = `#${colorCode}`;
+    tdColor.textContent = colorCode;
+
+    const tdTeam = document.createElement('td');
+    tdTeam.style.textAlign = 'center';
+    tdTeam.textContent = teamName || '不明';
+
+    const tdCount = document.createElement('td');
+    tdCount.style.textAlign = 'center';
+    tdCount.style.whiteSpace = 'normal';
+    tdCount.style.lineHeight = '1.25';
+    tdCount.dataset.dbaServerCount = String(Number(serverCount || 0));
+    tdCount.dataset.dbaLocalCount = String(Number(localCount || 0));
+    tdCount.innerHTML = `\
+      <span style="font-size:1.05em;">ローカル：${localCount}</span><br>\
+      <span style="font-size:0.95em; color:#666;">（サーバー：${serverCount}）</span>`;
+
+    tr.appendChild(tdColor);
+    tr.appendChild(tdTeam);
+    tr.appendChild(tdCount);
+    return tr;
+  }
+
+  async function applyLocalOwnershipCountsToTeamTable(rootOrWrap, snapshot){
+    const wrap = isTeamTablesWrap(rootOrWrap)
+      ? rootOrWrap
+      : findTeamTablesWrap(rootOrWrap || document);
+    if(!wrap) return false;
+
+    const table = getOwnershipInfoTableFromWrap(wrap);
+    if(!table) return false;
+
+    const tbody = ensureOwnershipTableTbody(table);
+    const countMap = buildLocalOwnershipCountMap(snapshot);
+    const sampleCellMap = buildLocalOwnershipSampleCellMap(snapshot);
+    const rows = Array.from(tbody.querySelectorAll(':scope > tr'))
+      .filter(tr => tr.querySelectorAll('td').length >= 3);
+
+    const rowMap = new Map();
+    const teamNameMap = new Map();
+    let changed = false;
+
+    for(const tr of rows){
+      const tds = Array.from(tr.querySelectorAll('td'));
+      if(tds.length < 3) continue;
+
+      const tdColor = tds[0];
+      const tdTeam  = tds[1];
+      const tdCount = tds[2];
+
+      const colorCode = extractTeamColorCodeFromRowColorCell(tdColor);
+      if(!colorCode) continue;
+
+      const teamName = sanitizeText(tdTeam.textContent || '');
+      if(teamName) teamNameMap.set(colorCode, teamName);
+
+      const rawServerText = tdCount.dataset.dbaServerCount || sanitizeText(tdCount.textContent || '');
+      const m = rawServerText.match(/(\d+)/);
+      const serverCount = m ? Number(m[1]) : 0;
+      const localCount = Number(countMap[colorCode] || 0);
+
+      tdCount.dataset.dbaServerCount = String(serverCount);
+      tdCount.dataset.dbaLocalCount = String(localCount);
+      tdCount.style.whiteSpace = 'normal';
+      tdCount.style.lineHeight = '1.25';
+
+      tdCount.innerHTML = `\
+        <span style="font-size:1.05em;">ローカル：${localCount}</span><br>\
+        <span style="font-size:0.95em; color:#666;">（サーバー：${serverCount}）</span>`;
+
+      rowMap.set(colorCode, tr);
+      changed = true;
+    }
+
+    const missingColorCodes = Object.keys(countMap)
+      .map(c => normalizeTeamColorCode(c))
+      .filter(Boolean)
+      .filter(colorCode => Number(countMap[colorCode] || 0) > 0)
+      .filter(colorCode => !rowMap.has(colorCode));
+
+    for(const colorCode of missingColorCodes){
+      let teamName = teamNameMap.get(colorCode) || '';
+      if(!teamName){
+        const rc = sampleCellMap[colorCode];
+        if(rc){
+          teamName = await fetchTeamInfoNameFromCell(rc.row, rc.col);
+        }
+      }
+
+      const tr = makeOwnershipTableRow(
+        colorCode,
+        teamName || '不明',
+        0,
+        Number(countMap[colorCode] || 0)
+      );
+      tbody.appendChild(tr);
+      rowMap.set(colorCode, tr);
+      if(teamName) teamNameMap.set(colorCode, teamName);
+      changed = true;
+    }
+
+    const sortableRows = Array.from(tbody.querySelectorAll(':scope > tr'))
+      .filter(tr => tr.querySelectorAll('td').length >= 3);
+
+    sortableRows.sort((a, b) => {
+      const aTds = Array.from(a.querySelectorAll('td'));
+      const bTds = Array.from(b.querySelectorAll('td'));
+      const aColor = extractTeamColorCodeFromRowColorCell(aTds[0]);
+      const bColor = extractTeamColorCodeFromRowColorCell(bTds[0]);
+
+      const aLocal = Number((aTds[2] && aTds[2].dataset.dbaLocalCount) || countMap[aColor] || 0);
+      const bLocal = Number((bTds[2] && bTds[2].dataset.dbaLocalCount) || countMap[bColor] || 0);
+      if(bLocal !== aLocal) return bLocal - aLocal;
+
+      const aServer = Number((aTds[2] && aTds[2].dataset.dbaServerCount) || 0);
+      const bServer = Number((bTds[2] && bTds[2].dataset.dbaServerCount) || 0);
+      if(bServer !== aServer) return bServer - aServer;
+
+      return String(aColor).localeCompare(String(bColor), 'ja');
+    });
+
+    for(const tr of sortableRows){
+      tbody.appendChild(tr);
+    }
+
+    return changed;
+  }
+
+  async function refreshHeaderAndTeamTablesFromFetchedDoc(doc, meta){
     const topUrl = meta?.topUrl || makeTeambattleUrl({ m: mode });
+    const snapshot = meta?.snapshot || (doc ? getBattlemapSnapshotFromDoc(doc) : getBattlemapSnapshotFromDoc(document));
     const sx = window.scrollX;
     const sy = window.scrollY;
 
@@ -9611,18 +10575,28 @@
       }
 
       // (B) チーム情報2テーブル差し替え
-      const curWrap = findTeamTablesWrap(document);
+      let effectiveWrap = findTeamTablesWrap(document);
+      const curWrap = effectiveWrap;
       const newWrap = doc ? findTeamTablesWrap(doc) : null;
       if(curWrap && newWrap && curWrap.parentNode){
         const importedWrap = document.importNode(newWrap, true);
         curWrap.parentNode.replaceChild(importedWrap, curWrap);
+        effectiveWrap = importedWrap;
       }
+
+      // (B-2) 「保有地域数」を ローカル／サーバー 併記へ置き換え
+      // - サーバー値は差し替えた table の元数値を保持
+      // - ローカル値は snapshot.cellColors を累積して算出
+      // - サーバー側に行が無い色でも、ローカル保有数が1以上なら新規行を追加
+      // - 行順はローカル保有数の多い順へ並べ替え
+      await applyLocalOwnershipCountsToTeamTable(effectiveWrap || document, snapshot);
 
       // (C) fnbar 上段の「チームカラー」表示も、差し替え後の header を元に再描画
       // - 戦況情報のクリック時/長押し時の双方で、サーバーHTML由来の最新色へ追従させる
       // - fnbar 未生成のタイミングでは何もしない
       if(document.getElementById('dba-fn-header-info')){
         renderFnHeaderInfo();
+        await updateRbUnifiedRegDisplay(true);
         scheduleFnbarHeightSync();
       }
 
@@ -9777,11 +10751,7 @@
         ctx.clearRect(dx, dy, CELL, CELL);
       }
 
-      function dbaClearBaseCell(r,c){
-        dbaClearBaseCellWithCtx(bctx, r, c);
-      }
-
-      function dbaPaintBaseCellWithCtx(ctx, r, c){
+      function dbaPaintTerrainCellWithCtx(ctx, r, c){
         if(!ctx) return;
         if(r<0 || c<0 || r>=GRID_SIZE || c>=GRID_SIZE) return;
 
@@ -9794,6 +10764,15 @@
         const tidx = terrainMap[k] ?? 0;
         const tsx = tidx * 128;
         ctx.drawImage(terrainImg, tsx, 0, 128, 128, dx, dy, CELL, CELL);
+      }
+
+      function dbaPaintColorCellWithCtx(ctx, r, c){
+        if(!ctx) return;
+        if(r<0 || c<0 || r>=GRID_SIZE || c>=GRID_SIZE) return;
+
+        const k = String(r) + '-' + String(c);
+        const dx = c * CELL;
+        const dy = r * CELL;
 
         if(showTint){
           const t = teamMap[k] || 0;
@@ -9803,53 +10782,104 @@
             ctx.fillRect(dx, dy, CELL, CELL);
           }
         }
+      }
+
+      function dbaPaintBuildingCellWithCtx(ctx, r, c){
+        if(!ctx) return;
+        if(r<0 || c<0 || r>=GRID_SIZE || c>=GRID_SIZE) return;
+
+        const k = String(r) + '-' + String(c);
+        const dx = c * CELL;
+        const dy = r * CELL;
 
         const s = dbaFogStateAt(r,c);
         const b = buildingsMap[k];
-        if(b && s !== 0){
-          const WALLS_COL = 3;
-          const RADAR_COL = 4;
-          const col = (b.kind==='f' ? WALLS_COL : RADAR_COL);
-          const ownerTeam = teamMap[k] || 0;
-          const ownerRow = (ownerTeam===2 ? 1 : (ownerTeam===1 ? 2 : 0));
+        if(!b || s === 0) return;
 
-          if(s===1){
-            ctx.save();
-            ctx.globalAlpha = 0.60;
-            ctx.drawImage(buildingImg, col * 128, 0, 128, 128, dx, dy, CELL, CELL);
-            ctx.restore();
-          }else{
-            ctx.drawImage(buildingImg, col * 128, ownerRow * 128, 128, 128, dx, dy, CELL, CELL);
-          }
+        const WALLS_COL = 3;
+        const RADAR_COL = 4;
+        const col = (b.kind==='f' ? WALLS_COL : RADAR_COL);
+
+        // 建造物の所有者は、snapshot 側では buildingsMap[k].owner に入っている。
+        // まず owner を優先し、無ければ従来どおり teamMap にフォールバックする。
+        let ownerTeam = 0;
+        const ownerRaw = String(b.owner ?? '').trim().toLowerCase();
+        if(ownerRaw === 'red'){
+          ownerTeam = 1;
+        }else if(ownerRaw === 'blue'){
+          ownerTeam = 2;
+        }else{
+          ownerTeam = teamMap[k] || 0;
         }
 
-        if(capitalSet.has(k)){
-          const OUTPOST_COL = 0;
-          const COMMAND_COL = 1;
-          const HQ_COL      = 2;
-          function capColForTeam(team){
-            const WEAK = 0.20;
-            const OK   = 0.55;
-            if(team===1){
-              const f = ownership.redFrac;
-              if(f < WEAK) return OUTPOST_COL;
-              if(f < OK)   return COMMAND_COL;
-              return HQ_COL;
-            }
-            if(team===2){
-              const f = ownership.blueFrac;
-              if(f < WEAK) return OUTPOST_COL;
-              if(f < OK)   return COMMAND_COL;
-              return HQ_COL;
-            }
+        const ownerRow = (ownerTeam===2 ? 1 : (ownerTeam===1 ? 2 : 0));
+
+        if(s===1){
+          ctx.save();
+          ctx.globalAlpha = 0.60;
+          ctx.drawImage(buildingImg, col * 128, 0, 128, 128, dx, dy, CELL, CELL);
+          ctx.restore();
+        }else{
+          ctx.drawImage(buildingImg, col * 128, ownerRow * 128, 128, 128, dx, dy, CELL, CELL);
+        }
+      }
+
+      function dbaPaintCapitalCellWithCtx(ctx, r, c){
+        if(!ctx) return;
+        if(r<0 || c<0 || r>=GRID_SIZE || c>=GRID_SIZE) return;
+
+        const k = String(r) + '-' + String(c);
+        if(!capitalSet.has(k)) return;
+
+        const dx = c * CELL;
+        const dy = r * CELL;
+        const OUTPOST_COL = 0;
+        const COMMAND_COL = 1;
+        const HQ_COL      = 2;
+
+        function capColForTeam(team){
+          const WEAK = 0.20;
+          const OK   = 0.55;
+          if(team===1){
+            const f = ownership.redFrac;
+            if(f < WEAK) return OUTPOST_COL;
+            if(f < OK)   return COMMAND_COL;
             return HQ_COL;
           }
-
-          const team = teamMap[k] || 0;
-          const row = (team===2 ? 1 : (team===1 ? 2 : 0));
-          const col = capColForTeam(team);
-          ctx.drawImage(buildingImg, col * 128, row * 128, 128, 128, dx, dy, CELL, CELL);
+          if(team===2){
+            const f = ownership.blueFrac;
+            if(f < WEAK) return OUTPOST_COL;
+            if(f < OK)   return COMMAND_COL;
+            return HQ_COL;
+          }
+          return HQ_COL;
         }
+
+        const team = teamMap[k] || 0;
+        const row = (team===2 ? 1 : (team===1 ? 2 : 0));
+        const col = capColForTeam(team);
+        ctx.drawImage(buildingImg, col * 128, row * 128, 128, 128, dx, dy, CELL, CELL);
+      }
+
+      function dbaPaintBaseOverlayCellWithCtx(ctx, r, c){
+        if(!ctx) return;
+        if(r<0 || c<0 || r>=GRID_SIZE || c>=GRID_SIZE) return;
+        dbaPaintColorCellWithCtx(ctx, r, c);
+        dbaPaintBuildingCellWithCtx(ctx, r, c);
+        dbaPaintCapitalCellWithCtx(ctx, r, c);
+      }
+
+
+
+
+
+
+
+      function dbaPaintBaseCellWithCtx(ctx, r, c){
+        if(!ctx) return;
+        if(r<0 || c<0 || r>=GRID_SIZE || c>=GRID_SIZE) return;
+        dbaPaintTerrainCellWithCtx(ctx, r, c);
+        dbaPaintBaseOverlayCellWithCtx(ctx, r, c);
       }
 
       function dbaPaintBaseCell(r,c){
@@ -9872,6 +10902,76 @@
         }
       }
 
+      function dbaCreateBlankCanvasLike(canvasId){
+        try{
+          const src = document.getElementById(canvasId);
+          if(!src || !src.width || !src.height) return null;
+          const cv = document.createElement('canvas');
+          cv.width = src.width;
+          cv.height = src.height;
+          const ctx = cv.getContext('2d');
+          if(!ctx) return null;
+          return { canvas: cv, ctx: ctx };
+        }catch(_e){
+          return null;
+        }
+      }
+
+      const dbaTerrainOnlyBuf = dbaCreateBlankCanvasLike('gridBase');
+      let dbaTerrainOnlyBufReady = false;
+
+      function dbaEnsureTerrainOnlyBuffer(){
+        if(!dbaTerrainOnlyBuf || !dbaTerrainOnlyBuf.ctx) return null;
+        if(dbaTerrainOnlyBufReady) return dbaTerrainOnlyBuf;
+        for(let rr=0; rr<GRID_SIZE; rr++){
+          for(let cc=0; cc<GRID_SIZE; cc++){
+            dbaPaintTerrainCellWithCtx(dbaTerrainOnlyBuf.ctx, rr, cc);
+          }
+        }
+        dbaTerrainOnlyBufReady = true;
+        return dbaTerrainOnlyBuf;
+      }
+
+      function dbaCopyCellFromCanvas(ctx, srcCanvas, r, c){
+        try{
+          if(!ctx || !srcCanvas) return;
+          if(r<0 || c<0 || r>=GRID_SIZE || c>=GRID_SIZE) return;
+          const dx = c * CELL;
+          const dy = r * CELL;
+          ctx.clearRect(dx, dy, CELL, CELL);
+          ctx.drawImage(srcCanvas, dx, dy, CELL, CELL, dx, dy, CELL, CELL);
+        }catch(_e){}
+      }
+
+      function dbaBlitCellFromBuffer(ctx, srcCanvas, r, c){
+        try{
+          if(!ctx || !srcCanvas) return;
+          if(r<0 || c<0 || r>=GRID_SIZE || c>=GRID_SIZE) return;
+          const dx = c * CELL;
+          const dy = r * CELL;
+          ctx.drawImage(srcCanvas, dx, dy, CELL, CELL, dx, dy, CELL, CELL);
+        }catch(_e){}
+      }
+
+      function dbaCommitCanvasBuffer(ctx, dstCanvas, srcCanvas, opts){
+        try{
+          if(!ctx || !dstCanvas || !srcCanvas) return false;
+
+          const clearFirst = !!(opts && opts.clearFirst);
+
+          ctx.save();
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          if(clearFirst){
+            ctx.clearRect(0, 0, dstCanvas.width, dstCanvas.height);
+          }
+          ctx.drawImage(srcCanvas, 0, 0);
+          ctx.restore();
+          return true;
+        }catch(_e){
+          return false;
+        }
+      }
+
       function dbaNormalizeChangedMeta(changedMeta){
         const out = Object.create(null);
         if(!Array.isArray(changedMeta)) return out;
@@ -9884,7 +10984,11 @@
           out[k] = {
             base: !!it.base,
             fog: !!it.fog,
-            overlay: !!it.overlay
+            overlay: !!it.overlay,
+            terrain: !!it.terrain,
+            color: !!it.color,
+            building: !!it.building,
+            capital: !!it.capital
           };
         }
         return out;
@@ -9936,9 +11040,8 @@
           const metaMap = dbaNormalizeChangedMeta(changedMeta);
           const baseBuf = (paintList.length > 0) ? dbaCreateCanvasBufferLike('gridBase') : null;
           const fogBuf  = (paintList.length > 0) ? dbaCreateCanvasBufferLike('gridFog')  : null;
+          const terrainBuf = (paintList.length > 0) ? dbaEnsureTerrainOnlyBuffer() : null;
           const useBufferedBlit = !!(baseBuf && baseBuf.ctx && fogBuf && fogBuf.ctx);
-          let needBaseCommit = false;
-          let needFogCommit = false;
           let needOverlayRedraw = false;
 
           for(const k of paintList){
@@ -9946,19 +11049,41 @@
             if(!m) continue;
             const r = Number(m[1]);
             const c = Number(m[2]);
-            const meta = metaMap[k] || { base:true, fog:true, overlay:true };
+            const meta = metaMap[k] || {
+              base:true,
+              fog:false,
+              overlay:false,
+              terrain:false,
+              color:false,
+              building:false,
+              capital:true
+            };
 
             const doBase = !!meta.base;
             const doFog = !!meta.fog;
             const doOverlay = !!meta.overlay;
 
-            if(doBase) needBaseCommit = true;
-            if(doFog) needFogCommit = true;
             if(doOverlay) needOverlayRedraw = true;
 
             if(useBufferedBlit){
               if(doBase){
-                dbaPaintBaseCellWithCtx(baseBuf.ctx, r, c);
+                if(terrainBuf && terrainBuf.ctx){
+                  const needsWholeBaseRebuild = !!(meta.terrain || meta.color || meta.capital || meta.building);
+
+                  if(needsWholeBaseRebuild){
+                    if(meta.terrain){
+                      dbaPaintTerrainCellWithCtx(terrainBuf.ctx, r, c);
+                    }
+                    dbaCopyCellFromCanvas(baseBuf.ctx, terrainBuf.canvas, r, c);
+                    dbaPaintBaseOverlayCellWithCtx(baseBuf.ctx, r, c);
+                  }else{
+                    // 念のための保険
+                    dbaCopyCellFromCanvas(baseBuf.ctx, terrainBuf.canvas, r, c);
+                    dbaPaintBaseOverlayCellWithCtx(baseBuf.ctx, r, c);
+                  }
+                }else{
+                  dbaPaintBaseCellWithCtx(baseBuf.ctx, r, c);
+                }
               }
               if(doFog){
                 dbaPaintFogCellWithCtx(fogBuf.ctx, r, c);
@@ -9974,13 +11099,44 @@
           }
 
           if(useBufferedBlit){
-            if(needBaseCommit){
-              bctx.clearRect(0, 0, baseBuf.canvas.width, baseBuf.canvas.height);
-              bctx.drawImage(baseBuf.canvas, 0, 0);
+            let needBaseCommit = false;
+            let needFogCommit = false;
+
+            for(const k of paintList){
+              const m = String(k).match(/^(\\d+)-(\\d+)$/);
+              if(!m) continue;
+              const r = Number(m[1]);
+              const c = Number(m[2]);
+              const meta = metaMap[k] || {
+                base:true,
+                fog:false,
+                overlay:false,
+                terrain:false,
+                color:false,
+                building:false,
+                capital:true
+              };
+
+              if(meta.base){
+                needBaseCommit = true;
+              }
+              if(meta.fog){
+                needFogCommit = true;
+              }
             }
-            if(needFogCommit){
-              fctx.clearRect(0, 0, fogBuf.canvas.width, fogBuf.canvas.height);
-              fctx.drawImage(fogBuf.canvas, 0, 0);
+
+            // 画面に出ている canvas をセル単位で clearRect しながら更新すると、
+            // 差分更新時に黒いちらつきが見えやすい。
+            // そのため、オフスクリーン側で差分反映を済ませてから、
+            // 最後に 1 回だけまとめてコミットする。
+            const baseCanvasEl = document.getElementById('gridBase');
+            const fogCanvasEl  = document.getElementById('gridFog');
+
+            if(needBaseCommit && baseCanvasEl){
+              dbaCommitCanvasBuffer(bctx, baseCanvasEl, baseBuf.canvas, { clearFirst:false });
+            }
+            if(needFogCommit && fogCanvasEl){
+              dbaCommitCanvasBuffer(fctx, fogCanvasEl, fogBuf.canvas, { clearFirst:true });
             }
           }
 
@@ -10105,7 +11261,10 @@
 
       // ★追加：header + チーム情報2テーブル も最新ページ情報で差し替え
       // （マップ差し替え前後どちらでも良いが、ここでは同じ doc を使って先に更新）
-      refreshHeaderAndTeamTablesFromFetchedDoc(doc, { topUrl });
+      await refreshHeaderAndTeamTablesFromFetchedDoc(doc, {
+        topUrl,
+        snapshot: getBattlemapSnapshotFromDoc(doc)
+      });
 
       const imported = document.importNode(fetchedRoot, true);
       prepareImportedBattlemapScripts(imported);
@@ -10160,7 +11319,10 @@
       const doc = new DOMParser().parseFromString(html, 'text/html');
 
       // ★追加：戦況情報実行時は header + チーム情報2テーブル も最新版へ差し替え
-      refreshHeaderAndTeamTablesFromFetchedDoc(doc, { topUrl });
+      await refreshHeaderAndTeamTablesFromFetchedDoc(doc, {
+        topUrl,
+        snapshot: getBattlemapSnapshotFromDoc(doc)
+      });
 
       const fetchedRoot = findFetchedBattlemapRoot(doc);
       if(!fetchedRoot){
@@ -10410,6 +11572,25 @@
     }
   }
 
+  function shouldShowRbCellRegulation(){
+    try{
+      const s = loadSettings();
+      return !!(mode === 'rb' && s?.rbLayer?.showCellRegulation);
+    }catch(_e){
+      return false;
+    }
+  }
+
+  function buildLayerCellDisplayText(reg, holder){
+    const regText = sanitizeText(reg || '---') || '---';
+    const holderText = sanitizeText(holder || '---') || '---';
+
+    if(mode === 'rb' && !shouldShowRbCellRegulation()){
+      return holderText;
+    }
+    return `${regText}\n${holderText}`;
+  }
+
   // =========================
   // RB専用：トップページHTML内の window.__FOW から「既知領域」を抽出（visible + explored の union）
   //  - explored / visible をそれぞれ配列としてJSON.parseし、座標を union する
@@ -10446,6 +11627,42 @@
       };
     }catch(_e){
       return { visible: [], explored: [], hasCapital: false };
+    }
+  }
+
+  // =========================
+  // RB専用：トップページHTML内の window.__BUILDINGS から建造物payloadを抽出
+  //  - 元ページでは main script 内の buildingsPayload は
+  //      (window.__BUILDINGS && typeof window.__BUILDINGS === 'object') ? window.__BUILDINGS : null
+  //    という参照式であり、JSONリテラルではない。
+  //  - 実データは別 script の
+  //      window.__BUILDINGS = {...};
+  //    側に入っているため、そこを直接読む。
+  // =========================
+  function extractRbBuildingsPayloadFromDoc(doc){
+    try{
+      if(mode !== 'rb') return null;
+      if(!doc) return null;
+
+      const scripts = Array.from(doc.querySelectorAll('script'));
+      let src = '';
+      for(const s of scripts){
+        const t = (s && s.textContent) ? String(s.textContent) : '';
+        if(!t) continue;
+        if(t.includes('window.__BUILDINGS') && t.includes('"buildings"')){
+          src = t;
+          break;
+        }
+      }
+      if(!src) return null;
+
+      const m = src.match(/window\.__BUILDINGS\s*=\s*(\{[\s\S]*?\})\s*;?/);
+      if(!m || !m[1]) return null;
+
+      const obj = JSON.parse(m[1]);
+      return (obj && typeof obj === 'object') ? obj : null;
+    }catch(_e){
+      return null;
     }
   }
 
@@ -10620,7 +11837,7 @@
       }
     }
 
-    // fetch の並列数（多すぎると重いので抑制）
+    // 戦況情報（全セル更新）の fetch 並行処理数（多すぎると重いので抑制）
     const CONCURRENCY = 9;
 
     const jobs = (mode === 'rb' && rbKnownJobs && rbKnownJobs.length > 0)
@@ -10630,8 +11847,7 @@
       const { row, col } = job;
       try{
         const { holder, reg } = await fetchCellDetail(row, col);
-        // 表示：レギュレーション + ホルダー
-        setLayerCellText(row, col, `${reg}\n${holder}`);
+        setLayerCellText(row, col, buildLayerCellDisplayText(reg, holder));
       }catch(_e){
         setLayerCellText(row, col, `ERR\n(${row},${col})`);
       }
@@ -10672,10 +11888,32 @@
 
   function extractConstLiteral(scriptText, constName){
     // 例: const cellColors = { ... };
-    const re1 = new RegExp(`const\\s+${constName}\\s*=\\s*([\\s\\S]*?);\\s*(?:\\n|$)`);
-    const m = scriptText.match(re1);
-    if(!m) return null;
-    return (m[1] || '').trim();
+    // Cloudflare / 圧縮後HTML では
+    //   const cellColors = {...};const capitalMap = [...];
+    // のように「改行なしで次の const が続く」ことがある。
+    // そのため、「セミコロンの直後が改行 or 文末」という条件では
+    // hc / l の cellColors を取りこぼしてしまう。
+    const src = String(scriptText || '');
+    if(!src) return null;
+
+    // 第1候補：
+    //   const <name> = ... ;
+    // の末尾を「次の const / let / var / function の直前」または文末までで取る
+    const re1 = new RegExp(
+      `const\\s+${constName}\\s*=\\s*([\\s\\S]*?);\\s*(?=(?:const|let|var|function)\\b|$)`
+    );
+    let m = src.match(re1);
+    if(m) return (m[1] || '').trim();
+
+    // 第2候補（後方互換）：
+    // 旧来どおり「改行 or 文末」で終わる形も許容
+    const re2 = new RegExp(
+      `const\\s+${constName}\\s*=\\s*([\\s\\S]*?);\\s*(?:\\n|$)`
+    );
+    m = src.match(re2);
+    if(m) return (m[1] || '').trim();
+
+    return null;
   }
 
   function normalizeCellColors(obj){
@@ -10793,8 +12031,8 @@
       const litColors = extractConstLiteral(t, 'cellColors');
       const litCap = extractConstLiteral(t, 'capitalList') || extractConstLiteral(t, 'capitalMap');
       const litTerr = extractConstLiteral(t, 'terrainsPayload');
-      const litBuildings = extractConstLiteral(t, 'buildingsPayload');
       const fowState = extractRbFowStateFromDoc(doc);
+      const buildingsPayloadObj = extractRbBuildingsPayloadFromDoc(doc);
 
       let size = 0;
       try{ size = Number(parseJsValueLiteral(litSize)); }catch(_e){ size = 0; }
@@ -10805,7 +12043,7 @@
       try{ out.cellColors = normalizeCellColors(parseJsValueLiteral(litColors)); }catch(_e){ out.cellColors = Object.create(null); }
       try{ out.capitalSet = normalizeCapitalSet(parseJsValueLiteral(litCap)); }catch(_e){ out.capitalSet = new Set(); }
       try{ out.terrainsKey = normalizeTerrainsPayload(parseJsValueLiteral(litTerr)); }catch(_e){ out.terrainsKey = ''; }
-      try{ out.buildingsKey = normalizeBuildingsPayload(parseJsValueLiteral(litBuildings)); }catch(_e){ out.buildingsKey = ''; }
+      try{ out.buildingsKey = normalizeBuildingsPayload(buildingsPayloadObj); }catch(_e){ out.buildingsKey = ''; }
       out.visibleList = normalizeRcList(fowState.visible);
       out.exploredList = normalizeRcList(fowState.explored);
       out.visibleSet = new Set(out.visibleList.map((rc) => `${rc[0]}-${rc[1]}`));
@@ -10837,8 +12075,12 @@
   function diffChangedCells(curSnap, newSnap){
     const changed = [];
     const keys = new Set();
+    const curTerr = terrainsKeyToMap(curSnap?.terrainsKey || '');
+    const newTerr = terrainsKeyToMap(newSnap?.terrainsKey || '');
+    const curBld = buildingsKeyToMap(curSnap?.buildingsKey || '');
+    const newBld = buildingsKeyToMap(newSnap?.buildingsKey || '');
 
-    // 全セルキー（サイズ範囲）を対象にする：色/首都の変化検出を漏らさない
+    // 全セルキー（サイズ範囲）を対象にする：地形/色/首都/建造物の変化検出を漏らさない
     for(let r=0;r<curSnap.rows;r++){
       for(let c=0;c<curSnap.cols;c++){
         keys.add(`${r}-${c}`);
@@ -10849,16 +12091,24 @@
         keys.add(`${r}-${c}`);
       }
     }
-    // cellColors にだけ存在するキーも対象（念のため）
+    // cellColors / terrains / buildings にだけ存在するキーも対象（念のため）
     for(const k of Object.keys(curSnap.cellColors||{})) keys.add(k);
     for(const k of Object.keys(newSnap.cellColors||{})) keys.add(k);
+    for(const k of curTerr.keys || []) keys.add(k);
+    for(const k of newTerr.keys || []) keys.add(k);
+    for(const k of curBld.keys || []) keys.add(k);
+    for(const k of newBld.keys || []) keys.add(k);
 
     for(const k of keys){
+      const t1 = Number(curTerr.map[k] ?? -1);
+      const t2 = Number(newTerr.map[k] ?? -1);
       const c1 = (curSnap.cellColors && (k in curSnap.cellColors)) ? curSnap.cellColors[k] : null;
       const c2 = (newSnap.cellColors && (k in newSnap.cellColors)) ? newSnap.cellColors[k] : null;
+      const b1 = (k in (curBld.map || {})) ? String(curBld.map[k] || '') : '';
+      const b2 = (k in (newBld.map || {})) ? String(newBld.map[k] || '') : '';
       const cap1 = curSnap.capitalSet ? curSnap.capitalSet.has(k) : false;
       const cap2 = newSnap.capitalSet ? newSnap.capitalSet.has(k) : false;
-      if(c1 !== c2 || cap1 !== cap2){
+      if(t1 !== t2 || c1 !== c2 || cap1 !== cap2 || b1 !== b2){
         const m = k.match(/^(\d+)-(\d+)$/);
         if(!m) continue;
         changed.push({ row: Number(m[1]), col: Number(m[2]) });
@@ -10876,6 +12126,10 @@
   function diffChangedCellsWithinCoords(curSnap, newSnap, coords){
     const changed = [];
     const keys = new Set();
+    const curTerr = terrainsKeyToMap(curSnap?.terrainsKey || '');
+    const newTerr = terrainsKeyToMap(newSnap?.terrainsKey || '');
+    const curBld = buildingsKeyToMap(curSnap?.buildingsKey || '');
+    const newBld = buildingsKeyToMap(newSnap?.buildingsKey || '');
 
     // coords 由来のキーだけを見る（＝既知領域だけ）
     if(Array.isArray(coords)){
@@ -10894,11 +12148,15 @@
     }
 
     for(const k of keys){
+      const t1 = Number(curTerr.map[k] ?? -1);
+      const t2 = Number(newTerr.map[k] ?? -1);
       const c1 = (curSnap.cellColors && (k in curSnap.cellColors)) ? curSnap.cellColors[k] : null;
       const c2 = (newSnap.cellColors && (k in newSnap.cellColors)) ? newSnap.cellColors[k] : null;
+      const b1 = (k in (curBld.map || {})) ? String(curBld.map[k] || '') : '';
+      const b2 = (k in (newBld.map || {})) ? String(newBld.map[k] || '') : '';
       const cap1 = curSnap.capitalSet ? curSnap.capitalSet.has(k) : false;
       const cap2 = newSnap.capitalSet ? newSnap.capitalSet.has(k) : false;
-      if(c1 !== c2 || cap1 !== cap2){
+      if(t1 !== t2 || c1 !== c2 || cap1 !== cap2 || b1 !== b2){
         const m = k.match(/^(\d+)-(\d+)$/);
         if(!m) continue;
         changed.push({ row: Number(m[1]), col: Number(m[2]) });
@@ -11040,7 +12298,11 @@
         col,
         base: needBase,
         fog: needFog,
-        overlay: needOverlay
+        overlay: needOverlay,
+        terrain: terrainChanged,
+        color: colorChanged,
+        building: buildingChanged,
+        capital: capitalChanged
       });
     }
 
@@ -11074,6 +12336,7 @@
     }
 
     // RB は base / fog / overlay を見て、detail を取りに行く必要があるセルだけに絞る
+    // （base の内訳として terrain / color / building / capital も保持される）
     const metaList = buildRbChangedCellMeta(curSnap, newSnap, list);
     const metaMap = new Map();
     for(const it of metaList){
@@ -11121,15 +12384,18 @@
       const html = await res.text();
       const doc = new DOMParser().parseFromString(html, 'text/html');
 
-      // ★追加：クリック（短押し）でも header + チーム情報2テーブル を最新化
-      // （差分セルが0でも、上部の情報は更新したい）
-      refreshHeaderAndTeamTablesFromFetchedDoc(doc, { topUrl });
-
       // (2) 現在と最新を比較
       const curSnap = getBattlemapSnapshotFromDoc(document);
       const newSnap = getBattlemapSnapshotFromDoc(doc);
 
-      // (1) GRID_SIZE 差 → 長押し（全セル更新）へ
+      // ★追加：クリック（短押し）でも header + チーム情報2テーブル を最新化
+      // （差分セルが0でも、上部の情報は更新したい）
+      await refreshHeaderAndTeamTablesFromFetchedDoc(doc, {
+        topUrl,
+        snapshot: newSnap
+      });
+
+      // (3) 比較結果に応じて更新
       if(curSnap.rows !== newSnap.rows || curSnap.cols !== newSnap.cols){
         if(btn) btn.textContent = '全更新（サイズ差）…';
         await scanAllCellsAndRender();
@@ -11256,6 +12522,7 @@
 
         // -----------------------
         // (8) buildings：建物の追加/削除/種類変更/所有者変更
+        //     → 地形/チームカラー/首都に差分が無くても、建造物差分だけで更新対象に含める
         // -----------------------
         const buildingKeys = new Set();
         for(const k of bldLocal.keys) buildingKeys.add(k);
@@ -11339,12 +12606,13 @@
         return;
       }
 
-      const CONCURRENCY = 9;
+      // 戦況情報（差分更新）の fetch 並行処理数（多すぎると重いので抑制）
+      const CONCURRENCY = 4;
       await mapLimit(detailJobs, CONCURRENCY, async (job, idx) => {
         const { row, col } = job;
         try{
           const { holder, reg } = await fetchCellDetail(row, col);
-          setLayerCellText(row, col, `${reg}\n${holder}`);
+          setLayerCellText(row, col, buildLayerCellDisplayText(reg, holder));
         }catch(_e){
           setLayerCellText(row, col, `ERR\n(${row},${col})`);
         }
@@ -11576,6 +12844,29 @@
       mid.appendChild(row);
     })();
 
+    // レッドvsブルー：各セルのレギュレーション表示
+    (function mkRbCellRegulationBlock(){
+      const row = document.createElement('div');
+      row.className = 'dba-setting-row';
+
+      const lab = document.createElement('label');
+      lab.className = 'dba-setting-checkline';
+
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.checked = !!settings?.rbLayer?.showCellRegulation;
+      input.dataset.rbShowCellRegulation = '1';
+
+      const txt = document.createElement('span');
+      txt.className = 'dba-setting-checktext';
+      txt.textContent = '「レッドvsブルーモード」の各セルにレギュレーションを表示する。';
+
+      lab.appendChild(input);
+      lab.appendChild(txt);
+      row.appendChild(lab);
+      mid.appendChild(row);
+    })();
+
     (function mkCellSizeBlock(){
       const row = document.createElement('div');
       row.className = 'dba-setting-row';
@@ -11765,6 +13056,7 @@
         hc: { width: 30, height: 30 },
         l:  { width: 30, height: 30 },
         postBattleAutoDiff: false,
+        rbShowCellRegulation: false,
         layerTextOpacity: 100,
         showOriginalHeader: false
       };
@@ -11775,6 +13067,8 @@
       }
       const pb = dlg.querySelector('input[type="checkbox"][data-post-battle-auto-diff="1"]');
       if(pb) out.postBattleAutoDiff = !!pb.checked;
+      const rbReg = dlg.querySelector('input[type="checkbox"][data-rb-show-cell-regulation="1"]');
+      if(rbReg) out.rbShowCellRegulation = !!rbReg.checked;
       const op = dlg.querySelector('input[type="range"][data-layer-opacity="1"]');
       if(op) out.layerTextOpacity = Number.parseInt(op.value, 10);
       const hd = dlg.querySelector('input[type="checkbox"][data-show-original-header="1"]');
@@ -11792,6 +13086,10 @@
       const pb = dlg.querySelector('input[type="checkbox"][data-post-battle-auto-diff="1"]');
       if(pb){
         pb.checked = !!s?.postBattle?.autoDiffSync;
+      }
+      const rbReg = dlg.querySelector('input[type="checkbox"][data-rb-show-cell-regulation="1"]');
+      if(rbReg){
+        rbReg.checked = !!s?.rbLayer?.showCellRegulation;
       }
       const op = dlg.querySelector('input[type="range"][data-layer-opacity="1"]');
       if(op){
@@ -11825,6 +13123,7 @@
       cur.cellSize.l.width   = sanitizeCellPx(v.l.width,   DEFAULT_SETTINGS.cellSize.l.width);
       cur.cellSize.l.height  = sanitizeCellPx(v.l.height,  DEFAULT_SETTINGS.cellSize.l.height);
       cur.postBattle.autoDiffSync = !!v.postBattleAutoDiff;
+      cur.rbLayer.showCellRegulation = !!v.rbShowCellRegulation;
       cur.layer.textOpacity = sanitizeOpacity(v.layerTextOpacity);
       cur.header.showOriginalHeader = !!v.showOriginalHeader;
 
@@ -11836,6 +13135,23 @@
       applyCurrentModeScale();
       reapplyOriginalHeaderVisibilityFromSettings();
       scheduleBattlemapLayerSync();
+
+      if(mode === 'rb'){
+        const showReg = !!cur?.rbLayer?.showCellRegulation;
+        for(const el of document.querySelectorAll('#dba-battlemap-layer-grid .dba-layer-cell__content')){
+          const raw = String(el.textContent || '');
+          if(!raw) continue;
+          if(showReg){
+            // ONに戻しただけでは reg を再取得できないため、ここでは現状維持。
+            // 次回の「戦況情報」クリック/長押し、または攻撃後自動差分取得で再描画される。
+            continue;
+          }
+          const parts = raw.split('\n');
+          if(parts.length >= 2){
+            el.textContent = parts.slice(1).join('\n');
+          }
+        }
+      }
 
       refreshInitial();
     }
@@ -12012,6 +13328,10 @@
       if(rosterLpFired) return;
       openRosterModal();
     });
+    bindFnButtonTooltip(
+      btnRoster,
+      'クリック：「装備ロスター」画面を表示\n長押し：装備ロスターの切替や新規作成'
+    );
 
     const btnBattleInfo = document.createElement('button');
     btnBattleInfo.type = 'button';
@@ -12062,6 +13382,10 @@
       if(btnBattleInfo.disabled) return;
       await updateOnlyChangedCellsFromTopPage();
     });
+    bindFnButtonTooltip(
+      btnBattleInfo,
+      'クリック：差分更新\n長押し：全セル更新'
+    );
 
     const btnAutoEquip = document.createElement('button');
     btnAutoEquip.type = 'button';
@@ -12100,7 +13424,7 @@
 
     addStyle(CSS);
 
-    const doInsert = () => {
+    const doInsert = async () => {
       // 二重挿入防止
       if (document.getElementById('dba-function-section')) return;
 
@@ -12123,6 +13447,12 @@
       const hh = bar.querySelector('#dba-fn-header-host');
       ensureFnHeaderInfoContainer(hh || null);
       renderFnHeaderInfo();
+      await updateRbUnifiedRegDisplay(true);
+
+      // 初回表示時点でも「保有地域数」をローカル算出つき表示へ置き換える
+      try{
+        await applyLocalOwnershipCountsToTeamTable(document, getBattlemapSnapshotFromDoc(document));
+      }catch(_e){}
 
       // fnbar 内（上段）に、トップページ同期の「経過時間」プログレスバーを設置
       const ph = bar.querySelector('#dba-fn-progress-host');
