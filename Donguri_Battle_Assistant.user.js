@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Donguri Battle Assistant
 // @namespace    https://donguri.5ch.io/
-// @version      3.1.0.4
+// @version      3.1.2.3
 // @description  5ちゃんねるのどんぐりシステムから派生したゲームの操作性を改善するためのユーザースクリプト
 // @author       福呼び草
 // @assistant    ChatGPT (OpenAI)
@@ -19,7 +19,7 @@
   // =========================
   // スクリプト自身のバージョン（スクリプト情報表示用）
   // =========================
-  const DBA_VERSION = '3.1.0.4';
+  const DBA_VERSION = '3.1.2.3';
 
   console.log('[DBA] BOOT', 'ver=', DBA_VERSION, 'href=', location.href);
 
@@ -136,7 +136,7 @@
       padding: 0;
       box-sizing: border-box;
       border: 0 none #000;
-      background: trasparent;
+      background: transparent;
     }
     .dba-fn-header-info__title {
       font-size: 1.1em;
@@ -397,7 +397,7 @@
     }
     /* 試合バー */
     #dba-top-progress .progress-bar.dba-match-progress {
-      height: 18x;
+      height: 18px;
       font-size: 15px;
       margin-top: 0;
       border-radius: 10px;
@@ -843,7 +843,7 @@
       border: 2px solid #000;
       border-radius: 12px;
       margin: 4px 8px;
-      padding: 8px auto;
+      padding: 8px 12px;
       font-size: 1em;
       font-weight: 600;
       line-height: 1.1em;
@@ -1862,7 +1862,7 @@
 
   // =========================
   // ファンクションボタン用ホバーヒント
-  //  - マウスカーソルを1秒以上静止で表示
+  //  - マウスカーソルを一定時間静止で表示
   //  - 長押しやタッチ操作は対象外
   // =========================
   const DBA_FN_TOOLTIP = {
@@ -1939,7 +1939,7 @@
       DBA_FN_TOOLTIP.timer = 0;
       if(DBA_FN_TOOLTIP.anchor !== btn) return;
       showFnTooltipNearButton(btn, DBA_FN_TOOLTIP.text);
-    }, 1000);
+    }, 600);   // ヘルプバルーンの待機時間（ミリ秒）
   }
 
   function bindFnButtonTooltip(btn, text){
@@ -1961,7 +1961,7 @@
       DBA_FN_TOOLTIP.mouseX = x;
       DBA_FN_TOOLTIP.mouseY = y;
 
-      // 「静止1秒」を満たすため、ある程度動いたらタイマーをやり直す
+      // 静止時間を満たすため、ある程度動いたらタイマーをやり直す
       if(dx > 2 || dy > 2){
         const el = document.getElementById('dba-fn-tooltip');
         if(el && el.dataset.open === '1'){
@@ -2903,7 +2903,9 @@
     inFlight: false,
     doneAt: 0,
     lastMinute: -1,
-    lastAutoAt: 0 // 最終補正（自動）専用
+    lastAutoAt: 0, // 最終補正（自動）専用
+    failCount: 0,
+    nextRetryAt: 0
   };
 
   function pctToMinute(pct){
@@ -2915,6 +2917,13 @@
 
   async function fetchTopElapsedProgressFromTopPageOnce(reason){
     if(DBA_TOP_PROGRESS_AUTOSYNC.inFlight) return false;
+
+    const now = Date.now();
+    const isManual = (String(reason || '') === 'manual');
+    if(!isManual && now < Number(DBA_TOP_PROGRESS_AUTOSYNC.nextRetryAt || 0)){
+      return false;
+    }
+
     DBA_TOP_PROGRESS_AUTOSYNC.inFlight = true;
     try{
       // メタ表示を更新（見た目だけ）
@@ -2934,6 +2943,8 @@
 
       saveTopElapsedProgress(pct, term);
       DBA_TOP_PROGRESS_AUTOSYNC.doneAt = Date.now();
+      DBA_TOP_PROGRESS_AUTOSYNC.failCount = 0;
+      DBA_TOP_PROGRESS_AUTOSYNC.nextRetryAt = 0;
       // manual 以外は「自動補正」としても記録
       if(String(reason || '') !== 'manual'){
         DBA_TOP_PROGRESS_AUTOSYNC.lastAutoAt = DBA_TOP_PROGRESS_AUTOSYNC.doneAt;
@@ -2943,6 +2954,10 @@
       try{ renderTopProgress(); }catch(_e){}
       return true;
     }catch(_e){
+      const failCount = Math.max(0, Number(DBA_TOP_PROGRESS_AUTOSYNC.failCount || 0)) + 1;
+      DBA_TOP_PROGRESS_AUTOSYNC.failCount = failCount;
+      const retryMs = Math.min(60000, 5000 * failCount);
+      DBA_TOP_PROGRESS_AUTOSYNC.nextRetryAt = Date.now() + retryMs;
       return false;
     }finally{
       DBA_TOP_PROGRESS_AUTOSYNC.inFlight = false;
@@ -2954,6 +2969,11 @@
   function maybeAutoSyncTopProgress(){
     // まだコンテナが無い/表示不要なら何もしない
     if(!document.getElementById('dba-top-progress-inner')) return;
+
+    const now = Date.now();
+    if(now < Number(DBA_TOP_PROGRESS_AUTOSYNC.nextRetryAt || 0)){
+      return;
+    }
 
     const data = loadTopElapsedProgress();
     const pct = estimateTopElapsedProgressPct();
@@ -3478,28 +3498,25 @@
       DBA_LIGHT_REFRESH_STATE.timer = 0;
     }
     DBA_LIGHT_REFRESH_STATE.running = false;
+    setLightRefreshButtonBusyState(false);
   }
 
-  function scheduleLightRefreshAfterBattleLog(){
-    const s = loadSettings();
-    if(!s?.lightRefresh?.enabled) return false;
-    if(DBA_LIGHT_REFRESH_STATE.running) return true;
+  function setLightRefreshButtonBusyState(running){
+    const btn = document.getElementById('dba-btn-light-refresh');
+    if(!btn) return;
+    btn.disabled = !!running;
+    btn.dataset.dbaBusy = running ? '1' : '0';
+    btn.textContent = running ? '軽量化中…' : '軽量化';
+  }
 
-    DBA_LIGHT_REFRESH_STATE.battleCount += 1;
-    const threshold = sanitizeLightRefreshBattleCount(s?.lightRefresh?.battleCount);
-    if(DBA_LIGHT_REFRESH_STATE.battleCount < threshold){
-      return false;
-    }
+  function triggerLightRefreshNow(){
+    if(DBA_LIGHT_REFRESH_STATE.running) return false;
 
-    DBA_LIGHT_REFRESH_STATE.battleCount = 0;
     DBA_LIGHT_REFRESH_STATE.running = true;
+    DBA_LIGHT_REFRESH_STATE.battleCount = 0;
 
     try{
-      const btn = document.getElementById('dba-btn-settings');
-      if(btn){
-        btn.dataset.dbaLightRefresh = '1';
-        btn.textContent = '軽量化再読込…';
-      }
+      setLightRefreshButtonBusyState(true);
     }catch(_e){}
 
     DBA_LIGHT_REFRESH_STATE.timer = setTimeout(() => {
@@ -3515,6 +3532,20 @@
     }, 600);
 
     return true;
+  }
+
+  function scheduleLightRefreshAfterBattleLog(){
+    const s = loadSettings();
+    if(!s?.lightRefresh?.enabled) return false;
+    if(DBA_LIGHT_REFRESH_STATE.running) return true;
+
+    DBA_LIGHT_REFRESH_STATE.battleCount += 1;
+    const threshold = sanitizeLightRefreshBattleCount(s?.lightRefresh?.battleCount);
+    if(DBA_LIGHT_REFRESH_STATE.battleCount < threshold){
+      return false;
+    }
+
+  return triggerLightRefreshNow();
   }
 
   async function scheduleBattleInfoDiffSyncAfterBattleLog(){
@@ -4883,7 +4914,6 @@
   }
 
   function openBattleResultModalWithNode(nodeOrText, titleText){
-    buildBattleResultModal();
     buildBattleResultModal();
     ensureBattleResultFloatWheelBridge();
     const dlg = document.getElementById('dba-m-battle-result');
@@ -13199,14 +13229,14 @@
       cnt.dataset.lightRefreshBattleCount = '1';
 
       const suf = document.createElement('span');
-      suf.textContent = '回ごと';
+      suf.textContent = '回ごとに自動でページの再読込を行う。';
 
       const note = document.createElement('div');
       note.style.width = '100%';
       note.style.fontSize = '0.92em';
       note.style.lineHeight = '1.35';
       note.style.opacity = '0.9';
-      note.textContent = '※ブラウザ拡張のように Firefox 全体の Cache を直接消すのではなく、ページ再読込でページ内状態を掃除する代替策です。';
+      note.textContent = '※拡張機能のようにブラウザの Cache を直接消すのではなく、ページの再読込で掃除するという代替策です。';
 
       sub.appendChild(pre);
       sub.appendChild(cnt);
@@ -13753,6 +13783,21 @@
       'クリック：差分更新\n長押し：全セル更新'
     );
 
+    const btnLightRefresh = document.createElement('button');
+    btnLightRefresh.type = 'button';
+    btnLightRefresh.className = 'dba-btn-fn';
+    btnLightRefresh.textContent = '軽量化';
+    btnLightRefresh.id = 'dba-btn-light-refresh';
+    btnLightRefresh.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      triggerLightRefreshNow();
+    });
+    bindFnButtonTooltip(
+      btnLightRefresh,
+      'ページ再読込し不要データ削除等'
+    );
+
     const btnAutoEquip = document.createElement('button');
     btnAutoEquip.type = 'button';
     btnAutoEquip.className = 'dba-btn-fn';
@@ -13774,6 +13819,7 @@
     buttonsRow.appendChild(btnSettings);
     buttonsRow.appendChild(btnAutoEquip);
     buttonsRow.appendChild(btnRapid);
+    buttonsRow.appendChild(btnLightRefresh);
     buttonsRow.appendChild(btnRoster);
     buttonsRow.appendChild(btnBattleInfo);
 
@@ -13824,6 +13870,7 @@
       const ph = bar.querySelector('#dba-fn-progress-host');
       ensureTopProgressContainer(ph || null);
       startTopProgressTicker();
+      setLightRefreshButtonBusyState(!!DBA_LIGHT_REFRESH_STATE.running);
 
       // fnbar高さを実測して反映（初回 + 画面変化に追従）
       scheduleFnbarHeightSync();
