@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Donguri Battle Assistant
 // @namespace    https://donguri.5ch.io/
-// @version      3.2.1.4
+// @version      3.3.1.0
 // @description  5ちゃんねるのどんぐりシステムから派生したゲームの操作性を改善するためのユーザースクリプト
 // @author       福呼び草
 // @assistant    ChatGPT (OpenAI)
@@ -19,7 +19,7 @@
   // =========================
   // スクリプト自身のバージョン（スクリプト情報表示用）
   // =========================
-  const DBA_VERSION = '3.2.1.4';
+  const DBA_VERSION = '3.3.1.0';
 
   console.log('[DBA] BOOT', 'ver=', DBA_VERSION, 'href=', location.href);
 
@@ -1474,7 +1474,89 @@
       font-size: 0.95em;
       line-height: 1.25em;
     }
-      /* ===== オート装備（候補ポップアップ / 設定） ===== */
+    /* ===== 装備ロスター：オプション ===== */
+    #dba-m-roster-option.dba-m-std {
+      width: min(720px, calc(100vw - 24px));
+      max-height: min(88vh, calc(100vh - 24px));
+      overflow: hidden;
+    }
+    #dba-m-roster-option.dba-m-std .dba-modal__mid {
+      max-height: calc(min(88vh, calc(100vh - 24px)) - 110px);
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .dba-roster-opt-section {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 12px 12px;
+      border: 1px solid #00000022;
+      border-radius: 12px;
+      background: #fff;
+      box-sizing: border-box;
+    }
+    .dba-roster-opt-section__title {
+      margin: 0;
+      padding: 0 0 8px 0;
+      border-bottom: 1px solid #00000022;
+      font-size: 1.02em;
+      font-weight: 800;
+      text-align: left;
+      line-height: 1.35;
+    }
+    .dba-roster-opt-note {
+      margin: 0;
+      padding: 0;
+      font-size: 0.92em;
+      font-weight: 600;
+      line-height: 1.45;
+      text-align: left;
+      color: #333;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .dba-roster-opt-btngrid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+      align-items: stretch;
+    }
+    .dba-roster-opt-btngrid .dba-btn-mini {
+      width: 100%;
+      min-height: 44px;
+      margin: 0;
+      padding: 10px 12px;
+      text-align: center;
+      box-sizing: border-box;
+    }
+    /* ===== 装備ロスター：バックアップ直接編集 ===== */
+    #dba-m-roster-backup-editor.dba-m-std {
+      width: min(1040px, calc(100vw - 16px));
+      height: min(94vh, calc(100vh - 16px));
+      max-height: min(94vh, calc(100vh - 16px));
+      overflow: hidden;
+    }
+    #dba-m-roster-backup-editor.dba-m-std .dba-modal__mid {
+      flex: 1 1 auto;
+      min-height: 0;
+      height: auto;
+      max-height: none;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      padding: 12px;
+    }
+    #dba-m-roster-backup-editor .dba-backup-textarea {
+      flex: 1 1 auto;
+      min-height: 0;
+      height: 100%;
+      max-height: none;
+      resize: none;
+    }
+    /* ===== オート装備（候補ポップアップ / 設定） ===== */
     #dba-auto-equip-pop {
       position: fixed;
       z-index: 999998; /* fnbar(999999)より下 */
@@ -2051,6 +2133,8 @@
   const LS_AUTO_EQUIP_NOTIFY_AUTOCLOSE_SEC_KEY = 'dba.autoEquip.notifyAutoClose.sec.v1'; // number
   const LS_AUTO_EQUIP_PREFER_TOP_KEY = 'dba.autoEquip.preferTop.enabled.v1'; // 0/1 「一番上の装備候補を常に優先する」
   const LS_CURRENT_PRESET_NAME_KEY = 'dba.roster.currentPresetName.v1'; // string 現在装備中として扱うプリセット名
+  const LS_ROSTER_SCROLL_REMEMBER_KEY = 'dba.roster.scrollRemember.v1'; // 0/1
+  const LS_ROSTER_SCROLL_TOP_KEY = 'dba.roster.scrollTop.v1'; // number
   const LS_BR_TAIL2_KEY = 'dba.battleResult.tail2.v1'; // 戦闘結果「末尾2行のみ表示」ON/OFF
   const LS_BR_ALIGN_KEY = 'dba.battleResult.align.v1'; // left / center / right
   const LS_BR_PASS_KEY  = 'dba.battleResult.passThrough.v1'; // 0/1 クリック透過
@@ -2058,6 +2142,10 @@
   const LS_BR_WIDTH_KEY = 'dba.battleResult.widthPx.v1'; // number 横幅(px)
   const LS_BR_HIDE_CLOSE_KEY = 'dba.battleResult.hideClose.v1'; // 0/1 「戦闘結果」ウインドウのCloseボタン非表示
   const LS_BR_HIDE_OPT_KEY   = 'dba.battleResult.hideOption.v1'; // 0/1 「戦闘結果」ウインドウのオプションボタン非表示
+
+  const DBA_ROSTER_UI_STATE = {
+    scrollTop: 0
+  };
 
   // トップページ「経過時間」プログレス（同期用）
   const LS_TOP_ELAPSED_PROGRESS_KEY = 'dba.topElapsedProgress.v1';
@@ -3508,6 +3596,77 @@
     try{
       localStorage.setItem(LS_CURRENT_PRESET_NAME_KEY, String(name || ''));
     }catch(_e){}
+  }
+
+  function loadRosterScrollRememberEnabled(){
+    try{
+      const raw = localStorage.getItem(LS_ROSTER_SCROLL_REMEMBER_KEY);
+      if(raw == null) return false; // デフォルトOFF
+      return raw === '1';
+    }catch(_e){
+      return false;
+    }
+  }
+
+  function saveRosterScrollRememberEnabled(on){
+    try{
+      localStorage.setItem(LS_ROSTER_SCROLL_REMEMBER_KEY, on ? '1' : '0');
+    }catch(_e){}
+  }
+
+  function loadRosterSavedScrollTop(){
+    try{
+      const raw = localStorage.getItem(LS_ROSTER_SCROLL_TOP_KEY);
+      if(raw == null) return 0;
+      const n = Number.parseInt(raw, 10);
+      if(!Number.isFinite(n)) return 0;
+      return Math.max(0, n);
+    }catch(_e){
+      return 0;
+    }
+  }
+
+  function saveRosterSavedScrollTop(v){
+    try{
+      const n = Number.parseInt(v, 10);
+      localStorage.setItem(LS_ROSTER_SCROLL_TOP_KEY, String(Number.isFinite(n) ? Math.max(0, n) : 0));
+    }catch(_e){}
+  }
+
+  function clearRosterSavedScrollTop(){
+    try{
+      localStorage.removeItem(LS_ROSTER_SCROLL_TOP_KEY);
+    }catch(_e){}
+  }
+
+  function captureRosterListScrollState(){
+    const list = document.getElementById('dba-roster-list');
+    if(!(list instanceof HTMLElement)) return 0;
+    const top = Math.max(0, Math.round(list.scrollTop || 0));
+    DBA_ROSTER_UI_STATE.scrollTop = top;
+    if(loadRosterScrollRememberEnabled()){
+      saveRosterSavedScrollTop(top);
+    }
+    return top;
+  }
+
+  function prepareRosterScrollStateForOpen(){
+    if(loadRosterScrollRememberEnabled()){
+      DBA_ROSTER_UI_STATE.scrollTop = loadRosterSavedScrollTop();
+    }else{
+      DBA_ROSTER_UI_STATE.scrollTop = 0;
+      clearRosterSavedScrollTop();
+    }
+  }
+
+  function finalizeRosterScrollStateOnClose(){
+    const top = captureRosterListScrollState();
+    if(loadRosterScrollRememberEnabled()){
+      saveRosterSavedScrollTop(top);
+    }else{
+      DBA_ROSTER_UI_STATE.scrollTop = 0;
+      clearRosterSavedScrollTop();
+    }
   }
 
   function getTeamChallengeUrl(){
@@ -7470,12 +7629,11 @@
 
       const dy = Number(e.deltaY || 0);
 
-      // list 自身がスクロール可能なら、そのスクロールだけを許可して背面伝播を止める
+      // list 自身がスクロール可能なら、ネイティブスクロールをそのまま使い、
+      // 背面 modal / page への伝播だけを止める
       if(canScrollElementByDelta(listEl, dy)){
-        e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();
-        listEl.scrollTop += dy;
         return;
       }
 
@@ -7506,9 +7664,10 @@
       const deltaY = touchStartY - t.clientY;
 
       if(canScrollElementByDelta(listEl, deltaY)){
-        // list 内だけスクロールさせ、背面の modal / page には渡さない
+        // list 内だけネイティブスクロールさせ、背面の modal / page には渡さない
         e.stopPropagation();
         e.stopImmediatePropagation();
+        touchStartY = t.clientY;
         return;
       }
 
@@ -7516,6 +7675,7 @@
       e.preventDefault();
       e.stopPropagation();
       e.stopImmediatePropagation();
+      touchStartY = t.clientY;
     };
 
     const onScrollChainBlock = (e) => {
@@ -7640,6 +7800,7 @@
     document.body.appendChild(dlg);
 
     function closeDirect(){
+      finalizeRosterScrollStateOnClose();
       try{ dlg.close(); }catch(_e){ dlg.removeAttribute('open'); }
     }
     btnX.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); closeDirect(); });
@@ -7650,6 +7811,16 @@
   function renderRosterModalState(selectedPresetName){
     const box = document.getElementById('dba-roster-box');
     if(!box) return;
+    {
+      const prevList = document.getElementById('dba-roster-list');
+      if(prevList instanceof HTMLElement){
+        const prevTop = Math.max(0, Math.round(prevList.scrollTop || 0));
+        DBA_ROSTER_UI_STATE.scrollTop = prevTop;
+        if(loadRosterScrollRememberEnabled()){
+          saveRosterSavedScrollTop(prevTop);
+        }
+      }
+    }
     const { roster } = getActiveRoster();
     const title = roster ? roster.title : '装備ロスター';
     const presets = roster && roster.presets ? roster.presets : {};
@@ -7698,19 +7869,19 @@
     btnRename.className = 'dba-btn-mini';
     btnRename.textContent = '名前変更';
 
+    const btnOption = document.createElement('button');
+    btnOption.type = 'button';
+    btnOption.className = 'dba-btn-mini';
+    btnOption.textContent = 'オプション';
+
     const btnWipe = document.createElement('button');
     btnWipe.type = 'button';
     btnWipe.className = 'dba-btn-mini dba-btn-mini--danger';
     btnWipe.textContent = 'ロスター削除';
 
-    const btnBackup = document.createElement('button');
-    btnBackup.type = 'button';
-    btnBackup.className = 'dba-btn-mini';
-    btnBackup.textContent = 'バックアップ';
-
     headBtns.appendChild(btnRename);
+    headBtns.appendChild(btnOption);
     headBtns.appendChild(btnWipe);
-    headBtns.appendChild(btnBackup);
 
     head.appendChild(headTitle);
     head.appendChild(headBtns);
@@ -7852,6 +8023,24 @@
     }
     box.appendChild(list);
 
+    list.addEventListener('scroll', () => {
+      const top = Math.max(0, Math.round(list.scrollTop || 0));
+      DBA_ROSTER_UI_STATE.scrollTop = top;
+      if(loadRosterScrollRememberEnabled()){
+        saveRosterSavedScrollTop(top);
+      }
+    }, { passive: true });
+
+    requestAnimationFrame(() => {
+      const restoreTop = Math.max(
+        0,
+        loadRosterScrollRememberEnabled()
+          ? loadRosterSavedScrollTop()
+          : Number(DBA_ROSTER_UI_STATE.scrollTop || 0)
+      );
+      list.scrollTop = restoreTop;
+    });
+
     if(addPickMode){
       const releaseScrollLock = installRosterInsertPickScrollLock(list);
 
@@ -7947,6 +8136,16 @@
       });
     });
 
+    btnOption.addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      if(rosterDlg) rosterDlg.dataset.dbaDelMode = '0';
+      if(rosterDlg) rosterDlg.dataset.dbaEditMode = '0';
+      if(rosterDlg) rosterDlg.dataset.dbaAddPickMode = '0';
+      openRosterOptionsModal(() => {
+        renderRosterModalState(selectedPresetName || null);
+      });
+    });
+
     btnWipe.addEventListener('click', (e) => {
       e.preventDefault(); e.stopPropagation();
       if(rosterDlg) rosterDlg.dataset.dbaDelMode = '0';
@@ -7954,15 +8153,6 @@
       openRosterWipeModal(() => {
         deleteActiveRosterAndSwitch();
         renderRosterModalState(null);
-      });
-    });
-
-    btnBackup.addEventListener('click', (e) => {
-      e.preventDefault(); e.stopPropagation();
-      if(rosterDlg) rosterDlg.dataset.dbaDelMode = '0';
-      if(rosterDlg) rosterDlg.dataset.dbaEditMode = '0';
-      openRosterBackupModal(() => {
-        renderRosterModalState(selectedPresetName || null);
       });
     });
 
@@ -8032,6 +8222,7 @@
     const openNow = () => {
       buildRosterModal();
       createRosterIfNeeded();
+      prepareRosterScrollStateForOpen();
       const dlg = document.getElementById('dba-m-roster');
       if(dlg){
         dlg.dataset.dbaAddPickMode = '0';
@@ -9342,6 +9533,168 @@
 
     overwriteRosterFromObject(importedObj);
     try{ onDone && onDone(); }catch(_e){}
+  }
+
+  function ensureRosterOptionsModal(){
+    if(document.getElementById('dba-m-roster-option')) return;
+
+    const dlg = document.createElement('dialog');
+    dlg.id = 'dba-m-roster-option';
+    dlg.className = 'dba-m-std';
+
+    const top = document.createElement('div');
+    top.className = 'dba-modal__top';
+    const t = document.createElement('div');
+    t.className = 'dba-modal__title';
+    t.textContent = '装備ロスター：オプション';
+    const x = document.createElement('button');
+    x.type = 'button';
+    x.className = 'dba-btn-x';
+    x.textContent = '×';
+    top.appendChild(t);
+    top.appendChild(x);
+
+    const mid = document.createElement('div');
+    mid.className = 'dba-modal__mid';
+
+    const rememberSection = document.createElement('section');
+    rememberSection.className = 'dba-roster-opt-section';
+
+    const rememberTitle = document.createElement('div');
+    rememberTitle.className = 'dba-roster-opt-section__title';
+    rememberTitle.textContent = '表示オプション';
+    rememberSection.appendChild(rememberTitle);
+
+    const rememberLabel = document.createElement('label');
+    rememberLabel.className = 'dba-setting-checkline';
+    const rememberChk = document.createElement('input');
+    rememberChk.type = 'checkbox';
+    rememberChk.id = 'dba-roster-option-scroll-remember';
+    const rememberText = document.createElement('span');
+    rememberText.className = 'dba-setting-checktext';
+    rememberText.textContent = 'プリセットリストのスクロール位置を記憶する。';
+    rememberLabel.appendChild(rememberChk);
+    rememberLabel.appendChild(rememberText);
+    rememberSection.appendChild(rememberLabel);
+
+    const rememberNote = document.createElement('p');
+    rememberNote.className = 'dba-roster-opt-note';
+    rememberNote.textContent = '次に「装備ロスター」を開いた時、プリセットリストのスクロール位置を復元します。';
+    rememberSection.appendChild(rememberNote);
+
+    mid.appendChild(rememberSection);
+
+    const backupSection = document.createElement('section');
+    backupSection.className = 'dba-roster-opt-section';
+
+    const backupTitle = document.createElement('div');
+    backupTitle.className = 'dba-roster-opt-section__title';
+    backupTitle.textContent = 'バックアップ';
+    backupSection.appendChild(backupTitle);
+
+    const backupNote = document.createElement('p');
+    backupNote.className = 'dba-roster-opt-note';
+    backupNote.textContent = '現在の装備ロスターを保存・復元したり、JSON を直接編集したりできます。';
+    backupSection.appendChild(backupNote);
+
+    const backupWrap = document.createElement('div');
+    backupWrap.className = 'dba-roster-opt-btngrid';
+
+    const btnExport = document.createElement('button');
+    btnExport.type = 'button';
+    btnExport.id = 'dba-roster-option-btn-export';
+    btnExport.className = 'dba-btn-mini';
+    btnExport.textContent = 'エクスポート';
+
+    const btnImport = document.createElement('button');
+    btnImport.type = 'button';
+    btnImport.id = 'dba-roster-option-btn-import';
+    btnImport.className = 'dba-btn-mini';
+    btnImport.textContent = 'インポート';
+
+    const btnEdit = document.createElement('button');
+    btnEdit.type = 'button';
+    btnEdit.id = 'dba-roster-option-btn-edit';
+    btnEdit.className = 'dba-btn-mini';
+    btnEdit.textContent = 'ファイルを直接編集';
+
+    backupWrap.appendChild(btnExport);
+    backupWrap.appendChild(btnImport);
+    backupWrap.appendChild(btnEdit);
+    backupSection.appendChild(backupWrap);
+    mid.appendChild(backupSection);
+
+    const bot = document.createElement('div');
+    bot.className = 'dba-modal__bot';
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'dba-btn-close';
+    cancel.textContent = 'Close';
+    bot.appendChild(cancel);
+
+    dlg.appendChild(top);
+    dlg.appendChild(mid);
+    dlg.appendChild(bot);
+    document.body.appendChild(dlg);
+
+    function closeDirect(){
+      try{ dlg.close(); }catch(_e){ dlg.removeAttribute('open'); }
+    }
+    x.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeDirect(); });
+    cancel.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeDirect(); });
+    dlg.addEventListener('cancel', (e)=>{ e.preventDefault(); closeDirect(); });
+  }
+
+  function openRosterOptionsModal(onDone){
+    const openNow = () => {
+      ensureRosterOptionsModal();
+      const dlg = document.getElementById('dba-m-roster-option');
+      if(!dlg) return;
+
+      const chkRemember = document.getElementById('dba-roster-option-scroll-remember');
+      const btnExport = document.getElementById('dba-roster-option-btn-export');
+      const btnImport = document.getElementById('dba-roster-option-btn-import');
+      const btnEdit = document.getElementById('dba-roster-option-btn-edit');
+
+      if(chkRemember){
+        chkRemember.checked = loadRosterScrollRememberEnabled();
+        chkRemember.onchange = () => {
+          const on = !!chkRemember.checked;
+          saveRosterScrollRememberEnabled(on);
+          if(on){
+            const top = captureRosterListScrollState();
+            saveRosterSavedScrollTop(top);
+          }else{
+            clearRosterSavedScrollTop();
+          }
+        };
+      }
+
+      if(btnExport){
+        btnExport.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          exportRosterViaUi(onDone);
+        };
+      }
+      if(btnImport){
+        btnImport.onclick = async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          await importRosterViaUi(onDone);
+        };
+      }
+      if(btnEdit){
+        btnEdit.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          openRosterBackupEditorModal(onDone);
+        };
+      }
+
+      try{ dlg.showModal(); }catch(_e){ dlg.setAttribute('open',''); }
+    };
+    if(document.body) openNow(); else document.addEventListener('DOMContentLoaded', openNow, { once:true });
   }
 
   function ensureRosterBackupModal(){
