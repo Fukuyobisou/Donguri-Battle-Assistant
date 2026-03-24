@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Donguri Battle Assistant
 // @namespace    https://donguri.5ch.io/
-// @version      5.2.0.0
+// @version      5.2.0.2
 // @description  5ちゃんねるのどんぐりシステムから派生したゲームの操作性を改善するためのユーザースクリプト
 // @author       福呼び草
 // @assistant    ChatGPT (OpenAI)
@@ -22,7 +22,7 @@
   // =========================
   // スクリプト自身のバージョン（スクリプト情報表示用）
   // =========================
-  const DBA_VERSION = '5.2.0.0';
+  const DBA_VERSION = '5.2.0.2';
 
   console.log('[DBA] BOOT', 'ver=', DBA_VERSION, 'href=', location.href);
 
@@ -4671,17 +4671,14 @@
       lpCtx = calcRC(evt);
       if(!lpCtx) return;
 
-      // 「クリック/長押し」分岐はオート装備ONの時だけ意味があるので、その時だけ表示
-      if(loadAutoEquipEnabled()){
-        longPressGaugeStart(lpCtx.x, lpCtx.y, LP_MS);
-      }
+      // 長押しメニューは、オート装備OFFでも開けるようにする
+      // （タイル操作「要塞を建設」「レーダーを設置」も同じメニュー内にあるため）
+      longPressGaugeStart(lpCtx.x, lpCtx.y, LP_MS);
       lpTimer = setTimeout(async () => {
         lpFired = true;
         try{
-          if(loadAutoEquipEnabled()){
-            longPressGaugeComplete();
-            await handleAutoEquipLongPress(lpCtx.r, lpCtx.c, lpCtx.x, lpCtx.y);
-          }
+          longPressGaugeComplete();
+          await handleAutoEquipLongPress(lpCtx.r, lpCtx.c, lpCtx.x, lpCtx.y);
         }catch(_e){
           // noop
         }
@@ -6472,17 +6469,14 @@
       // ★重要：rc を確実に保持（spreading 記法や誤記で壊れないよう明示）
       lpCtx = { r: rc.r, c: rc.c, x, y };
 
-      // 「クリック/長押し」分岐はオート装備ONの時だけ意味があるので、その時だけ表示
-      if(loadAutoEquipEnabled()){
-        longPressGaugeStart(lpCtx.x, lpCtx.y, LP_MS);
-      }
+      // 長押しメニューは、オート装備OFFでも開けるようにする
+      // （オート装備候補の確認用途もあるため）
+      longPressGaugeStart(lpCtx.x, lpCtx.y, LP_MS);
       lpTimer = setTimeout(async () => {
         lpFired = true;
         try{
-          if(loadAutoEquipEnabled()){
-            longPressGaugeComplete();
-            await handleAutoEquipLongPress(lpCtx.r, lpCtx.c, lpCtx.x, lpCtx.y);
-          }
+          longPressGaugeComplete();
+          await handleAutoEquipLongPress(lpCtx.r, lpCtx.c, lpCtx.x, lpCtx.y);
         }catch(_e){
           // noop
         }
@@ -7376,7 +7370,7 @@
     }else{
       left = x - 12;
     }
-    if(y < svh/2){
+    if(y < vh/2){
       top = y + 12;
     }else{
       top = y - 12;
@@ -7393,7 +7387,7 @@
 
     if(rect.right > vw - 8) nx -= (rect.right - (vw - 8));
     if(rect.left < 8) nx = 8;
-    if(rect.bottom > svh - 8) ny -= (rect.bottom - (svh - 8));
+    if(rect.bottom > vh - 8) ny -= (rect.bottom - (svh - 8));
     if(rect.top < 8) ny = 8;
 
     pop.style.left = nx + 'px';
