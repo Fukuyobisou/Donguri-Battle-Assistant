@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Donguri Battle Assistant
 // @namespace    https://donguri.5ch.io/
-// @version      4.3.5.7
+// @version      5.0.1.0
 // @description  5ちゃんねるのどんぐりシステムから派生したゲームの操作性を改善するためのユーザースクリプト
 // @author       福呼び草
 // @assistant    ChatGPT (OpenAI)
@@ -9,6 +9,9 @@
 // @match        https://donguri.5ch.io/teambattle*
 // @match        https://donguri.5ch.io/bag
 // @match        https://donguri.5ch.io/
+// @match        https://donguri.world/teambattle*
+// @match        https://donguri.world/bag
+// @match        https://donguri.world/
 // @run-at       document-start
 // @grant        GM_addStyle
 // ==/UserScript==
@@ -19,7 +22,7 @@
   // =========================
   // スクリプト自身のバージョン（スクリプト情報表示用）
   // =========================
-  const DBA_VERSION = '4.3.5.7';
+  const DBA_VERSION = '5.0.1.0';
 
   console.log('[DBA] BOOT', 'ver=', DBA_VERSION, 'href=', location.href);
 
@@ -27,7 +30,13 @@
   // URL / ドメイン集中管理
   //  今後ドメインが変わった場合は、まずここを直す
   // =========================
-  const DBA_BASE_ORIGIN = 'https://donguri.5ch.io';
+  const DBA_ALLOWED_ORIGINS = new Set([
+    'https://donguri.5ch.io',
+    'https://donguri.world'
+  ]);
+  const DBA_BASE_ORIGIN = DBA_ALLOWED_ORIGINS.has(location.origin)
+    ? location.origin
+    : 'https://donguri.world';
 
   function makeSiteUrl(path){
     const p = String(path || '');
@@ -122,7 +131,7 @@
       border-bottom: 1px solid var(--dba-fn-border);
       box-shadow: 0 2px 8px var(--dba-fn-shadow);
       z-index: 999999;
-      max-height: min(60vh, calc(100vh - 8px)); /* ★大きくなりすぎたらfnbar内で収める */
+      max-height: min(60svh, calc(100svh - 8px)); /* ★大きくなりすぎたらfnbar内で収める */
       overflow: auto;                              /* ★あふれはfnbar内でスクロール */
       scrollbar-gutter: stable both-edges;
     }
@@ -528,7 +537,7 @@
     }
 
     /* ===== ハードコア / ラダー：巨大マップが上下の領域へ潜り込む問題の抑制 =====
-        元ページ側は「display:flex; justify-content:center; align-items:center; height:70vh; ...」
+        元ページ側は「display:flex; justify-content:center; align-items:center; height:70svh; ...」
         の固定高コンテナ内に .grid を置いているため、セル数やセルサイズが大きいと
         .grid がコンテナからはみ出し、上の fnbar や下の table に重なりやすい。
         ここでは HC / ラダー系のそのコンテナだけを「自動高＋上寄せ」に変えて、
@@ -543,7 +552,7 @@
     p[style*="text-align:center"][style*="margin:0 auto;"] > div[style*="display: flex"][style*="justify-content: center"][style*="align-items: center"][style*="background-color: #f0f0f0"] {
       width: 100%;
       height: auto !important;
-      min-height: min(70vh, calc(100vh - var(--dba-fn-height) - 160px));
+      min-height: min(70svh, calc(100svh - var(--dba-fn-height) - 160px));
       padding: 12px 8px;
       box-sizing: border-box;
       align-items: flex-start !important;
@@ -648,7 +657,7 @@
       padding: 0;
       margin: auto;
       width: min(640px, 100svw);
-      max-height: min(80svh, calc(100vh));
+      max-height: min(80svh, calc(100svh));
       display: flex;
       flex-direction: column;
       box-sizing: border-box;
@@ -683,7 +692,7 @@
       min-height: 0;
       padding: 12px;
       overflow: auto;
-      max-height: calc(min(80vh, calc(100vh - 24px)) - 110px);
+      max-height: calc(min(80svh, calc(100svh - 24px)) - 110px);
     }
     .dba-m-std .dba-modal__bot {
       display: flex;
@@ -701,18 +710,18 @@
     /* ===== セル詳細モーダル（サイズ最適化） ===== */
     #dba-m-cell-detail.dba-m-std {
       width: min(760px, calc(100vw - 24px));
-      max-height: min(88vh, calc(100vh - 24px));
+      max-height: min(88svh, calc(100svh - 24px));
     }
     #dba-m-cell-detail.dba-m-std .dba-modal__mid {
-      /* 標準(80vh)の計算を、セル詳細(88vh)に合わせて上書き */
-      max-height: calc(min(88vh, calc(100vh - 24px)) - 110px);
+      /* 標準(80svh)の計算を、セル詳細(88svh)に合わせて上書き */
+      max-height: calc(min(88svh, calc(100svh - 24px)) - 110px);
     }
 
     /* ===== 戦闘結果モーダル（サイズ最適化 + スクロール） ===== */
     #dba-m-battle-result.dba-m-std {
       width: min(820px, calc(100vw - 24px));
       /* 長い時はここで上限、短い時は content に合わせて自然に縮む */
-      max-height: min(88vh, calc(100vh - 24px));
+      max-height: min(88svh, calc(100svh - 24px));
       /* スクロールは mid のみに限定（dialog全体にはスクロールを出さない） */
       overflow: hidden;
     }
@@ -780,7 +789,7 @@
       right: 12px;
       margin: 0 auto;
       width: min(360px, calc(100vw - 24px));
-      max-height: min(88vh, calc(100vh - 24px));
+      max-height: min(88svh, calc(100svh - 24px));
       border: 4px solid #080;
       border-radius: 12px;
       padding: 0;
@@ -807,7 +816,7 @@
     #dba-br-float .dba-btn-x { display:none !important; }
     #dba-br-float .dba-modal__mid {
       overflow: auto;
-      max-height: calc(min(88vh, calc(100vh - 24px)) - 110px);
+      max-height: calc(min(88svh, calc(100svh - 24px)) - 110px);
       scrollbar-gutter: stable both-edges;
     }
     #dba-br-float .dba-modal__mid[data-dba-wheel-scrollable="1"] {
@@ -818,7 +827,7 @@
       /* 常にスクロール可能（短い時はスクロールは出ない） */
       overflow: auto;
       /* 上限は max-height で決まる。短文なら高さは自然に小さくなる */
-      max-height: calc(min(88vh, calc(100vh - 24px)) - 110px);
+      max-height: calc(min(88svh, calc(100svh - 24px)) - 110px);
       /* スクロールバーを見やすく（OS依存だが効く環境では効く） */
       scrollbar-gutter: stable both-edges;
     }
@@ -1083,11 +1092,11 @@
     /* ===== 装備ロスター ===== */
     #dba-m-roster.dba-m-std {
       width: min(920px, calc(100vw - 24px));
-      max-height: min(88vh, calc(100vh - 24px));
+      max-height: min(88svh, calc(100svh - 24px));
       overflow: hidden;
     }
     #dba-m-roster.dba-m-std .dba-modal__mid {
-      max-height: calc(min(88vh, calc(100vh - 24px)) - 110px);
+      max-height: calc(min(88svh, calc(100svh - 24px)) - 110px);
       overflow: hidden; /* mid全体はスクロールさせず、内部のリストだけをスクロール */
       display: flex;
       flex-direction: column;
@@ -1184,7 +1193,7 @@
     }
     .dba-roster-item {
       display: grid;
-      grid-template-columns: 1fr auto;
+      grid-template-columns: minmax(0, 1fr) auto;
       gap: 10px;
       align-items: center;
       padding: 8px 10px;
@@ -1210,7 +1219,16 @@
       font-size: 0.9em;
       font-weight: 700;
       opacity: 0.9;
+      display: grid;
+      grid-template-columns: repeat(3, max-content);
+      gap: 2px 10px;
+      align-items: center;
+      justify-items: end;
+      text-align: right;
       white-space: nowrap;
+    }
+    .dba-preset-meta__part {
+      display: block;
     }
 
     /* 装備変更結果（ロスター）テキスト表示 */
@@ -1227,11 +1245,11 @@
     /* ===== プリセット並び替えモーダル ===== */
     #dba-m-roster-sort.dba-m-std {
       width: min(760px, calc(100vw - 24px));
-      max-height: min(88vh, calc(100vh - 24px));
+      max-height: min(88svh, calc(100svh - 24px));
       overflow: hidden;
     }
     #dba-m-roster-sort.dba-m-std .dba-modal__mid {
-      max-height: calc(min(88vh, calc(100vh - 24px)) - 110px);
+      max-height: calc(min(88svh, calc(100svh - 24px)) - 110px);
       overflow: hidden; /* リスト側でスクロール */
       display: flex;
       flex-direction: column;
@@ -1251,7 +1269,7 @@
       padding: 8px;
       overflow: auto;
       min-height: 120px;
-      max-height: 52vh; /* 画面が小さい時も暴れにくく */
+      max-height: 52svh; /* 画面が小さい時も暴れにくく */
       scrollbar-gutter: stable both-edges;
       position: relative; /* 挿入ラインの absolute 基準 */
     }
@@ -1305,27 +1323,66 @@
       font-size: 0.9em;
       font-weight: 800;
       opacity: 0.85;
+      display: grid;
+      grid-template-columns: repeat(3, max-content);
+      gap: 2px 10px;
+      align-items: center;
+      justify-items: end;
+      text-align: right;
       white-space: nowrap;
+    }
+
+    @media (max-width: 720px) {
+      .dba-roster-item {
+        grid-template-columns: minmax(0, 1fr);
+        align-items: start;
+      }
+      .dba-roster-item__meta {
+        grid-template-columns: 1fr;
+        justify-items: start;
+        text-align: left;
+      }
+
+      .dba-sort-item {
+        grid-template-columns: 28px minmax(0, 1fr);
+        align-items: start;
+      }
+      .dba-sort-handle {
+        grid-column: 1;
+        grid-row: 1;
+      }
+      .dba-sort-name {
+        grid-column: 2;
+        grid-row: 1;
+      }
+      .dba-sort-meta {
+        grid-column: 1 / -1;
+        grid-row: 2;
+        grid-template-columns: 1fr;
+        justify-items: start;
+        text-align: left;
+        padding-left: 38px;
+      }
     }
 
     /* ===== 装備プリセット追加モーダル ===== */
     #dba-m-roster-add.dba-m-std {
       width: min(760px, calc(100vw - 24px));
-      max-height: min(88vh, calc(100vh - 24px));
+      max-height: min(88svh, calc(100svh - 24px));
       overflow: hidden;
     }
     #dba-m-roster-add.dba-m-std .dba-modal__mid {
-      max-height: calc(min(88vh, calc(100vh - 24px)) - 110px);
+      max-height: calc(min(88svh, calc(100svh - 24px)) - 110px);
       overflow: auto;
     }
     /* ===== 装備プリセット再編集モーダル ===== */
     #dba-m-roster-edit.dba-m-std {
       width: min(760px, calc(100vw - 24px));
-      max-height: min(88vh, calc(100vh - 24px));
+      max-height: min(88svh, calc(100svh - 24px));
       overflow: hidden;
     }
     #dba-m-roster-edit.dba-m-std .dba-modal__mid {
-      max-height: calc(min(88vh, calc(100vh - 24px)) - 110px);
+      max-height: calc(min(88svh, calc(100svh - 24px)) - 110px);
       overflow: auto;
     }
     .dba-add-wrap {
@@ -1376,11 +1433,11 @@
     /* ===== アイテム選択（バッグ表） ===== */
     #dba-m-pick-item.dba-m-std {
       width: min(1100px, calc(100vw - 24px));
-      max-height: min(90vh, calc(100vh - 24px));
+      max-height: min(90svh, calc(100svh - 24px));
       overflow: hidden;
     }
     #dba-m-pick-item.dba-m-std .dba-modal__mid {
-      max-height: calc(min(90vh, calc(100vh - 24px)) - 110px);
+      max-height: calc(min(90svh, calc(100svh - 24px)) - 110px);
       overflow: auto;
     }
     .dba-pick-hint {
@@ -1485,12 +1542,12 @@
     /* ===== 装備ロスター：オプション ===== */
     #dba-m-roster-option.dba-m-std {
       width: min(720px, calc(100vw - 24px));
-      max-height: min(88vh, calc(100vh - 24px));
+      max-height: min(88svh, calc(100svh - 24px));
       overflow: hidden;
       margin: calc(var(--dba-fn-height) + 12px) auto auto;
     }
     #dba-m-roster-option.dba-m-std .dba-modal__mid {
-      max-height: calc(min(88vh, calc(100vh - 24px)) - 110px);
+      max-height: calc(min(88svh, calc(100svh - 24px)) - 110px);
       overflow: auto;
       display: flex;
       flex-direction: column;
@@ -1498,6 +1555,8 @@
       min-height: 0;
       justify-content: flex-start;
       align-items: stretch;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
     }
     .dba-roster-opt-section {
       display: flex;
@@ -1583,11 +1642,32 @@
       text-align: center;
       box-sizing: border-box;
     }
+    @media (max-width: 640px), (pointer: coarse) {
+      #dba-m-roster-option.dba-m-std {
+        position: fixed;
+        left: 8px;
+        right: 8px;
+        top: calc(var(--dba-fn-height) + 8px);
+        bottom: 8px;
+        width: auto;
+        height: auto;
+        max-height: none;
+        margin: 0;
+      }
+      #dba-m-roster-option.dba-m-std .dba-modal__mid {
+        flex: 1 1 auto;
+        max-height: none;
+        min-height: 0;
+      }
+      .dba-roster-opt-btngrid {
+        grid-template-columns: 1fr;
+      }
+    }
     /* ===== 装備ロスター：バックアップ直接編集 ===== */
     #dba-m-roster-backup-editor.dba-m-std {
       width: min(1040px, calc(100vw - 16px));
-      height: min(94vh, calc(100vh - 16px));
-      max-height: min(94vh, calc(100vh - 16px));
+      height: min(94svh, calc(100svh - 16px));
+      max-height: min(94svh, calc(100svh - 16px));
       overflow: hidden;
     }
     #dba-m-roster-backup-editor.dba-m-std .dba-modal__mid {
@@ -1614,7 +1694,7 @@
       display: none;
       min-width: 180px;
       max-width: min(360px, 92vw);
-      max-height: min(60vh, 520px);
+      max-height: min(60svh, 520px);
       overflow: auto;
       border: 2px solid #000;
       border-radius: 12px;
@@ -1648,16 +1728,49 @@
 
     #dba-m-auto-equip.dba-m-std {
       width: min(980px, calc(100vw - 24px));
-      max-height: min(88vh, calc(100vh - 24px));
+      max-height: min(88svh, calc(100svh - 24px));
       overflow: hidden;
     }
     #dba-m-auto-equip.dba-m-std .dba-modal__mid {
-      max-height: calc(min(88vh, calc(100vh - 24px)) - 110px);
+      max-height: calc(min(88svh, calc(100svh - 24px)) - 110px);
       /* ★ここが重要：mid全体スクロールを抑止して、内部（左右ゾーン）でスクロールさせる */
       overflow: hidden;
       display: flex;
       flex-direction: column;
       gap: 10px;
+      min-height: 0;
+    }
+    @media (max-width: 640px), (pointer: coarse) {
+      #dba-m-roster-option.dba-m-std,
+      #dba-m-roster-backup-editor.dba-m-std,
+      #dba-m-auto-equip.dba-m-std {
+        position: fixed;
+        left: 8px;
+        right: 8px;
+        top: calc(var(--dba-fn-height) + 8px);
+        bottom: 8px;
+        width: auto;
+        height: auto;
+        max-height: none;
+        margin: 0;
+      }
+      #dba-m-roster-option.dba-m-std .dba-modal__mid,
+      #dba-m-roster-backup-editor.dba-m-std .dba-modal__mid,
+      #dba-m-auto-equip.dba-m-std .dba-modal__mid {
+        flex: 1 1 auto;
+        min-height: 0;
+        max-height: none;
+      }
+      #dba-m-roster-option.dba-m-std .dba-modal__mid {
+        overflow: auto;
+      }
+      #dba-m-roster-backup-editor .dba-backup-textarea {
+        min-height: 160px;
+        height: 100%;
+      }
+      .dba-roster-opt-btngrid {
+        grid-template-columns: 1fr;
+      }
     }
     .dba-ae-topbtns {
       display: flex;
@@ -1812,7 +1925,7 @@
       display: none;
       min-width: 220px;
       max-width: min(420px, 92vw);
-      max-height: min(60vh, 520px);
+      max-height: min(60svh, 520px);
       overflow: auto;
       border: 2px solid #000;
       border-radius: 12px;
@@ -7109,7 +7222,7 @@
     }else{
       left = x - 12;
     }
-    if(y < vh/2){
+    if(y < svh/2){
       top = y + 12;
     }else{
       top = y - 12;
@@ -7126,7 +7239,7 @@
 
     if(rect.right > vw - 8) nx -= (rect.right - (vw - 8));
     if(rect.left < 8) nx = 8;
-    if(rect.bottom > vh - 8) ny -= (rect.bottom - (vh - 8));
+    if(rect.bottom > svh - 8) ny -= (rect.bottom - (svh - 8));
     if(rect.top < 8) ny = 8;
 
     pop.style.left = nx + 'px';
@@ -7510,7 +7623,7 @@
   function placePopupUnderButton(pop, btn){
     const rect = btn.getBoundingClientRect();
     const vw = window.innerWidth || document.documentElement.clientWidth || 800;
-    const vh = window.innerHeight || document.documentElement.clientHeight || 600;
+    const svh = window.innerHeight || document.documentElement.clientHeight || 600;
 
     // ボタンの“下”を基本
     let x = rect.left;
@@ -7527,7 +7640,7 @@
     let ny = r2.top;
     if(r2.right > vw - 8) nx -= (r2.right - (vw - 8));
     if(r2.left < 8) nx = 8;
-    if(r2.bottom > vh - 8) ny -= (r2.bottom - (vh - 8));
+    if(r2.bottom > svh - 8) ny -= (r2.bottom - (svh - 8));
     if(r2.top < 8) ny = 8;
 
     pop.style.left = nx + 'px';
@@ -8456,6 +8569,26 @@
     return `${w} ${a} ${n}`;
   }
 
+  function buildPresetMetaNode(triple, className){
+    const wrap = document.createElement('div');
+    wrap.className = className;
+
+    const parts = [
+      (triple && triple[0] != null) ? `W:${triple[0]}` : 'W:-',
+      (triple && triple[1] != null) ? `A:${triple[1]}` : 'A:-',
+      (triple && triple[2] != null) ? `N:${triple[2]}` : 'N:-'
+    ];
+
+    for(const txt of parts){
+      const part = document.createElement('span');
+      part.className = 'dba-preset-meta__part';
+      part.textContent = txt;
+      wrap.appendChild(part);
+    }
+
+    return wrap;
+  }
+
   async function equipById(id){
     if(id == null) return { ok:true, missing:false };
     const url = makeEquipUrl(id);
@@ -8707,9 +8840,7 @@
         n.className = 'dba-roster-item__name';
         n.textContent = nm;
 
-        const m = document.createElement('div');
-        m.className = 'dba-roster-item__meta';
-        m.textContent = presetMetaText(triple);
+        const m = buildPresetMetaNode(triple, 'dba-roster-item__meta');
 
         item.appendChild(n);
         item.appendChild(m);
@@ -8806,14 +8937,31 @@
       const touchState = {
         active: false,
         moved: false,
+        scrolled: false,
+        startAt: 0,
         startX: 0,
-        startY: 0
+        startY: 0,
+        startScrollTop: 0
       };
+
+      const INSERT_PICK_TAP_MAX_MS = 250;
+      const INSERT_PICK_TAP_MOVE_PX = 6;
+      const INSERT_PICK_TAP_SCROLL_PX = 2;
 
       const getTouchClientY = (evt) => {
         if(evt && evt.touches && evt.touches[0]) return evt.touches[0].clientY;
         if(evt && evt.changedTouches && evt.changedTouches[0]) return evt.changedTouches[0].clientY;
         return null;
+      };
+
+      const resetTouchState = () => {
+        touchState.active = false;
+        touchState.moved = false;
+        touchState.scrolled = false;
+        touchState.startAt = 0;
+        touchState.startX = 0;
+        touchState.startY = 0;
+        touchState.startScrollTop = 0;
       };
 
       showRosterInsertLineAtIndex(list, names.length);
@@ -8845,27 +8993,48 @@
         const x = (e.touches && e.touches[0]) ? e.touches[0].clientX : 0;
         touchState.active = true;
         touchState.moved = false;
+        touchState.scrolled = false;
+        touchState.startAt = Date.now();
         touchState.startX = x;
         touchState.startY = y;
+        touchState.startScrollTop = list.scrollTop;
         updateRosterInsertLineFromClientY(list, y);
       }, { passive: true });
 
       list.addEventListener('touchmove', (e) => {
+        if(!touchState.active) return;
         const y = getTouchClientY(e);
         if(y == null) return;
         const x = (e.touches && e.touches[0]) ? e.touches[0].clientX : 0;
-        if(Math.abs(x - touchState.startX) > 8 || Math.abs(y - touchState.startY) > 8){
+        if(
+          Math.abs(x - touchState.startX) > INSERT_PICK_TAP_MOVE_PX ||
+          Math.abs(y - touchState.startY) > INSERT_PICK_TAP_MOVE_PX
+        ){
           touchState.moved = true;
         }
+        if(Math.abs(list.scrollTop - touchState.startScrollTop) > INSERT_PICK_TAP_SCROLL_PX){
+          touchState.scrolled = true;
+        }
         updateRosterInsertLineFromClientY(list, y);
+      }, { passive: true });
+
+      list.addEventListener('scroll', () => {
+        if(!touchState.active) return;
+        if(Math.abs(list.scrollTop - touchState.startScrollTop) > INSERT_PICK_TAP_SCROLL_PX){
+          touchState.scrolled = true;
+        }
       }, { passive: true });
 
       list.addEventListener('touchend', (e) => {
         if(!rosterDlg || rosterDlg.dataset.dbaAddPickMode !== '1') return;
         const y = getTouchClientY(e);
-        if(y == null) return;
-        if(touchState.moved){
-          touchState.active = false;
+        if(y == null){
+          resetTouchState();
+          return;
+        }
+        const elapsed = touchState.startAt > 0 ? (Date.now() - touchState.startAt) : Number.POSITIVE_INFINITY;
+        if(touchState.moved || touchState.scrolled || elapsed > INSERT_PICK_TAP_MAX_MS){
+          resetTouchState();
           return;
         }
         const idx = updateRosterInsertLineFromClientY(list, y);
@@ -8875,7 +9044,11 @@
         openRosterAddPresetModal(() => {
           renderRosterModalState(null);
         }, idx);
-        touchState.active = false;
+        resetTouchState();
+      }, { passive: true });
+
+      list.addEventListener('touchcancel', () => {
+        resetTouchState();
       }, { passive: true });
 
       list.addEventListener('click', () => {
@@ -11324,9 +11497,7 @@
           const n = document.createElement('div');
           n.className = 'dba-sort-name';
           n.textContent = nm;
-          const m = document.createElement('div');
-          m.className = 'dba-sort-meta';
-          m.textContent = presetMetaText(triple);
+          const m = buildPresetMetaNode(triple, 'dba-sort-meta');
 
           row.appendChild(h);
           row.appendChild(n);
@@ -13418,7 +13589,7 @@
   }
 
   async function fetchCellDetail(row, col){
-    const url = `https://donguri.5ch.io/teambattle?r=${row}&c=${col}&m=${mode}`;
+    const url = makeTeambattleUrl({ r: row, c: col, m: mode });
     try{
       const res = await fetch(url, {
         method: 'GET',
