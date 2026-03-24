@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Donguri Battle Assistant
 // @namespace    https://donguri.5ch.io/
-// @version      5.0.1.0
+// @version      5.2.0.0
 // @description  5ちゃんねるのどんぐりシステムから派生したゲームの操作性を改善するためのユーザースクリプト
 // @author       福呼び草
 // @assistant    ChatGPT (OpenAI)
@@ -22,7 +22,7 @@
   // =========================
   // スクリプト自身のバージョン（スクリプト情報表示用）
   // =========================
-  const DBA_VERSION = '5.0.1.0';
+  const DBA_VERSION = '5.2.0.0';
 
   console.log('[DBA] BOOT', 'ver=', DBA_VERSION, 'href=', location.href);
 
@@ -100,6 +100,7 @@
       --dba-fn-border: #000;
       --dba-fn-shadow: rgba(0,0,0,0.15);
       --dba-fn-height: 50px; /* ファンクションセクションの高さ（JSで実測値に更新） */
+      --dba-base-font-size: 17px; /* DBA全体の基準文字サイズ */
       --dba-layer-text-opacity: 1; /* 0.0 - 1.0（レイヤー上の文字濃度） */
     }
 
@@ -117,6 +118,7 @@
       top: 0;
       left: 0;
       right: 0;
+      font-size: var(--dba-base-font-size);
       height: auto;                 /* ★2段構造になるので固定高をやめる（高さはJSで追従） */
       display: flex;
       flex-direction: column;       /* ★縦積み（上=progress / 下=ボタン群） */
@@ -437,6 +439,8 @@
       top: 0;
       width: 0;
       height: 0;
+      font-size: var(--dba-base-font-size);
+      line-height: 1;
       z-index: 999990; /* fnbar(999999)より下、マップより上 */
       pointer-events: none; /* 現段階ではページ既存操作を妨げない */
       background: transparent;
@@ -453,6 +457,8 @@
       width: 100%;
       height: 100%;
       display: grid;
+      font-size: inherit;
+      line-height: inherit;
       background: transparent;
       box-sizing: border-box;
       contain: layout paint style;
@@ -461,6 +467,8 @@
       position: absolute;
       inset: 0;
       display: block;
+      font-size: inherit;
+      line-height: inherit;
       pointer-events: none;
       user-select: none;
       background: transparent;
@@ -470,6 +478,8 @@
     }
     .dba-layer-cell {
       position: relative;
+      font-size: inherit;
+      line-height: inherit;
       background: transparent;
       box-sizing: border-box;
       overflow: hidden;
@@ -484,10 +494,10 @@
       width: 100%;
       height: 100%;
       display: block;
-      font-size: 0.95rem; /* レイヤー上のセルのフォントサイズ */
+      font-size: 0.95em; /* dba-battlemap-layer の基準文字サイズを親として相対指定 */
       font-weight: 700;
       letter-spacing: -0.08rem;
-      line-height: 0.95rem;
+      line-height: 0.95em;
       opacity: var(--dba-layer-text-opacity);
       user-select: none;
       pointer-events: none;
@@ -513,7 +523,7 @@
       position: absolute;
       right: 2px;
       bottom: 1px;
-      font-size: 1.6rem;
+      font-size: 1.6em;
       line-height: 1.6;
       pointer-events: none;
       user-select: none;
@@ -573,7 +583,7 @@
     .dba-btn-fn {
       appearance: none;
       margin:4px;
-      padding: 8px 4px;
+      padding: 10px 6px;
       border: 2px solid #000;
       border-radius: 12px;
       background: #f08800;
@@ -614,13 +624,13 @@
       top: 0;
       z-index: 1000001; /* fnbar(999999)より上 */
       display: none;
+      font-size: calc(var(--dba-base-font-size) * 0.95);
       max-width: min(320px, calc(100vw - 24px));
       padding: 8px 10px;
       border: 2px solid #000;
       border-radius: 12px;
       background: rgba(255, 255, 225, 0.98);
       color: #111;
-      font-size: 0.95em;
       font-weight: 700;
       line-height: 1.35;
       white-space: pre-line;
@@ -656,6 +666,7 @@
       border-radius: 12px;
       padding: 0;
       margin: auto;
+      font-size: var(--dba-base-font-size);
       width: min(640px, 100svw);
       max-height: min(80svh, calc(100svh));
       display: flex;
@@ -788,6 +799,7 @@
       left: 12px;
       right: 12px;
       margin: 0 auto;
+      font-size: var(--dba-base-font-size);
       width: min(360px, calc(100vw - 24px));
       max-height: min(88svh, calc(100svh - 24px));
       border: 4px solid #080;
@@ -849,6 +861,7 @@
       border-radius: 12px;
       padding: 0;
       margin: auto;
+      font-size: var(--dba-base-font-size);
       width: min(420px, calc(100vw - 24px));
       background: #f0f0cc;
       color: #000;
@@ -903,7 +916,7 @@
       border: 2px solid #000;
       border-radius: 12px;
       margin: 4px 8px;
-      padding: 8px 12px;
+      padding: 10px 16px;
       font-size: 1em;
       font-weight: 600;
       line-height: 1.1em;
@@ -931,12 +944,10 @@
       box-shadow: 0 1px 2px rgba(0,0,0,0.12);
     }
     .dba-btn-ok {
-      width: 4em;
       background: #3399ee;
       color: #fff;
       }
     .dba-btn-apply {
-      width: 4em;
       background: #50aa50;
       color: #fff;
       }
@@ -945,15 +956,14 @@
       color: #fff;
       }
     .dba-btn-close {
-      width: 4em;
       background: #ea4a4a;
       color: #fff;
       }
     .dba-btn-x {
-      width: 32px;
-      height: 32px;
+      width: 34px;
+      height: 34px;
       padding: 0;
-      border-radius: 16px;
+      border-radius: 999px;
       background: #e02222;
       color: #fff;
       font-size: 1.4rem;
@@ -963,7 +973,7 @@
       appearance: none;
       border: 2px solid #000;
       border-radius: 10px;
-      padding: 6px 10px;
+      padding: 10px 6px;
       margin: 0 0 0 6px;
       font-size: 0.95em;
       font-weight: 700;
@@ -982,17 +992,25 @@
     /* ===== 「設定」modal ===== */
     .dba-setting-row {
       display: block;
-      margin-left: 30px;
-      padding: 8px 10px;
+      margin: 0 0 12px 0;
+      padding: 8px 12px;
       border: 1px solid #00000022;
       border-radius: 10px;
       background: #fff;
-      margin-bottom: 10px;
       box-sizing: border-box;
     }
     .dba-setting-row label {
       text-align: left;
       font-weight: 700;
+    }
+    .dba-setting-row-sub {
+      display: block;
+      margin: 0 0 0 30px;
+      padding: 8px 12px;
+      border: 1px solid #00000022;
+      border-radius: 10px;
+      background: #fff;
+      box-sizing: border-box;
     }
     .dba-setting-checkline {
       display: flex;
@@ -1087,6 +1105,33 @@
     .dba-setting-cellsize-sep {
       white-space: nowrap;
       margin: 0 2px;
+    }
+
+    .dba-setting-radio-group {
+      margin: 0 0 0 30px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 18px;
+      flex-wrap: wrap;
+      text-align: left;
+    }
+    .dba-setting-radio-line {
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 8px;
+      font-weight: 700;
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+    .dba-setting-radio-line input[type="radio"] {
+      margin: 0;
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+      flex: 0 0 auto;
     }
 
     /* ===== 装備ロスター ===== */
@@ -1231,6 +1276,26 @@
       display: block;
     }
 
+    .dba-roster-item__actions {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 8px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid #00000022;
+    }
+    .dba-roster-item__actions .dba-btn-mini {
+      width: 100%;
+      margin: 0;
+      padding: 10px 12px;
+      text-align: center;
+      box-sizing: border-box;
+    }
+    .dba-roster-item__actions .dba-btn-mini--cancel {
+      background: #f3d0d0;
+    }
+
     /* 装備変更結果（ロスター）テキスト表示 */
     .dba-roster-result-text {
       white-space: pre-wrap;
@@ -1341,6 +1406,9 @@
         grid-template-columns: 1fr;
         justify-items: start;
         text-align: left;
+      }
+      .dba-roster-item__actions {
+        grid-template-columns: 1fr;
       }
 
       .dba-sort-item {
@@ -1628,6 +1696,33 @@
       overflow-wrap: anywhere;
       word-break: break-word;
     }
+    .dba-roster-opt-radio-group {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 18px;
+      flex-wrap: wrap;
+      margin: 0;
+      padding: 0;
+      text-align: left;
+    }
+    .dba-roster-opt-radio-line {
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 8px;
+      font-weight: 700;
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+    .dba-roster-opt-radio-line input[type="radio"] {
+      margin: 0;
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+      flex: 0 0 auto;
+    }
     .dba-roster-opt-btngrid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -1692,6 +1787,7 @@
       position: fixed;
       z-index: 999998; /* fnbar(999999)より下 */
       display: none;
+      font-size: var(--dba-base-font-size);
       min-width: 180px;
       max-width: min(360px, 92vw);
       max-height: min(60svh, 520px);
@@ -1829,7 +1925,7 @@
     .dba-ae-wrap {
       display: grid;
       grid-template-columns: 100px 1fr;
-      gap: 10px;
+      gap: 2px;
       /* ★grid item が縮められるようにする（min-height:auto を避ける） */
       align-items: stretch;
       flex: 1 1 auto;  /* #dba-m-auto-equip .dba-modal__mid（flex）配下で残り領域を占有 */
@@ -1838,26 +1934,28 @@
     .dba-ae-leftpane {
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      justify-content: flex-start;
+      gap: 10px;
       align-items: stretch;
       /* ★左ペインも高さが親より大きくならないようにし、溢れは左ペイン内でスクロール */
       overflow: auto;
+      width: 100%;
       min-height: 0;
       max-height: 100%;
       scrollbar-gutter: stable both-edges;
     }
     .dba-ae-rpane {
       display: grid;
-      grid-template-columns: 1fr 100px 1fr;
-      gap: 10px;
+      grid-template-columns: 1fr 90px 1fr;
+      gap: 0;
       align-items: stretch;
       min-height: 0; /* ★子（左右box）が親高さ以内に収まれるように */
     }
     .dba-ae-box {
       border: 1px solid #000;
-      border-radius: 12px;
+      border-radius: 8px;
       background: #fff;
-      padding: 8px;
+      padding: 8px 4px ;
       /* 左右ゾーンは内容が溢れたらゾーン内スクロール */
       overflow: auto;
       /* ★min-height 固定だと親より大きくなって mid がスクロールするので解除 */
@@ -1867,14 +1965,14 @@
     }
     .dba-ae-box-title {
       font-weight: 900;
-      margin: 0 0 8px 0;
+      margin: 0;
       text-align: left;
     }
     .dba-ae-item {
-      padding: 8px 10px;
+      padding: 8px 6px;
       border-radius: 10px;
       border: 1px solid #00000022;
-      margin: 6px 0;
+      margin: 0;
       cursor: pointer;
       user-select: none;
       font-weight: 800;
@@ -1923,6 +2021,7 @@
       position: fixed;
       z-index: 999998; /* fnbar(999999)より下 */
       display: none;
+      font-size: var(--dba-base-font-size);
       min-width: 220px;
       max-width: min(420px, 92vw);
       max-height: min(60svh, 520px);
@@ -2290,6 +2389,7 @@
   const LS_CURRENT_PRESET_NAME_KEY = 'dba.roster.currentPresetName.v1'; // string 現在装備中として扱うプリセット名
   const LS_ROSTER_SCROLL_REMEMBER_KEY = 'dba.roster.scrollRemember.v1'; // 0/1
   const LS_ROSTER_SCROLL_TOP_KEY = 'dba.roster.scrollTop.v1'; // number
+  const LS_ROSTER_PRESET_CLICK_ACTION_KEY = 'dba.roster.presetClickAction.v1'; // equip / menu
   const LS_BR_TAIL2_KEY = 'dba.battleResult.tail2.v1'; // 戦闘結果「末尾2行のみ表示」ON/OFF
   const LS_BR_ALIGN_KEY = 'dba.battleResult.align.v1'; // left / center / right
   const LS_BR_PASS_KEY  = 'dba.battleResult.passThrough.v1'; // 0/1 クリック透過
@@ -3369,6 +3469,8 @@
       hc: { width: 72, height: 64 },
       l:  { width: 72, height: 64 }
     },
+    // DBA全体の基準文字サイズ
+    ui: { baseFontPx: getDefaultBaseFontPxForDevice() },
     // 攻撃後の自動差分取得
     postBattle: { autoDiffSync: false },
     // 一定回数ごとにページ再読込して軽量化
@@ -3803,6 +3905,22 @@
     }catch(_e){}
   }
 
+  function loadRosterPresetClickAction(){
+    try{
+      const raw = localStorage.getItem(LS_ROSTER_PRESET_CLICK_ACTION_KEY);
+      return (raw === 'menu') ? 'menu' : 'equip';
+    }catch(_e){
+      return 'equip';
+    }
+  }
+
+  function saveRosterPresetClickAction(modeValue){
+    const v = (modeValue === 'menu') ? 'menu' : 'equip';
+    try{
+      localStorage.setItem(LS_ROSTER_PRESET_CLICK_ACTION_KEY, v);
+    }catch(_e){}
+  }
+
   function captureRosterListScrollState(){
     const list = document.getElementById('dba-roster-list');
     if(!(list instanceof HTMLElement)) return 0;
@@ -4121,6 +4239,34 @@
     return x;
   }
 
+  function getDefaultBaseFontPxForDevice(){
+    try{
+      const coarse = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+      const narrow = Math.max(0, window.innerWidth || 0) <= 640;
+      const tabletLike = Math.max(0, window.innerWidth || 0) <= 1024;
+
+      if(coarse && narrow) return 14;     // スマホ
+      if(coarse || tabletLike) return 16;   // タブレット
+      return 17;   // パソコン
+    }catch(_e){
+      return 17;   // 基準文字サイズ
+    }
+  }
+
+  function sanitizeBaseFontPx(v, fallback){
+    const fb = (fallback === 14 || fallback === 16 || fallback === 17)   // 基準文字サイズ
+      ? fallback
+      : getDefaultBaseFontPxForDevice();
+    const x = Number.parseInt(v, 10);
+    if(x === 14 || x === 16 || x === 17) return x;   // 基準文字サイズ
+    return fb;
+  }
+
+  function applyBaseFontSize(baseFontPx){
+    const px = sanitizeBaseFontPx(baseFontPx, getDefaultBaseFontPxForDevice());
+    document.documentElement.style.setProperty('--dba-base-font-size', `${px}px`);
+  }
+
   function sanitizeRbBorderOpacity(v){
     const x = Number.parseInt(v, 10);
     if(!Number.isFinite(x)) return 100;
@@ -4159,6 +4305,9 @@
           out.cellSize[k].width = px;
           out.cellSize[k].height = px;
         }
+      }
+      if(obj && obj.ui){
+        out.ui.baseFontPx = sanitizeBaseFontPx(obj.ui.baseFontPx, getDefaultBaseFontPxForDevice());
       }
       if(obj && obj.postBattle){
         out.postBattle.autoDiffSync = !!obj.postBattle.autoDiffSync;
@@ -4206,6 +4355,9 @@
             width:  sanitizeCellPx(s?.cellSize?.l?.width,  DEFAULT_SETTINGS.cellSize.l.width),
             height: sanitizeCellPx(s?.cellSize?.l?.height, DEFAULT_SETTINGS.cellSize.l.height)
           }
+        },
+        ui: {
+          baseFontPx: sanitizeBaseFontPx(s?.ui?.baseFontPx, getDefaultBaseFontPxForDevice())
         },
         postBattle: { autoDiffSync: !!s?.postBattle?.autoDiffSync },
         lightRefresh: {
@@ -6871,6 +7023,7 @@
       ensureBattlemapLayerDOM();
       // 初期値反映（文字濃度）
       const s = loadSettings();
+      applyBaseFontSize(s?.ui?.baseFontPx);
       applyLayerTextOpacity(s.layer.textOpacity);
 
       // まず同期
@@ -6905,6 +7058,7 @@
 
   function applyCurrentModeScale(){
     const settings = loadSettings();
+    applyBaseFontSize(settings?.ui?.baseFontPx);
     applyLayerTextOpacity(settings.layer.textOpacity);
     if(mode === 'rb'){
       const sz = getEffectiveCellSizeForMode('rb', settings);
@@ -8713,6 +8867,8 @@
     const editMode = !!(rosterDlg && rosterDlg.dataset.dbaEditMode === '1');
     // 追加位置選択モード（「追加」→挿入位置選択 方式）
     const addPickMode = !!(rosterDlg && rosterDlg.dataset.dbaAddPickMode === '1');
+    const presetClickAction = loadRosterPresetClickAction();
+    const expandedMenuPresetName = sanitizeText(rosterDlg && rosterDlg.dataset.dbaMenuPresetName ? rosterDlg.dataset.dbaMenuPresetName : '');
     // ★並び替え禁止：表示順は presetOrder（追加順／バックアップ記述順）を優先
     const order = Array.isArray(roster && roster.presetOrder) ? roster.presetOrder : [];
     const seen = new Set();
@@ -8834,7 +8990,12 @@
         item.className = 'dba-roster-item';
         item.dataset.name = nm;
         // 削除モード中は「選択＝装備適用」ではないため、選択強調はOFFにする
-        item.dataset.selected = (!delMode && (nm === selectedPresetName)) ? '1' : '0';
+        item.dataset.selected = (
+          !delMode && (
+            (nm === selectedPresetName) ||
+            (presetClickAction === 'menu' && nm === expandedMenuPresetName)
+          )
+        ) ? '1' : '0';
 
         const n = document.createElement('div');
         n.className = 'dba-roster-item__name';
@@ -8844,6 +9005,26 @@
 
         item.appendChild(n);
         item.appendChild(m);
+
+        const runEquipPreset = async () => {
+          renderRosterModalState(nm);
+          try{
+            closeRosterResultModal();
+            openRosterProgressAlertModal(`装備切替中…\n${nm}\n${presetMetaText(presets[nm])}`, '装備ロスター');
+            const result = await equipPresetByName(nm);
+            if(result && result.missing){
+              closeRosterProgressAlertModal();
+              return;
+            }
+            saveAutoEquipLastPreset('');
+            if(rosterDlg) rosterDlg.dataset.dbaMenuPresetName = '';
+            closeRosterProgressAlertModal();
+            openRosterResultModalWithNode(`装備切替完了\n${nm}`, '装備ロスター');
+          }catch(_e2){
+            closeRosterProgressAlertModal();
+            openRosterResultModalWithNode(`装備切替に失敗しました\n${nm}`, '装備ロスター');
+          }
+        };
 
         item.addEventListener('click', async (e) => {
           e.preventDefault();
@@ -8883,30 +9064,117 @@
             return;
           }
 
-          // 通常：クリック＝選択 + 装備適用
-          renderRosterModalState(nm);
-          try{
-            // 装備ロスター専用の進行中ダイアログはアラート（赤枠）で表示
-            closeRosterResultModal();
-            openRosterProgressAlertModal(`装備切替中…\n${nm}\n${presetMetaText(presets[nm])}`, '装備ロスター');
-            const result = await equipPresetByName(nm);
-            if(result && result.missing){
-              closeRosterProgressAlertModal();
-              return;
+          if(presetClickAction === 'menu'){
+            if(rosterDlg){
+              rosterDlg.dataset.dbaMenuPresetName = (expandedMenuPresetName === nm) ? '' : nm;
             }
-            // 手動で装備ロスターから装備を変えた直後は、
-            // 「最後にオート装備で適用したプリセット」の記録を無効化する。
-            // これをしないと、後で別レギュレーションのセルを攻撃した際に
-            // オート装備が「同じプリセットは既に装備済み」と誤判定して
-            // 再装備を省略してしまうことがある。
-            saveAutoEquipLastPreset('');
-            closeRosterProgressAlertModal();
-            openRosterResultModalWithNode(`装備切替完了\n${nm}`, '装備ロスター');
-          }catch(_e2){
-            closeRosterProgressAlertModal();
-            openRosterResultModalWithNode(`装備切替に失敗しました\n${nm}`, '装備ロスター');
+            renderRosterModalState(selectedPresetName || null);
+            return;
           }
+
+          // 通常：クリック＝選択 + 装備適用
+          await runEquipPreset();
         });
+
+        if(presetClickAction === 'menu' && expandedMenuPresetName === nm){
+          const actionWrap = document.createElement('div');
+          actionWrap.className = 'dba-roster-item__actions';
+
+          const btnCancelMenu = document.createElement('button');
+          btnCancelMenu.type = 'button';
+          btnCancelMenu.className = 'dba-btn-mini dba-btn-mini--cancel';
+          btnCancelMenu.textContent = 'キャンセル';
+
+          const btnEquipMenu = document.createElement('button');
+          btnEquipMenu.type = 'button';
+          btnEquipMenu.className = 'dba-btn-mini dba-btn-mini--ok';
+          btnEquipMenu.textContent = '装備';
+
+          const btnReeditMenu = document.createElement('button');
+          btnReeditMenu.type = 'button';
+          btnReeditMenu.className = 'dba-btn-mini';
+          btnReeditMenu.textContent = '再編集';
+
+          const btnAddAboveMenu = document.createElement('button');
+          btnAddAboveMenu.type = 'button';
+          btnAddAboveMenu.className = 'dba-btn-mini';
+          btnAddAboveMenu.textContent = '上に追加';
+
+          const btnAddBelowMenu = document.createElement('button');
+          btnAddBelowMenu.type = 'button';
+          btnAddBelowMenu.className = 'dba-btn-mini';
+          btnAddBelowMenu.textContent = '下に追加';
+
+          const btnDeleteMenu = document.createElement('button');
+          btnDeleteMenu.type = 'button';
+          btnDeleteMenu.className = 'dba-btn-mini dba-btn-mini--danger';
+          btnDeleteMenu.textContent = '削除';
+
+          btnCancelMenu.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if(rosterDlg) rosterDlg.dataset.dbaMenuPresetName = '';
+            renderRosterModalState(selectedPresetName || null);
+          });
+
+          btnEquipMenu.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            await runEquipPreset();
+          });
+
+          btnReeditMenu.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if(rosterDlg) rosterDlg.dataset.dbaMenuPresetName = '';
+            renderRosterModalState(null);
+            openRosterEditPresetModal(nm, () => {
+              renderRosterModalState(nm);
+            });
+          });
+
+          btnAddAboveMenu.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const baseIdx = names.indexOf(nm);
+            const insertIdx = (baseIdx >= 0) ? baseIdx : 0;
+            if(rosterDlg) rosterDlg.dataset.dbaMenuPresetName = '';
+            renderRosterModalState(null);
+            openRosterAddPresetModal(() => {
+              renderRosterModalState(null);
+            }, insertIdx);
+          });
+
+          btnAddBelowMenu.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const baseIdx = names.indexOf(nm);
+            const insertIdx = (baseIdx >= 0) ? (baseIdx + 1) : names.length;
+            if(rosterDlg) rosterDlg.dataset.dbaMenuPresetName = '';
+            renderRosterModalState(null);
+            openRosterAddPresetModal(() => {
+              renderRosterModalState(null);
+            }, insertIdx);
+          });
+
+          btnDeleteMenu.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const ok = confirm(`プリセット「${nm}」を削除しますか？`);
+            if(!ok) return;
+            deletePreset(nm);
+            if(rosterDlg) rosterDlg.dataset.dbaMenuPresetName = '';
+            renderRosterModalState(null);
+          });
+
+          actionWrap.appendChild(btnCancelMenu);
+          actionWrap.appendChild(btnEquipMenu);
+          actionWrap.appendChild(btnReeditMenu);
+          actionWrap.appendChild(btnAddAboveMenu);
+          actionWrap.appendChild(btnAddBelowMenu);
+          actionWrap.appendChild(btnDeleteMenu);
+          item.appendChild(actionWrap);
+        }
 
         list.appendChild(item);
       }
@@ -8987,6 +9255,18 @@
         }, idx);
       });
 
+      list.addEventListener('click', (e) => {
+        if(!rosterDlg) return;
+        if(rosterDlg.dataset.dbaAddPickMode === '1') return;
+        if(loadRosterPresetClickAction() !== 'menu') return;
+        if((e.target instanceof Element) && e.target.closest('.dba-roster-item')) return;
+        if(!sanitizeText(rosterDlg.dataset.dbaMenuPresetName || '')) return;
+        e.preventDefault();
+        e.stopPropagation();
+        rosterDlg.dataset.dbaMenuPresetName = '';
+        renderRosterModalState(selectedPresetName || null);
+      });
+
       list.addEventListener('touchstart', (e) => {
         const y = getTouchClientY(e);
         if(y == null) return;
@@ -9062,6 +9342,7 @@
       e.preventDefault(); e.stopPropagation();
       if(rosterDlg) rosterDlg.dataset.dbaDelMode = '0';
       if(rosterDlg) rosterDlg.dataset.dbaEditMode = '0';
+      if(rosterDlg) rosterDlg.dataset.dbaMenuPresetName = '';
       openRosterRenameModal(title, (newName) => {
         setRosterTitle(newName);
         renderRosterModalState(selectedPresetName || null);
@@ -9073,6 +9354,7 @@
       if(rosterDlg) rosterDlg.dataset.dbaDelMode = '0';
       if(rosterDlg) rosterDlg.dataset.dbaEditMode = '0';
       if(rosterDlg) rosterDlg.dataset.dbaAddPickMode = '0';
+      if(rosterDlg) rosterDlg.dataset.dbaMenuPresetName = '';
       openRosterOptionsModal(() => {
         renderRosterModalState(selectedPresetName || null);
       });
@@ -9082,6 +9364,7 @@
       e.preventDefault(); e.stopPropagation();
       if(rosterDlg) rosterDlg.dataset.dbaDelMode = '0';
       if(rosterDlg) rosterDlg.dataset.dbaEditMode = '0';
+      if(rosterDlg) rosterDlg.dataset.dbaMenuPresetName = '';
       openRosterWipeModal(() => {
         deleteActiveRosterAndSwitch();
         renderRosterModalState(null);
@@ -9092,6 +9375,7 @@
       e.preventDefault(); e.stopPropagation();
       if(rosterDlg) rosterDlg.dataset.dbaDelMode = '0';
       if(rosterDlg) rosterDlg.dataset.dbaEditMode = '0';
+      if(rosterDlg) rosterDlg.dataset.dbaMenuPresetName = '';
       if(!rosterDlg) return;
       const next = (rosterDlg.dataset.dbaAddPickMode === '1') ? '0' : '1';
       rosterDlg.dataset.dbaAddPickMode = next;
@@ -9105,6 +9389,7 @@
       // 再編集モードに入るときは削除モードをOFF（誤操作防止）
       rosterDlg.dataset.dbaDelMode = '0';
       rosterDlg.dataset.dbaAddPickMode = '0';
+      rosterDlg.dataset.dbaMenuPresetName = '';
       const next = (rosterDlg.dataset.dbaEditMode === '1') ? '0' : '1';
       rosterDlg.dataset.dbaEditMode = next;
       // 再編集モードON時は、誤操作防止のため選択状態をクリアして描画
@@ -9119,6 +9404,7 @@
       e.preventDefault(); e.stopPropagation();
       if(rosterDlg) rosterDlg.dataset.dbaDelMode = '0';
       if(rosterDlg) rosterDlg.dataset.dbaEditMode = '0';
+      if(rosterDlg) rosterDlg.dataset.dbaMenuPresetName = '';
       openRosterSortModal(() => {
         renderRosterModalState(selectedPresetName || null);
       });
@@ -9129,6 +9415,7 @@
       if(rosterDlg) rosterDlg.dataset.dbaDelMode = '0';
       if(rosterDlg) rosterDlg.dataset.dbaEditMode = '0';
       if(rosterDlg) rosterDlg.dataset.dbaAddPickMode = '0';
+      if(rosterDlg) rosterDlg.dataset.dbaMenuPresetName = '';
       openAutoEquipSettingsModal();
     });
 
@@ -9160,6 +9447,7 @@
         dlg.dataset.dbaAddPickMode = '0';
         dlg.dataset.dbaDelMode = '0';
         dlg.dataset.dbaEditMode = '0';
+        dlg.dataset.dbaMenuPresetName = '';
       }
       renderRosterModalState(null);
       const dlg2 = document.getElementById('dba-m-roster');
@@ -10547,6 +10835,56 @@
     const mid = document.createElement('div');
     mid.className = 'dba-modal__mid';
 
+    const actionSection = document.createElement('section');
+    actionSection.className = 'dba-roster-opt-section';
+
+    const actionTitle = document.createElement('div');
+    actionTitle.className = 'dba-roster-opt-section__title';
+    actionTitle.textContent = 'プリセットをクリック／タップした時の動作';
+    actionSection.appendChild(actionTitle);
+
+    const actionBody = document.createElement('div');
+    actionBody.className = 'dba-roster-opt-section__body';
+
+    const actionRadioGroup = document.createElement('div');
+    actionRadioGroup.className = 'dba-roster-opt-radio-group';
+
+    const actionEquipLabel = document.createElement('label');
+    actionEquipLabel.className = 'dba-roster-opt-radio-line';
+    const actionEquipRadio = document.createElement('input');
+    actionEquipRadio.type = 'radio';
+    actionEquipRadio.name = 'dba-roster-option-preset-click-action';
+    actionEquipRadio.id = 'dba-roster-option-preset-click-equip';
+    actionEquipRadio.value = 'equip';
+    const actionEquipText = document.createElement('span');
+    actionEquipText.textContent = 'プリセットを装備';
+    actionEquipLabel.appendChild(actionEquipRadio);
+    actionEquipLabel.appendChild(actionEquipText);
+
+    const actionMenuLabel = document.createElement('label');
+    actionMenuLabel.className = 'dba-roster-opt-radio-line';
+    const actionMenuRadio = document.createElement('input');
+    actionMenuRadio.type = 'radio';
+    actionMenuRadio.name = 'dba-roster-option-preset-click-action';
+    actionMenuRadio.id = 'dba-roster-option-preset-click-menu';
+    actionMenuRadio.value = 'menu';
+    const actionMenuText = document.createElement('span');
+    actionMenuText.textContent = 'メニューを展開';
+    actionMenuLabel.appendChild(actionMenuRadio);
+    actionMenuLabel.appendChild(actionMenuText);
+
+    actionRadioGroup.appendChild(actionEquipLabel);
+    actionRadioGroup.appendChild(actionMenuLabel);
+    actionBody.appendChild(actionRadioGroup);
+
+    const actionNote = document.createElement('p');
+    actionNote.className = 'dba-roster-opt-note';
+    actionNote.textContent = '「メニューを展開」を選ぶと、プリセットをクリック／タップした時にキャンセル・装備・再編集・上に追加・下に追加・削除のメニューを表示します。';
+    actionBody.appendChild(actionNote);
+
+    actionSection.appendChild(actionBody);
+    mid.appendChild(actionSection);
+
     const rememberSection = document.createElement('section');
     rememberSection.className = 'dba-roster-opt-section';
 
@@ -10652,9 +10990,30 @@
       if(!dlg) return;
 
       const chkRemember = document.getElementById('dba-roster-option-scroll-remember');
+      const radioEquip = document.getElementById('dba-roster-option-preset-click-equip');
+      const radioMenu = document.getElementById('dba-roster-option-preset-click-menu');
       const btnExport = document.getElementById('dba-roster-option-btn-export');
       const btnImport = document.getElementById('dba-roster-option-btn-import');
       const btnEdit = document.getElementById('dba-roster-option-btn-edit');
+
+      const clickAction = loadRosterPresetClickAction();
+      if(radioEquip) radioEquip.checked = (clickAction === 'equip');
+      if(radioMenu) radioMenu.checked = (clickAction === 'menu');
+
+      if(radioEquip){
+        radioEquip.onchange = () => {
+          if(radioEquip.checked){
+            saveRosterPresetClickAction('equip');
+          }
+        };
+      }
+      if(radioMenu){
+        radioMenu.onchange = () => {
+          if(radioMenu.checked){
+            saveRosterPresetClickAction('menu');
+          }
+        };
+      }
 
       if(chkRemember){
         chkRemember.checked = loadRosterScrollRememberEnabled();
@@ -11279,6 +11638,9 @@
           try{
             if(nextName !== nm){
               renamePreset(nm, nextName);
+            }
+            if(nextName === nm){
+              assertPresetNameAvailable(nextName, nm);
             }
             setPreset(nextName, [st.weaponId, st.armorId, st.necklaceId]);
             try{ onDone && onDone(); }catch(_e2){}
@@ -15400,7 +15762,7 @@ function avatarsKeyToMap(avatarsKey){
       sub.appendChild(labBorder);
 
       const rowBorderOpacity = document.createElement('div');
-      rowBorderOpacity.className = 'dba-setting-row';
+      rowBorderOpacity.className = 'dba-setting-row-sub';
 
       const titleBorderOpacity = document.createElement('div');
       titleBorderOpacity.className = 'dba-setting-block-title';
@@ -15603,6 +15965,55 @@ function avatarsKeyToMap(avatarsKey){
       mid.appendChild(row);
     })();
 
+    (function mkBaseFontRow(){
+      const row = document.createElement('div');
+      row.className = 'dba-setting-row';
+
+      const title = document.createElement('div');
+      title.style.fontSize = '1.05em';
+      title.style.fontWeight = '700';
+      title.style.textAlign = 'left';
+      title.style.margin = '0 0 8px 0';
+      title.textContent = '基準文字サイズ';
+
+      const group = document.createElement('div');
+      group.className = 'dba-setting-radio-group';
+
+      const currentBase = sanitizeBaseFontPx(settings?.ui?.baseFontPx, getDefaultBaseFontPxForDevice());
+
+      function mkRadio(px){
+        const lab = document.createElement('label');
+        lab.className = 'dba-setting-radio-line';
+
+        const input = document.createElement('input');
+        input.type = 'radio';
+        input.name = 'dba-base-font-size';
+        input.value = String(px);
+        input.checked = currentBase === px;
+        input.dataset.baseFontPx = '1';
+
+        const txt = document.createElement('span');
+        txt.textContent = `${px}px`;
+
+        input.addEventListener('change', () => {
+          if(!input.checked) return;
+          applyBaseFontSize(px);
+        });
+
+        lab.appendChild(input);
+        lab.appendChild(txt);
+        return lab;
+      }
+
+      group.appendChild(mkRadio(17));
+      group.appendChild(mkRadio(16));
+      group.appendChild(mkRadio(14));
+
+      row.appendChild(title);
+      row.appendChild(group);
+      mid.appendChild(row);
+    })();
+
     // レイヤー文字濃度（将来のテキスト/絵文字表示のための事前準備）
     (function mkOpacityRow(){
       const row = document.createElement('div');
@@ -15767,6 +16178,7 @@ function avatarsKeyToMap(avatarsKey){
         rb: { width: 32, height: 32 },
         hc: { width: 30, height: 30 },
         l:  { width: 30, height: 30 },
+        baseFontPx: getDefaultBaseFontPxForDevice(),
         postBattleAutoDiff: false,
         lightRefreshEnabled: false,
         lightRefreshBattleCount: DEFAULT_SETTINGS.lightRefresh.battleCount,
@@ -15783,6 +16195,10 @@ function avatarsKeyToMap(avatarsKey){
         const k = inp.dataset.modeKey;
         const axis = inp.dataset.axis;
         out[k][axis] = Number.parseInt(inp.value, 10);
+      }
+      const baseFont = dlg.querySelector('input[type="radio"][data-base-font-px="1"]:checked');
+      if(baseFont){
+        out.baseFontPx = Number.parseInt(baseFont.value, 10);
       }
       const pb = dlg.querySelector('input[type="checkbox"][data-post-battle-auto-diff="1"]');
       if(pb) out.postBattleAutoDiff = !!pb.checked;
@@ -15815,6 +16231,12 @@ function avatarsKeyToMap(avatarsKey){
         const axis = inp.dataset.axis;
         const eff = getEffectiveCellSizeForMode(k, s);
         inp.value = String(axis === 'width' ? eff.width : eff.height);
+      }
+      {
+        const basePx = sanitizeBaseFontPx(s?.ui?.baseFontPx, getDefaultBaseFontPxForDevice());
+        for(const inp of dlg.querySelectorAll('input[type="radio"][data-base-font-px="1"]')){
+          inp.checked = Number.parseInt(inp.value, 10) === basePx;
+        }
       }
       const lre = dlg.querySelector('input[type="checkbox"][data-light-refresh-enabled="1"]');
       if(lre){
@@ -15885,6 +16307,7 @@ function avatarsKeyToMap(avatarsKey){
       cur.cellSize.hc.height = sanitizeCellPx(v.hc.height, DEFAULT_SETTINGS.cellSize.hc.height);
       cur.cellSize.l.width   = sanitizeCellPx(v.l.width,   DEFAULT_SETTINGS.cellSize.l.width);
       cur.cellSize.l.height  = sanitizeCellPx(v.l.height,  DEFAULT_SETTINGS.cellSize.l.height);
+      cur.ui.baseFontPx = sanitizeBaseFontPx(v.baseFontPx, getDefaultBaseFontPxForDevice());
       cur.postBattle.autoDiffSync = !!v.postBattleAutoDiff;
       cur.lightRefresh.enabled = !!v.lightRefreshEnabled;
       cur.lightRefresh.battleCount = sanitizeLightRefreshBattleCount(v.lightRefreshBattleCount);
@@ -16008,7 +16431,12 @@ function avatarsKeyToMap(avatarsKey){
       e.preventDefault();
       e.stopPropagation();
       // 破棄して閉じる：設定値は保存しない、UIも復元
-      setInputsFromSettings(loadSettings());
+      {
+        const saved = loadSettings();
+        setInputsFromSettings(saved);
+        applyBaseFontSize(saved?.ui?.baseFontPx);
+        applyLayerTextOpacity(saved?.layer?.textOpacity);
+      }
       refreshInitial();
       try{ adlg.close(); }catch(_e){ adlg.removeAttribute('open'); }
       closeDirect();
@@ -16245,6 +16673,10 @@ function avatarsKeyToMap(avatarsKey){
     try{ migrateSaveDataToGen3IfNeeded(); }catch(_e){}
 
     addStyle(CSS);
+    try{
+      const s = loadSettings();
+      applyBaseFontSize(s?.ui?.baseFontPx);
+    }catch(_e){}
 
     const doInsert = async () => {
       // 二重挿入防止
