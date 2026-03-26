@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Donguri Battle Assistant
 // @namespace    https://donguri.5ch.io/
-// @version      5.3.0.1
+// @version      5.3.1.16
 // @description  5ちゃんねるのどんぐりシステムから派生したゲームの操作性を改善するためのユーザースクリプト
 // @author       福呼び草
 // @assistant    ChatGPT (OpenAI)
@@ -22,9 +22,650 @@
   // =========================
   // スクリプト自身のバージョン（スクリプト情報表示用）
   // =========================
-  const DBA_VERSION = '5.3.0.1';
+  const DBA_VERSION = '5.3.1.16';
 
   console.log('[DBA] BOOT', 'ver=', DBA_VERSION, 'href=', location.href);
+
+  // =========================
+  // 現在地セル 調査用デバッグ
+  //  - 通常運用では不要なため既定OFF
+  //  - 再調査が必要になった時だけ enabled を true に戻す
+  //  - console 出力タグ: [DBA-RTDBG]
+  // =========================
+  const DBA_RT_COORD_DEBUG = {
+    enabled: false,
+    installed: false,
+    tickTimer: 0,
+    lastProbeSig: '',
+    lastResolveSig: '',
+    lastFetchSig: '',
+    lastRenderSig: '',
+    windowKeysLogged: false
+  };
+
+  function isRtCoordDebugEnabled(){
+    return !!DBA_RT_COORD_DEBUG.enabled;
+  }
+
+  // =========================
+  // マーカー再描画を遅延させる
+  // =========================
+  const DBA_CURRENT_MARKER_REFRESH = {
+    timer: 0,
+    raf1: 0,
+    raf2: 0
+  };
+
+  function cancelDeferredCurrentCellMarkerRefresh(){
+    if(DBA_CURRENT_MARKER_REFRESH.timer){
+      clearTimeout(DBA_CURRENT_MARKER_REFRESH.timer);
+      DBA_CURRENT_MARKER_REFRESH.timer = 0;
+    }
+    if(DBA_CURRENT_MARKER_REFRESH.raf1){
+      cancelAnimationFrame(DBA_CURRENT_MARKER_REFRESH.raf1);
+      DBA_CURRENT_MARKER_REFRESH.raf1 = 0;
+    }
+    if(DBA_CURRENT_MARKER_REFRESH.raf2){
+      cancelAnimationFrame(DBA_CURRENT_MARKER_REFRESH.raf2);
+      DBA_CURRENT_MARKER_REFRESH.raf2 = 0;
+    }
+  }
+
+  function cancelDeferredCurrentCellMarkerRefreshFramesOnly(){
+    if(DBA_CURRENT_MARKER_REFRESH.raf1){
+      cancelAnimationFrame(DBA_CURRENT_MARKER_REFRESH.raf1);
+      DBA_CURRENT_MARKER_REFRESH.raf1 = 0;
+    }
+    if(DBA_CURRENT_MARKER_REFRESH.raf2){
+      cancelAnimationFrame(DBA_CURRENT_MARKER_REFRESH.raf2);
+      DBA_CURRENT_MARKER_REFRESH.raf2 = 0;
+    }
+  }
+
+  function sanitizeCurrentMarkerDelayMs(v){
+    const n = Number(v);
+    if(!Number.isFinite(n)) return 500;
+    const clamped = Math.max(0, Math.min(5000, n));
+    return Math.round(clamped);
+  }
+
+  function sanitizeCurrentMarkerDelaySec(v){
+    const n = Number(v);
+    if(!Number.isFinite(n)) return 0.5;
+    const clamped = Math.max(0, Math.min(5, n));
+    return Math.round(clamped * 10) / 10;
+  }
+
+  function markerDelaySecToMs(sec){
+    return sanitizeCurrentMarkerDelayMs(sanitizeCurrentMarkerDelaySec(sec) * 1000);
+  }
+
+  function markerDelayMsToSec(ms){
+    return sanitizeCurrentMarkerDelaySec(sanitizeCurrentMarkerDelayMs(ms) / 1000);
+  }
+
+  function scheduleDeferredCurrentCellMarkerRefresh(){
+    cancelDeferredCurrentCellMarkerRefresh();
+
+    const settings = loadSettings();
+    const delayMs = sanitizeCurrentMarkerDelayMs(settings?.rbLayer?.currentCellMarkerDelayMs);
+
+    DBA_CURRENT_MARKER_REFRESH.timer = setTimeout(() => {
+      DBA_CURRENT_MARKER_REFRESH.timer = 0;
+      try{
+        flushPendingCurrentCellMarkerCache(true);
+        scheduleBattlemapLayerSync();
+      }catch(_e){}
+    }, delayMs);
+  }
+
+  function dbaRtDbg(){
+    if(!isRtCoordDebugEnabled()) return;
+    try{
+      console.log('[DBA-RTDBG]', ...arguments);
+    }catch(_e){}
+  }
+
+  function dbaRtDbgWarn(){
+    if(!isRtCoordDebugEnabled()) return;
+    try{
+      console.warn('[DBA-RTDBG]', ...arguments);
+    }catch(_e){}
+  }
+
+  function dbaCoordFromMaybe(obj){
+    if(!obj || typeof obj !== 'object') return null;
+    const r = Number(obj.row ?? obj.r ?? obj.bapRow);
+    const c = Number(obj.col ?? obj.c ?? obj.bapCol);
+    if(!Number.isFinite(r) || !Number.isFinite(c)) return null;
+    return { row: r, col: c };
+  }
+
+  function dbaCoordKey(coord){
+    if(!coord) return 'null';
+    const r = Number(coord.row);
+    const c = Number(coord.col);
+    if(!Number.isFinite(r) || !Number.isFinite(c)) return 'null';
+    return `${r},${c}`;
+  }
+
+  function dbaSummarizeWindowAvatars(root){
+    if(!root || typeof root !== 'object'){
+      return {
+        hasRoot: false,
+        direct: null,
+        selfMarked: [],
+        avatarCount: 0
+      };
+    }
+
+    const direct = dbaCoordFromMaybe(
+      (root.myAvatar && typeof root.myAvatar === 'object')
+        ? root.myAvatar
+        : ((root.selfAvatar && typeof root.selfAvatar === 'object') ? root.selfAvatar : null)
+    );
+
+    const avatars = Array.isArray(root.avatars) ? root.avatars : [];
+    const selfMarked = [];
+    for(const av of avatars){
+      if(!av || typeof av !== 'object') continue;
+      if(!(av.isSelf === true || av.self === true || av.mine === true)) continue;
+      const rc = dbaCoordFromMaybe(av);
+      if(!rc) continue;
+      selfMarked.push({
+        row: rc.row,
+        col: rc.col,
+        flags: {
+          isSelf: av.isSelf === true,
+          self: av.self === true,
+          mine: av.mine === true
+        }
+      });
+      if(selfMarked.length >= 6) break;
+    }
+
+    return {
+      hasRoot: true,
+      direct,
+      selfMarked,
+      avatarCount: avatars.length
+    };
+  }
+
+  function dbaListInterestingWindowKeys(){
+    try{
+      const keys = Object.getOwnPropertyNames(window);
+      return keys
+        .filter((k) => /avatar|coord|tile|battle|fow|grid|self/i.test(String(k || '')))
+        .sort()
+        .slice(0, 120);
+    }catch(_e){
+      return [];
+    }
+  }
+
+  function dbaExtractCoordCandidatesFromText(text){
+    const src = String(text || '');
+    if(!src) return [];
+
+    const out = [];
+    const seen = new Set();
+    const push = (label, row, col) => {
+      const r = Number(row);
+      const c = Number(col);
+      if(!Number.isFinite(r) || !Number.isFinite(c)) return;
+      const key = `${label}:${r},${c}`;
+      if(seen.has(key)) return;
+      seen.add(key);
+      out.push({ label, row: r, col: c });
+    };
+
+    {
+      const re = /"myAvatar"\s*:\s*\{[\s\S]{0,400}?"(?:row|r|bapRow)"\s*:\s*(\d+)[\s\S]{0,200}?"(?:col|c|bapCol)"\s*:\s*(\d+)/g;
+      let m;
+      while((m = re.exec(src)) !== null){
+        push('myAvatar', m[1], m[2]);
+        if(out.length >= 8) break;
+      }
+    }
+
+    {
+      const re = /"selfAvatar"\s*:\s*\{[\s\S]{0,400}?"(?:row|r|bapRow)"\s*:\s*(\d+)[\s\S]{0,200}?"(?:col|c|bapCol)"\s*:\s*(\d+)/g;
+      let m;
+      while((m = re.exec(src)) !== null){
+        push('selfAvatar', m[1], m[2]);
+        if(out.length >= 8) break;
+      }
+    }
+
+    {
+      const re = /"isSelf"\s*:\s*true[\s\S]{0,400}?"(?:row|r|bapRow)"\s*:\s*(\d+)[\s\S]{0,200}?"(?:col|c|bapCol)"\s*:\s*(\d+)/g;
+      let m;
+      while((m = re.exec(src)) !== null){
+        push('isSelf', m[1], m[2]);
+        if(out.length >= 8) break;
+      }
+    }
+
+    {
+      const re = /"currentAvatarCoord"[\s\S]{0,200}?"r"\s*:\s*(\d+)[\s\S]{0,120}?"c"\s*:\s*(\d+)/g;
+      let m;
+      while((m = re.exec(src)) !== null){
+        push('currentAvatarCoord', m[1], m[2]);
+        if(out.length >= 8) break;
+      }
+    }
+
+    return out;
+  }
+
+  function dbaBuildInterestingPreview(text){
+    const src = String(text || '').replace(/\s+/g, ' ').trim();
+    if(!src) return '';
+    const hit = src.match(/(.{0,120}(?:myAvatar|selfAvatar|isSelf|currentAvatarCoord|avatarsByTile).{0,220})/i);
+    return hit ? String(hit[1] || '') : src.slice(0, 240);
+  }
+
+  function dbaShouldInspectDebugUrl(url){
+    const u = String(url || '');
+    if(!u) return false;
+    return /teambattle|teamchallenge|avatar|battle|map|fow/i.test(u);
+  }
+
+  function dbaProbeRuntimeCurrentCell(reason){
+    if(!isRtCoordDebugEnabled()) return;
+    if(mode !== 'rb') return;
+
+    let live = null;
+    let fromDoc = null;
+    let snapSelf = null;
+    let urlCoord = null;
+    let cache = null;
+    let currentAvatarCoordValue = null;
+    let avatarsByTileSelf = [];
+    let winSummary = null;
+
+    try{ live = readCurrentBattleCellCoordFromLiveWindow(); }catch(_e){}
+    try{ fromDoc = readCurrentBattleCellCoordFromDocument(document); }catch(_e){}
+    try{
+      const snap = getBattlemapSnapshotFromDoc(document);
+      const cands = [
+        (snap && snap.selfAvatar && typeof snap.selfAvatar === 'object') ? snap.selfAvatar : null,
+        (snap && snap.myAvatar && typeof snap.myAvatar === 'object') ? snap.myAvatar : null,
+        (snap && snap.self && typeof snap.self === 'object') ? snap.self : null
+      ];
+      for(const self of cands){
+        const rc = dbaCoordFromMaybe(self);
+        if(rc){
+          snapSelf = rc;
+          break;
+        }
+      }
+    }catch(_e){}
+    try{
+      const u = new URL(location.href);
+      const r = Number(u.searchParams.get('r'));
+      const c = Number(u.searchParams.get('c'));
+      if(Number.isFinite(r) && Number.isFinite(c)){
+        urlCoord = { row: r, col: c };
+      }
+    }catch(_e){}
+    try{ cache = getCurrentCellMarkerCache(); }catch(_e){}
+    try{
+      if(typeof window.currentAvatarCoord === 'function'){
+        currentAvatarCoordValue = dbaCoordFromMaybe(window.currentAvatarCoord());
+      }
+    }catch(_e){}
+    try{
+      const src = window.avatarsByTile;
+      if(src && typeof src === 'object'){
+        const keys = Object.keys(src);
+        for(const k of keys){
+          const arr = Array.isArray(src[k]) ? src[k] : [];
+          for(const av of arr){
+            if(!av || typeof av !== 'object') continue;
+            if(!(av.isSelf === true || av.self === true || av.mine === true)) continue;
+            const rc = dbaCoordFromMaybe(av);
+            if(!rc) continue;
+            avatarsByTileSelf.push({
+              tile: String(k),
+              row: rc.row,
+              col: rc.col
+            });
+            if(avatarsByTileSelf.length >= 6) break;
+          }
+          if(avatarsByTileSelf.length >= 6) break;
+        }
+      }
+    }catch(_e){}
+    try{
+      winSummary = dbaSummarizeWindowAvatars(window.__AVATARS);
+    }catch(_e){
+      winSummary = null;
+    }
+
+    const payload = {
+      reason: String(reason || ''),
+      href: location.href,
+      live,
+      fromDoc,
+      snapSelf,
+      urlCoord,
+      cache,
+      currentAvatarCoord: currentAvatarCoordValue,
+      windowAvatars: winSummary,
+      avatarsByTileSelf
+    };
+    const sig = JSON.stringify(payload);
+    if(sig === DBA_RT_COORD_DEBUG.lastProbeSig && reason !== 'install'){
+      return;
+    }
+    DBA_RT_COORD_DEBUG.lastProbeSig = sig;
+
+    if(!DBA_RT_COORD_DEBUG.windowKeysLogged){
+      DBA_RT_COORD_DEBUG.windowKeysLogged = true;
+      dbaRtDbg('WINDOW_KEYS', dbaListInterestingWindowKeys());
+    }
+
+    dbaRtDbg('PROBE', payload);
+  }
+
+  function dbaLogCurrentCellResolved(source, coord){
+    if(!isRtCoordDebugEnabled()) return;
+    if(mode !== 'rb') return;
+
+    const sig = `${String(source || '')}|${dbaCoordKey(coord)}`;
+    if(sig === DBA_RT_COORD_DEBUG.lastResolveSig) return;
+    DBA_RT_COORD_DEBUG.lastResolveSig = sig;
+    dbaRtDbg('RESOLVE', {
+      source: String(source || ''),
+      coord: coord || null
+    });
+  }
+
+  function dbaInspectDebugResponseText(kind, url, text){
+    if(!isRtCoordDebugEnabled()) return;
+    if(mode !== 'rb') return;
+
+    const src = String(text || '');
+    if(!src) return;
+
+    const responseCoord = updateCurrentCellMarkerCacheFromResponseText(
+      src,
+      `${String(kind || 'response')}:myAvatar`
+    );
+
+    const candidates = dbaExtractCoordCandidatesFromText(src);
+    const preview = dbaBuildInterestingPreview(src);
+    const interesting =
+      !!responseCoord ||
+      candidates.length > 0 ||
+      /myAvatar|selfAvatar|isSelf|currentAvatarCoord|avatarsByTile/i.test(src);
+
+    if(!interesting) return;
+
+    const sig = JSON.stringify({
+      kind: String(kind || ''),
+      url: String(url || ''),
+      responseCoord,
+      candidates,
+      preview
+    });
+    if(sig === DBA_RT_COORD_DEBUG.lastFetchSig) return;
+    DBA_RT_COORD_DEBUG.lastFetchSig = sig;
+
+    dbaRtDbg(`${String(kind || '').toUpperCase()}_HIT`, {
+      url: String(url || ''),
+      responseCoord,
+      candidates,
+      preview
+    });
+
+    setTimeout(() => {
+      dbaProbeRuntimeCurrentCell(`${String(kind || '')}:after-response`);
+    }, 60);
+  }
+
+  function installRuntimeCurrentCellDebugProbes(){
+    if(!isRtCoordDebugEnabled()) return false;
+    if(mode !== 'rb') return false;
+    if(DBA_RT_COORD_DEBUG.installed) return true;
+    DBA_RT_COORD_DEBUG.installed = true;
+
+    dbaRtDbg('INSTALL', { mode, href: location.href });
+
+    if(!DBA_RT_COORD_DEBUG.tickTimer){
+      DBA_RT_COORD_DEBUG.tickTimer = window.setInterval(() => {
+        dbaProbeRuntimeCurrentCell('interval');
+      }, 1200);
+    }
+
+    const queueProbe = (reason, delay) => {
+      setTimeout(() => {
+        dbaProbeRuntimeCurrentCell(reason);
+      }, Math.max(0, Number(delay || 0)));
+    };
+
+    document.addEventListener('click', () => queueProbe('click', 80), true);
+    document.addEventListener('pointerup', () => queueProbe('pointerup', 80), true);
+    window.addEventListener('popstate', () => queueProbe('popstate', 50));
+
+    queueProbe('install', 0);
+    queueProbe('install+500ms', 500);
+    return true;
+  }
+
+  // =========================
+  // fetch レスポンス監視フック（実働用）
+  // =========================
+  const DBA_CURRENT_CELL_RESPONSE_HOOK = {
+    installed: false
+  };
+
+  function installCurrentCellResponseHooks(){
+    if(mode !== 'rb') return false;
+    if(DBA_CURRENT_CELL_RESPONSE_HOOK.installed) return true;
+    DBA_CURRENT_CELL_RESPONSE_HOOK.installed = true;
+
+    try{
+      const rawFetch = (typeof window.fetch === 'function') ? window.fetch.bind(window) : null;
+      if(rawFetch){
+        window.fetch = async function(){
+          const resp = await rawFetch(...arguments);
+          try{
+            const req0 = arguments[0];
+            const reqUrl = (resp && resp.url)
+              ? String(resp.url)
+              : (typeof req0 === 'string'
+                  ? req0
+                  : ((req0 && typeof req0.url === 'string') ? req0.url : ''));
+
+            if(dbaShouldInspectDebugUrl(reqUrl) && resp && typeof resp.clone === 'function'){
+              resp.clone().text().then((text) => {
+                try{
+                  updateCurrentCellMarkerCacheFromResponseText(
+                    text,
+                    'fetch:myAvatar'
+                  );
+                }catch(_e){}
+
+                try{
+                  if(isRtCoordDebugEnabled()){
+                    dbaInspectDebugResponseText('fetch', reqUrl, text);
+                  }
+                }catch(_e){}
+              }).catch(() => {});
+            }
+          }catch(_e){}
+          return resp;
+        };
+      }
+    }catch(e){
+      dbaRtDbgWarn('FETCH_HOOK_FAILED', String(e && e.message ? e.message : e));
+    }
+
+    try{
+      if(window.XMLHttpRequest && window.XMLHttpRequest.prototype){
+        const proto = window.XMLHttpRequest.prototype;
+        const rawOpen = proto.open;
+        const rawSend = proto.send;
+
+        proto.open = function(method, url){
+          try{
+            this.__dbaCurrentCellHookMethod = String(method || '');
+            this.__dbaCurrentCellHookUrl = String(url || '');
+          }catch(_e){}
+          return rawOpen.apply(this, arguments);
+        };
+
+        proto.send = function(){
+          try{
+            const xhr = this;
+            const url = String(xhr.__dbaCurrentCellHookUrl || '');
+            if(dbaShouldInspectDebugUrl(url)){
+              xhr.addEventListener('load', function(){
+                try{
+                  const finalUrl = String(xhr.responseURL || url || '');
+                  const text = (typeof xhr.responseText === 'string') ? xhr.responseText : '';
+
+                  try{
+                    updateCurrentCellMarkerCacheFromResponseText(
+                      text,
+                      'xhr:myAvatar'
+                    );
+                  }catch(_e){}
+
+                  try{
+                    if(isRtCoordDebugEnabled()){
+                      dbaInspectDebugResponseText('xhr', finalUrl, text);
+                    }
+                  }catch(_e){}
+                }catch(_e){}
+              }, { once:true });
+            }
+          }catch(_e){}
+          return rawSend.apply(this, arguments);
+        };
+      }
+    }catch(e){
+      dbaRtDbgWarn('XHR_HOOK_FAILED', String(e && e.message ? e.message : e));
+    }
+
+    return true;
+  }
+
+  // =========================
+  // fetch レスポンス中の myAvatar から現在地座標を読む
+  // =========================
+  function dbaExtractObjectLiteralTextByProp(srcText, propName){
+    const src = String(srcText || '');
+    const prop = String(propName || '');
+    if(!src || !prop) return '';
+
+    const re = new RegExp(`"${prop}"\\s*:\\s*\\{`, 'g');
+    const m = re.exec(src);
+    if(!m) return '';
+
+    const openIdx = src.indexOf('{', m.index);
+    if(openIdx < 0) return '';
+
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+
+    for(let i = openIdx; i < src.length; i++){
+      const ch = src[i];
+
+      if(inString){
+        if(escaped){
+          escaped = false;
+          continue;
+        }
+        if(ch === '\\'){
+          escaped = true;
+          continue;
+        }
+        if(ch === '"'){
+          inString = false;
+        }
+        continue;
+      }
+
+      if(ch === '"'){
+        inString = true;
+        continue;
+      }
+      if(ch === '{'){
+        depth += 1;
+        continue;
+      }
+      if(ch === '}'){
+        depth -= 1;
+        if(depth === 0){
+          return src.slice(openIdx, i + 1);
+        }
+      }
+    }
+
+    return '';
+  }
+
+  function dbaParseCoordFromObjectLiteralText(objText){
+    const src = String(objText || '');
+    if(!src) return null;
+
+    const rowMatch =
+      src.match(/"(?:row|r|bapRow)"\s*:\s*(-?\d+)/) ||
+      src.match(/(?:^|[,{]\s*)(?:row|r|bapRow)\s*:\s*(-?\d+)/);
+    const colMatch =
+      src.match(/"(?:col|c|bapCol)"\s*:\s*(-?\d+)/) ||
+      src.match(/(?:^|[,{]\s*)(?:col|c|bapCol)\s*:\s*(-?\d+)/);
+
+    if(!rowMatch || !colMatch) return null;
+
+    const row = Number(rowMatch[1]);
+    const col = Number(colMatch[1]);
+    if(!Number.isFinite(row) || !Number.isFinite(col)) return null;
+    return { row, col };
+  }
+
+  function readCurrentBattleCellCoordFromResponseText(text){
+    if(mode !== 'rb') return null;
+
+    const src = String(text || '');
+    if(!src) return null;
+
+    const directKeys = ['myAvatar', 'selfAvatar'];
+    for(const key of directKeys){
+      const objText = dbaExtractObjectLiteralTextByProp(src, key);
+      const rc = dbaParseCoordFromObjectLiteralText(objText);
+      if(rc) return rc;
+    }
+
+    return null;
+  }
+
+  function updateCurrentCellMarkerCacheFromResponseText(text, source){
+    if(mode !== 'rb') return null;
+
+    const rc = readCurrentBattleCellCoordFromResponseText(text);
+    if(!rc) return null;
+
+    const settings = loadSettings();
+    const delayMs = sanitizeCurrentMarkerDelayMs(settings?.rbLayer?.currentCellMarkerDelayMs);
+
+    setPendingCurrentCellMarkerCache(rc.row, rc.col, delayMs);
+    dbaLogCurrentCellResolved(String(source || 'response-text-pending'), {
+      row: rc.row,
+      col: rc.col
+    });
+
+    try{
+      scheduleDeferredCurrentCellMarkerRefresh();
+    }catch(_e){}
+
+    return rc;
+  }
 
   // =========================
   // URL / ドメイン集中管理
@@ -497,10 +1138,16 @@
       line-height: inherit;
       background: transparent;
       box-sizing: border-box;
-      overflow: hidden;
+      overflow: visible;
       contain: layout paint style;
       min-width: 0;
       min-height: 0;
+    }
+    .dba-layer-cell[data-dba-current-marker="1"] {
+      /* 現在地マーカーだけはセル外へ少しはみ出させたいので、
+         paint containment を外して overflow:visible を効かせる */
+      contain: layout style;
+      z-index: 3;
     }
     .dba-layer-cell__content {
       position: absolute;
@@ -531,6 +1178,27 @@
       text-shadow:
         0 0 4px rgba(255,255,255,1),
         0 0 8px rgba(255,255,255,0.75);
+    }
+
+    /* ===== 現在地セルを指し示すSVGマーカー ===== */
+    .dba-layer-cell[data-dba-current-marker="1"]::before {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: -33%;
+      width: 50%;
+      height: 50%;
+      transform: translateX(-50%);
+      pointer-events: none;
+      user-select: none;
+      z-index: 4;
+      background-repeat: no-repeat;
+      background-position: center top;
+      background-size: contain;
+      filter:
+        drop-shadow(0 2px 1px rgba(255,255,0,0.8))
+        drop-shadow(0 4px 6px rgba(30,0,0,0.8));
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 180'%3E%3Cdefs%3E%3ClinearGradient id='body' x1='0%25' y1='0%25' x2='100%25' y2='0%25'%3E%3Cstop offset='0%25' stop-color='%23666b73'/%3E%3Cstop offset='14%25' stop-color='%23edf2f7'/%3E%3Cstop offset='31%25' stop-color='%239aa3ad'/%3E%3Cstop offset='50%25' stop-color='%23ffffff'/%3E%3Cstop offset='67%25' stop-color='%23959da7'/%3E%3Cstop offset='84%25' stop-color='%23d9dee5'/%3E%3Cstop offset='100%25' stop-color='%23585f68'/%3E%3C/linearGradient%3E%3ClinearGradient id='rim' x1='0%25' y1='0%25' x2='0%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23ffffff'/%3E%3Cstop offset='100%25' stop-color='%23939ba4'/%3E%3C/linearGradient%3E%3CradialGradient id='shine' cx='38%25' cy='24%25' r='48%25'%3E%3Cstop offset='0%25' stop-color='rgba(255,255,255,0.95)'/%3E%3Cstop offset='55%25' stop-color='rgba(255,255,255,0.18)'/%3E%3Cstop offset='100%25' stop-color='rgba(255,255,255,0)'/%3E%3C/radialGradient%3E%3C/defs%3E%3Cellipse cx='60' cy='24' rx='34' ry='14' fill='url(%23rim)' stroke='%23485059' stroke-width='2.5'/%3E%3Cpath d='M28 26 L60 154 L92 26 Z' fill='url(%23body)' stroke='%23485059' stroke-width='2.5' stroke-linejoin='round'/%3E%3Cpath d='M41 28 L60 140 L72 28 Z' fill='url(%23shine)' opacity='0.95'/%3E%3Cellipse cx='60' cy='24' rx='22' ry='8' fill='rgba(255,255,255,0.45)'/%3E%3Cellipse cx='60' cy='155' rx='9' ry='4.5' fill='%23767d86' opacity='0.72'/%3E%3C/svg%3E");
     }
 
     .dba-layer-cell[data-dba-capital-crown="1"]::after {
@@ -3603,6 +4271,8 @@
       borderOpacity: 80,
       stopAnimation: false,
       showCapitalCrown: false,
+      showCurrentCellMarker: false,
+      currentCellMarkerDelayMs: 500,
       showNobodyHolder: false
     },
     // レイヤー文字濃度（範囲：0〜100）
@@ -4456,6 +5126,8 @@
         out.rbLayer.borderOpacity = sanitizeRbBorderOpacity(obj.rbLayer.borderOpacity);
         out.rbLayer.stopAnimation = !!obj.rbLayer.stopAnimation;
         out.rbLayer.showCapitalCrown = !!obj.rbLayer.showCapitalCrown;
+        out.rbLayer.showCurrentCellMarker = !!obj.rbLayer.showCurrentCellMarker;
+        out.rbLayer.currentCellMarkerDelayMs = sanitizeCurrentMarkerDelayMs(obj.rbLayer.currentCellMarkerDelayMs);
         out.rbLayer.showNobodyHolder = !!obj.rbLayer.showNobodyHolder;
       }
       if(obj && obj.layer){
@@ -4504,6 +5176,8 @@
           borderOpacity: sanitizeRbBorderOpacity(s?.rbLayer?.borderOpacity),
           stopAnimation: !!s?.rbLayer?.stopAnimation,
           showCapitalCrown: !!s?.rbLayer?.showCapitalCrown,
+          showCurrentCellMarker: !!s?.rbLayer?.showCurrentCellMarker,
+          currentCellMarkerDelayMs: sanitizeCurrentMarkerDelayMs(s?.rbLayer?.currentCellMarkerDelayMs),
           showNobodyHolder: !!s?.rbLayer?.showNobodyHolder
         },
         layer: { textOpacity: sanitizeOpacity(s?.layer?.textOpacity) },
@@ -7018,6 +7692,7 @@
       const snap = getBattlemapSnapshotFromDoc(document);
       renderRbOriginalBorders(snap);
       renderRbCapitalCrowns(snap);
+      renderCurrentCellMarker(snap);
     }
 
     return true;
@@ -7029,11 +7704,13 @@
       dbaLayerRAF = 0;
       const ok = syncBattlemapLayer();
       if(ok === true){
+        cancelDeferredCurrentCellMarkerRefreshFramesOnly();
         dbaLayerSyncRetryCount = 0;
         endBattlemapLayerTextFreeze();
         return;
       }
 
+      cancelDeferredCurrentCellMarkerRefreshFramesOnly();
       dbaLayerSyncRetryCount += 1;
       if(dbaLayerSyncRetryCount < clampInt(DBA_LAYER_SYNC_RETRY_LIMIT, 1, 60)){
         scheduleBattlemapLayerSync();
@@ -7148,7 +7825,11 @@
 
     // bodyが無い可能性を考慮
     const start = () => {
+      cancelDeferredCurrentCellMarkerRefresh();
       ensureBattlemapLayerDOM();
+      installCurrentCellResponseHooks();
+      installRuntimeCurrentCellDebugProbes();
+      dbaProbeRuntimeCurrentCell('initBattlemapLayer:start');
       // 初期値反映（文字濃度）
       const s = loadSettings();
       applyBaseFontSize(s?.ui?.baseFontPx);
@@ -7156,6 +7837,9 @@
 
       // まず同期
       scheduleBattlemapLayerSync();
+      setTimeout(() => {
+        dbaProbeRuntimeCurrentCell('initBattlemapLayer:post-sync');
+      }, 250);
       hydrateBattlemapLayerTextsOnInit().catch(()=>{});
 
       // スクロール・リサイズ追従
@@ -14435,6 +15119,17 @@
     }
   }
 
+  function setLayerCellCurrentMarker(row, col, on){
+    const content = dbaLayerCellContentMap.get(`${row},${col}`) || null;
+    const cell = content && content.parentElement ? content.parentElement : null;
+    if(!cell) return;
+    if(on){
+      cell.dataset.dbaCurrentMarker = '1';
+    }else{
+      delete cell.dataset.dbaCurrentMarker;
+    }
+  }
+
   function setLayerCellDecoBackground(row, col, backgroundValue){
     const cell = dbaLayerCellDecoMap.get(`${row},${col}`) || null;
     if(cell) cell.style.background = String(backgroundValue || 'transparent');
@@ -14647,6 +15342,312 @@
     }
   }
 
+  const DBA_CURRENT_CELL_MARKER_STATE = {
+    row: NaN,
+    col: NaN,
+    hasValue: false
+  };
+
+  const DBA_PENDING_CURRENT_CELL_MARKER_STATE = {
+    row: NaN,
+    col: NaN,
+    dueAt: 0,
+    hasValue: false
+  };
+
+  function setCurrentCellMarkerCache(row, col){
+    const r = Number(row);
+    const c = Number(col);
+    if(!Number.isFinite(r) || !Number.isFinite(c)) return false;
+    DBA_CURRENT_CELL_MARKER_STATE.row = r;
+    DBA_CURRENT_CELL_MARKER_STATE.col = c;
+    DBA_CURRENT_CELL_MARKER_STATE.hasValue = true;
+    return true;
+  }
+
+  function getCurrentCellMarkerCache(){
+    if(!DBA_CURRENT_CELL_MARKER_STATE.hasValue) return null;
+    const r = Number(DBA_CURRENT_CELL_MARKER_STATE.row);
+    const c = Number(DBA_CURRENT_CELL_MARKER_STATE.col);
+    if(!Number.isFinite(r) || !Number.isFinite(c)) return null;
+    return { row: r, col: c };
+  }
+
+  function clearPendingCurrentCellMarkerCache(){
+    DBA_PENDING_CURRENT_CELL_MARKER_STATE.row = NaN;
+    DBA_PENDING_CURRENT_CELL_MARKER_STATE.col = NaN;
+    DBA_PENDING_CURRENT_CELL_MARKER_STATE.dueAt = 0;
+    DBA_PENDING_CURRENT_CELL_MARKER_STATE.hasValue = false;
+  }
+
+  function setPendingCurrentCellMarkerCache(row, col, delayMs){
+    const r = Number(row);
+    const c = Number(col);
+    if(!Number.isFinite(r) || !Number.isFinite(c)) return false;
+
+    const delay = sanitizeCurrentMarkerDelayMs(delayMs);
+    DBA_PENDING_CURRENT_CELL_MARKER_STATE.row = r;
+    DBA_PENDING_CURRENT_CELL_MARKER_STATE.col = c;
+    DBA_PENDING_CURRENT_CELL_MARKER_STATE.dueAt = Date.now() + delay;
+    DBA_PENDING_CURRENT_CELL_MARKER_STATE.hasValue = true;
+    return true;
+  }
+
+  function flushPendingCurrentCellMarkerCache(force){
+    if(!DBA_PENDING_CURRENT_CELL_MARKER_STATE.hasValue) return null;
+
+    const r = Number(DBA_PENDING_CURRENT_CELL_MARKER_STATE.row);
+    const c = Number(DBA_PENDING_CURRENT_CELL_MARKER_STATE.col);
+    const dueAt = Number(DBA_PENDING_CURRENT_CELL_MARKER_STATE.dueAt || 0);
+    if(!Number.isFinite(r) || !Number.isFinite(c)){
+      clearPendingCurrentCellMarkerCache();
+      return null;
+    }
+
+    if(!force && Date.now() < dueAt){
+      return null;
+    }
+
+    clearPendingCurrentCellMarkerCache();
+    setCurrentCellMarkerCache(r, c);
+    return { row: r, col: c };
+  }
+
+  function readCurrentBattleCellCoordFromLiveWindow(){
+    try{
+      if(mode !== 'rb') return null;
+
+      const root = window.__AVATARS;
+      if(!root || typeof root !== 'object') return null;
+
+      const direct = (root.myAvatar && typeof root.myAvatar === 'object')
+        ? root.myAvatar
+        : ((root.selfAvatar && typeof root.selfAvatar === 'object') ? root.selfAvatar : null);
+
+      if(direct){
+        const r = Number(direct.row ?? direct.r ?? direct.bapRow);
+        const c = Number(direct.col ?? direct.c ?? direct.bapCol);
+        if(Number.isFinite(r) && Number.isFinite(c)){
+          return { row: r, col: c };
+        }
+      }
+
+      const rows = Array.isArray(root.avatars) ? root.avatars : [];
+      for(const av of rows){
+        if(!av || typeof av !== 'object') continue;
+        if(!(av.isSelf === true || av.self === true || av.mine === true)) continue;
+
+        const r = Number(av.row ?? av.r ?? av.bapRow);
+        const c = Number(av.col ?? av.c ?? av.bapCol);
+        if(Number.isFinite(r) && Number.isFinite(c)){
+          return { row: r, col: c };
+        }
+      }
+    }catch(_e){}
+
+    return null;
+  }
+
+  function readCurrentBattleCellCoordFromDocument(doc){
+    try{
+      if(mode !== 'rb') return null;
+      if(!doc) return null;
+
+      const payload = extractRbAvatarsPayloadFromDoc(doc);
+      if(!payload || typeof payload !== 'object') return null;
+
+      const direct = (payload.myAvatar && typeof payload.myAvatar === 'object')
+        ? payload.myAvatar
+        : ((payload.selfAvatar && typeof payload.selfAvatar === 'object') ? payload.selfAvatar : null);
+
+      if(direct){
+        const r = Number(
+          direct.row ??
+          direct.r ??
+          direct.bapRow
+        );
+        const c = Number(
+          direct.col ??
+          direct.c ??
+          direct.bapCol
+        );
+        if(Number.isFinite(r) && Number.isFinite(c)){
+          return { row: r, col: c };
+        }
+      }
+
+      const avatars = Array.isArray(payload.avatars) ? payload.avatars : [];
+      for(const av of avatars){
+        if(!av || typeof av !== 'object') continue;
+        if(!(av.isSelf === true || av.self === true || av.mine === true)) continue;
+
+        const r = Number(
+          av.row ??
+          av.r ??
+          av.bapRow
+        );
+        const c = Number(
+          av.col ??
+          av.c ??
+          av.bapCol
+        );
+        if(Number.isFinite(r) && Number.isFinite(c)){
+          return { row: r, col: c };
+        }
+      }
+
+      {
+        const avatarsKey = normalizeAvatarsPayload(payload);
+        const avInfo = avatarsKeyToMap(avatarsKey);
+        const self = avInfo && avInfo.selfAvatar ? avInfo.selfAvatar : null;
+        if(self){
+          const r = Number(self.row);
+          const c = Number(self.col);
+          if(Number.isFinite(r) && Number.isFinite(c)){
+            return { row: r, col: c };
+          }
+        }
+      }
+    }catch(_e){}
+
+    return null;
+  }
+
+  // 現在地座標の取得
+  function getCurrentBattleCellCoord(snapshot){
+    const snap = snapshot || null;
+
+    {
+      const live = readCurrentBattleCellCoordFromLiveWindow();
+      if(live){
+        setCurrentCellMarkerCache(live.row, live.col);
+        dbaLogCurrentCellResolved('live-window', live);
+        return live;
+      }
+    }
+
+    {
+      const fromDoc = readCurrentBattleCellCoordFromDocument(document);
+      if(fromDoc){
+        setCurrentCellMarkerCache(fromDoc.row, fromDoc.col);
+        dbaLogCurrentCellResolved('document', fromDoc);
+        return fromDoc;
+      }
+    }
+
+    if(mode === 'rb'){
+      const candidates = [
+        (snap && snap.selfAvatar && typeof snap.selfAvatar === 'object') ? snap.selfAvatar : null,
+        (snap && snap.myAvatar && typeof snap.myAvatar === 'object') ? snap.myAvatar : null,
+        (snap && snap.self && typeof snap.self === 'object') ? snap.self : null
+      ];
+
+      for(const self of candidates){
+        if(!self) continue;
+
+        const sr = Number(
+          self.row ??
+          self.r ??
+          self.bapRow
+        );
+        const sc = Number(
+          self.col ??
+          self.c ??
+          self.bapCol
+        );
+
+        if(Number.isFinite(sr) && Number.isFinite(sc)){
+          const rc = { row: sr, col: sc };
+          setCurrentCellMarkerCache(sr, sc);
+          dbaLogCurrentCellResolved('snapshot', rc);
+          return rc;
+        }
+      }
+    }
+
+    {
+      const flushed = flushPendingCurrentCellMarkerCache(false);
+      if(flushed){
+        dbaLogCurrentCellResolved('pending-cache', flushed);
+        return flushed;
+      }
+    }
+
+    const u = new URL(location.href);
+    const rawR = u.searchParams.get('r');
+    const rawC = u.searchParams.get('c');
+    if(rawR != null && rawC != null && rawR !== '' && rawC !== ''){
+      const r = Number(rawR);
+      const c = Number(rawC);
+      if(Number.isFinite(r) && Number.isFinite(c)){
+        const rc = { row: r, col: c };
+        setCurrentCellMarkerCache(r, c);
+        dbaLogCurrentCellResolved('url', rc);
+        return rc;
+      }
+    }
+
+    const cached = getCurrentCellMarkerCache();
+    if(cached){
+      dbaLogCurrentCellResolved('cache', cached);
+      return cached;
+    }
+
+    dbaLogCurrentCellResolved('none', null);
+    return null;
+
+    dbaLogCurrentCellResolved('none', null);
+    return null;
+  }
+
+  // 現在地マーカー描画
+  function renderCurrentCellMarker(snapshot){
+    const snap = snapshot || getBattlemapSnapshotFromDoc(document);
+    const rows = Math.max(0, Number(snap?.rows || 0));
+    const cols = Math.max(0, Number(snap?.cols || 0));
+
+    if(rows <= 0 || cols <= 0){
+      return;
+    }
+
+    const show = shouldShowCurrentCellMarker();
+    const cur = show ? getCurrentBattleCellCoord(snap) : null;
+    const cached = show ? getCurrentCellMarkerCache() : null;
+    const eff = cur || cached || null;
+    const curRow = eff ? Number(eff.row) : NaN;
+    const curCol = eff ? Number(eff.col) : NaN;
+
+    {
+      const sig = JSON.stringify({
+        show,
+        rows,
+        cols,
+        eff: eff ? { row: curRow, col: curCol } : null
+      });
+      if(isRtCoordDebugEnabled() && sig !== DBA_RT_COORD_DEBUG.lastRenderSig){
+        DBA_RT_COORD_DEBUG.lastRenderSig = sig;
+        dbaRtDbg('RENDER_MARKER', {
+          show,
+          rows,
+          cols,
+          eff: eff ? { row: curRow, col: curCol } : null
+        });
+      }
+    }
+
+    for(let r = 0; r < rows; r++){
+      for(let c = 0; c < cols; c++){
+        const on = (
+          show &&
+          Number.isFinite(curRow) &&
+          Number.isFinite(curCol) &&
+          r === curRow &&
+          c === curCol
+        );
+        setLayerCellCurrentMarker(r, c, on);
+      }
+    }
+  }
 
   function shouldShowRbCellRegulation(){
     try{
@@ -14661,6 +15662,15 @@
     try{
       const s = loadSettings();
       return !!(mode === 'rb' && s?.rbLayer?.showCapitalCrown);
+    }catch(_e){
+      return false;
+    }
+  }
+
+  function shouldShowCurrentCellMarker(){
+    try{
+      const s = loadSettings();
+      return !!s?.rbLayer?.showCurrentCellMarker;
     }catch(_e){
       return false;
     }
@@ -15164,6 +16174,7 @@ function avatarsKeyToMap(avatarsKey){
       const snap = getCurrentBattlemapSnapshot();
       renderRbOriginalBorders(snap);
       renderRbCapitalCrowns(snap);
+      renderCurrentCellMarker(snap);
       endBattlemapLayerTextFreeze();
     }
 
@@ -15358,7 +16369,13 @@ function avatarsKeyToMap(avatarsKey){
       exploredSet: new Set(Array.from(snap.exploredSet || [])),
       hasCapital: !!snap.hasCapital,
       buildingsKey: String(snap.buildingsKey || ''),
-      avatarsKey: String(snap.avatarsKey || '')
+      avatarsKey: String(snap.avatarsKey || ''),
+      selfAvatar: (snap.selfAvatar && typeof snap.selfAvatar === 'object') ? {
+        row: Number(snap.selfAvatar.row),
+        col: Number(snap.selfAvatar.col),
+        team: Number(snap.selfAvatar.team || 0),
+        key: String(snap.selfAvatar.key || 'ac')
+      } : null
     };
   }
 
@@ -15393,7 +16410,8 @@ function avatarsKeyToMap(avatarsKey){
       exploredSet: new Set(),
       hasCapital: false,
       buildingsKey: '',
-      avatarsKey: ''
+      avatarsKey: '',
+      selfAvatar: null
     };
 
     if(mode === 'rb'){
@@ -15417,6 +16435,15 @@ function avatarsKeyToMap(avatarsKey){
       try{ out.terrainsKey = normalizeTerrainsPayload(parseJsValueLiteral(litTerr)); }catch(_e){ out.terrainsKey = ''; }
       try{ out.buildingsKey = normalizeBuildingsPayload(buildingsPayloadObj); }catch(_e){ out.buildingsKey = ''; }
       try{ out.avatarsKey = normalizeAvatarsPayload(avatarsPayloadObj); }catch(_e){ out.avatarsKey = ''; }
+      {
+        const avInfo = avatarsKeyToMap(out.avatarsKey);
+        out.selfAvatar = avInfo && avInfo.selfAvatar ? {
+          row: Number(avInfo.selfAvatar.row),
+          col: Number(avInfo.selfAvatar.col),
+          team: Number(avInfo.selfAvatar.team || 0),
+          key: String(avInfo.selfAvatar.key || 'ac')
+        } : null;
+      }
       out.visibleList = normalizeRcList(fowState.visible);
       out.exploredList = normalizeRcList(fowState.explored);
       out.visibleSet = new Set(out.visibleList.map((rc) => `${rc[0]}-${rc[1]}`));
@@ -15823,6 +16850,7 @@ function avatarsKeyToMap(avatarsKey){
           const snap = getCurrentBattlemapSnapshot();
           renderRbOriginalBorders(snap);
           renderRbCapitalCrowns(snap);
+          renderCurrentCellMarker(snap);
           endBattlemapLayerTextFreeze();
         }
         if(btn){
@@ -15840,6 +16868,7 @@ function avatarsKeyToMap(avatarsKey){
           const snap = getCurrentBattlemapSnapshot();
           renderRbOriginalBorders(snap);
           renderRbCapitalCrowns(snap);
+          renderCurrentCellMarker(snap);
           endBattlemapLayerTextFreeze();
         }
         if(btn){
@@ -15872,6 +16901,7 @@ function avatarsKeyToMap(avatarsKey){
         const snap = getCurrentBattlemapSnapshot();
         renderRbOriginalBorders(snap);
         renderRbCapitalCrowns(snap);
+        renderCurrentCellMarker(snap);
         endBattlemapLayerTextFreeze();
       }
 
@@ -16229,6 +17259,65 @@ function avatarsKeyToMap(avatarsKey){
       labCrown.appendChild(inputCrown);
       labCrown.appendChild(txtCrown);
       sub.appendChild(labCrown);
+
+      const labCurrentMarker = document.createElement('label');
+      labCurrentMarker.className = 'dba-setting-checkline';
+
+      const inputCurrentMarker = document.createElement('input');
+      inputCurrentMarker.type = 'checkbox';
+      inputCurrentMarker.checked = !!settings?.rbLayer?.showCurrentCellMarker;
+      inputCurrentMarker.dataset.rbShowCurrentCellMarker = '1';
+
+      const txtCurrentMarker = document.createElement('span');
+      txtCurrentMarker.className = 'dba-setting-checktext';
+      txtCurrentMarker.textContent = '現在地セルを指し示すマーカーを表示する。';
+
+      labCurrentMarker.appendChild(inputCurrentMarker);
+      labCurrentMarker.appendChild(txtCurrentMarker);
+      sub.appendChild(labCurrentMarker);
+
+      const markerDelayRow = document.createElement('div');
+      markerDelayRow.className = 'dba-setting-row-sub';
+      markerDelayRow.style.marginTop = '4px';
+
+      const markerDelayLine = document.createElement('label');
+      markerDelayLine.className = 'dba-setting-checkline';
+      markerDelayLine.style.cursor = 'default';
+
+      const markerDelayDummy = document.createElement('span');
+      markerDelayDummy.style.display = 'inline-block';
+      markerDelayDummy.style.width = '20px';
+      markerDelayDummy.style.height = '20px';
+      markerDelayDummy.style.flex = '0 0 20px';
+
+      const markerDelayTextWrap = document.createElement('span');
+      markerDelayTextWrap.className = 'dba-setting-checktext';
+
+      const markerDelayText = document.createElement('span');
+      markerDelayText.textContent = 'マーカーの移動を ';
+
+      const markerDelayInput = document.createElement('input');
+      markerDelayInput.type = 'number';
+      markerDelayInput.min = '0';
+      markerDelayInput.max = '5';
+      markerDelayInput.step = '0.1';
+      markerDelayInput.value = String(markerDelayMsToSec(settings?.rbLayer?.currentCellMarkerDelayMs));
+      markerDelayInput.dataset.rbCurrentCellMarkerDelaySec = '1';
+      markerDelayInput.style.width = '5em';
+      markerDelayInput.style.margin = '0 6px';
+      markerDelayInput.style.textAlign = 'center';
+
+      const markerDelayUnit = document.createElement('span');
+      markerDelayUnit.textContent = '秒 遅延させる。';
+
+      markerDelayTextWrap.appendChild(markerDelayText);
+      markerDelayTextWrap.appendChild(markerDelayInput);
+      markerDelayTextWrap.appendChild(markerDelayUnit);
+
+      markerDelayLine.appendChild(markerDelayDummy);
+      markerDelayLine.appendChild(markerDelayTextWrap);
+      markerDelayRow.appendChild(markerDelayLine);
+      sub.appendChild(markerDelayRow);
 
       const labReg = document.createElement('label');
       labReg.className = 'dba-setting-checkline';
@@ -16605,6 +17694,7 @@ function avatarsKeyToMap(avatarsKey){
         rbBorderOpacity: 100,
         rbStopAnimation: false,
         rbShowCapitalCrown: false,
+        rbShowCurrentCellMarker: false,
         rbShowCellRegulation: false,
         rbShowNobodyHolder: false,
         layerTextOpacity: 100,
@@ -16633,6 +17723,12 @@ function avatarsKeyToMap(avatarsKey){
       if(rbStopAnim) out.rbStopAnimation = !!rbStopAnim.checked;
       const rbCrown = dlg.querySelector('input[type="checkbox"][data-rb-show-capital-crown="1"]');
       if(rbCrown) out.rbShowCapitalCrown = !!rbCrown.checked;
+      const rbCurrentMarker = dlg.querySelector('input[type="checkbox"][data-rb-show-current-cell-marker="1"]');
+      if(rbCurrentMarker) out.rbShowCurrentCellMarker = !!rbCurrentMarker.checked;
+      const rbCurrentMarkerDelay = dlg.querySelector('input[type="number"][data-rb-current-cell-marker-delay-sec="1"]');
+      if(rbCurrentMarkerDelay){
+        out.rbCurrentCellMarkerDelayMs = markerDelaySecToMs(rbCurrentMarkerDelay.value);
+      }
       const rbReg = dlg.querySelector('input[type="checkbox"][data-rb-show-cell-regulation="1"]');
       if(rbReg) out.rbShowCellRegulation = !!rbReg.checked;
       const rbNobody = dlg.querySelector('input[type="checkbox"][data-rb-show-nobody-holder="1"]');
@@ -16682,6 +17778,14 @@ function avatarsKeyToMap(avatarsKey){
       const rbCrown = dlg.querySelector('input[type="checkbox"][data-rb-show-capital-crown="1"]');
       if(rbCrown){
         rbCrown.checked = !!s?.rbLayer?.showCapitalCrown;
+      }
+      const rbCurrentMarker = dlg.querySelector('input[type="checkbox"][data-rb-show-current-cell-marker="1"]');
+      if(rbCurrentMarker){
+        rbCurrentMarker.checked = !!s?.rbLayer?.showCurrentCellMarker;
+      }
+      const rbCurrentMarkerDelay = dlg.querySelector('input[type="number"][data-rb-current-cell-marker-delay-sec="1"]');
+      if(rbCurrentMarkerDelay){
+        rbCurrentMarkerDelay.value = String(markerDelayMsToSec(s?.rbLayer?.currentCellMarkerDelayMs));
       }
       const pb = dlg.querySelector('input[type="checkbox"][data-post-battle-auto-diff="1"]');
       if(pb){
@@ -16734,6 +17838,8 @@ function avatarsKeyToMap(avatarsKey){
       cur.rbLayer.borderOpacity = sanitizeRbBorderOpacity(v.rbBorderOpacity);
       cur.rbLayer.stopAnimation = !!v.rbStopAnimation;
       cur.rbLayer.showCapitalCrown = !!v.rbShowCapitalCrown;
+      cur.rbLayer.showCurrentCellMarker = !!v.rbShowCurrentCellMarker;
+      cur.rbLayer.currentCellMarkerDelayMs = sanitizeCurrentMarkerDelayMs(v.rbCurrentCellMarkerDelayMs);
       cur.rbLayer.showCellRegulation = !!v.rbShowCellRegulation;
       cur.layer.textOpacity = sanitizeOpacity(v.layerTextOpacity);
       cur.rbLayer.showNobodyHolder = !!v.rbShowNobodyHolder;
@@ -16743,10 +17849,15 @@ function avatarsKeyToMap(avatarsKey){
       saveSettings(cur);
       setInputsFromSettings(cur);
 
-      // 反映
+      // 「設定」の反映
       applyCurrentModeScale();
       reapplyOriginalHeaderVisibilityFromSettings();
       scheduleBattlemapLayerSync();
+      if(mode === 'rb'){
+        try{
+          renderCurrentCellMarker(getCurrentBattlemapSnapshot());
+        }catch(_e){}
+      }
 
       if(mode === 'rb'){
         const rbApi = window.__DBA_RB_API;
