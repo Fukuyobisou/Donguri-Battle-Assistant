@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Donguri Battle Assistant
 // @namespace    https://donguri.5ch.io/
-// @version      5.2.0.2
+// @version      5.3.0.1
 // @description  5ちゃんねるのどんぐりシステムから派生したゲームの操作性を改善するためのユーザースクリプト
 // @author       福呼び草
 // @assistant    ChatGPT (OpenAI)
@@ -22,7 +22,7 @@
   // =========================
   // スクリプト自身のバージョン（スクリプト情報表示用）
   // =========================
-  const DBA_VERSION = '5.2.0.2';
+  const DBA_VERSION = '5.3.0.1';
 
   console.log('[DBA] BOOT', 'ver=', DBA_VERSION, 'href=', location.href);
 
@@ -119,14 +119,15 @@
       left: 0;
       right: 0;
       font-size: var(--dba-base-font-size);
+      max-width: 750px;
       height: auto;                 /* ★2段構造になるので固定高をやめる（高さはJSで追従） */
       display: flex;
       flex-direction: column;       /* ★縦積み（上=progress / 下=ボタン群） */
       align-items: stretch;
       justify-content: flex-start;
       gap: 2px;
-      margin: 0;
-      padding: 6px 8px;             /* ★内側余白を少し確保 */
+      margin: 0 auto;
+      padding: 6px 16px;             /* ★内側余白を少し確保 */
       box-sizing: border-box;
       background: var(--dba-fn-bg);
       color: var(--dba-fn-fg);
@@ -147,15 +148,23 @@
       width: 100%;
       min-width: 0;
       display: flex;
-      flex-wrap: wrap;
-      align-items: center;
+      flex-direction: column;
+      align-items: stretch;
       justify-content: flex-start;
-      gap: 10px;
+      gap: 4px;
       margin: 0;
       padding: 0;
       box-sizing: border-box;
       border: 0 none #000;
       background: transparent;
+    }
+    .dba-fn-header-info__line1 {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 10px;
+      min-width: 0;
     }
     .dba-fn-header-info__title {
       font-size: 1.1em;
@@ -225,25 +234,76 @@
     .dba-fn-header-info__anim-bracket {
       white-space: nowrap;
     }
-    .dba-fn-header-info__links {
+    .dba-fn-header-info__prevmenu {
+      position: relative;
       display: inline-flex;
       align-items: center;
       justify-content: flex-start;
       gap: 6px;
-      flex-wrap: wrap;
       margin-left: 8px;
       min-width: 0;
       font-size: 1em;
       font-weight: 700;
       line-height: 1.2;
     }
-    .dba-fn-header-info__links a {
+    .dba-fn-header-info__prevmenu-bracket {
+      white-space: nowrap;
+      user-select: none;
+    }
+    .dba-fn-header-info__prevmenu-btn {
+      appearance: none;
+      border: none;
+      background: transparent;
+      padding: 0;
+      margin: 0;
       color: #0040c0;
       text-decoration: underline;
       text-underline-offset: 2px;
+      font: inherit;
+      font-weight: 700;
+      line-height: 1.2;
+      cursor: pointer;
       white-space: nowrap;
     }
-    .dba-fn-header-info__links a:hover {
+    .dba-fn-header-info__prevmenu-btn:hover {
+      color: #0000e0;
+    }
+    /* 前回のチームバトルの結果 */
+    .dba-fn-header-info__prevmenu-panel {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: -70px;
+      min-width: 240px;
+      max-width: min(360px, calc(100vw - 24px));
+      padding: 6px;
+      border: 2px solid #000;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.98);
+      box-shadow: 0 10px 24px rgba(0,0,0,0.24);
+      z-index: 1000000;
+      display: none;
+      box-sizing: border-box;
+    }
+    .dba-fn-header-info__prevmenu-panel[data-open="1"] {
+      display: block;
+    }
+    .dba-fn-header-info__prevmenu-row {
+      display: block;
+      margin: 0;
+      padding: 0;
+    }
+    .dba-fn-header-info__prevmenu-link {
+      display: block;
+      padding: 8px 10px;
+      border-radius: 10px;
+      color: #0040c0;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+    .dba-fn-header-info__prevmenu-link:hover {
+      background: #f3f6ff;
       color: #0000e0;
     }
 
@@ -251,11 +311,13 @@
       width: 100%;
       min-width: 0;
     }
+
+    /* 設定・オート装備・ラピッド攻撃などのボタン群 */
     #dba-fn-buttons-row {
       display: flex;
       align-items: center;
       justify-content: flex-start;
-      gap: 8px;
+      gap: 0;   /* ボタン自体に padding が設定されているため */
       flex-wrap: wrap;   /* ボタンが多い場合は折り返し */
       min-width: 0;
     }
@@ -268,114 +330,59 @@
     /* ===== トップページ「経過時間」プログレス表示（teambattle側へ移植） ===== */
     #dba-top-progress {
       margin: 0;                /* ★fnbar内に入るので外側マージンは0 */
-      padding: 6px 8px;         /* ★fnbar内向けに少し圧縮 */
+      padding: 2px 0 0 0;
       border: 0 none #000;
       background: transparent;
-      width: 100%;
+      max-width: 600px;
       box-sizing: border-box;
     }
-    /* 3ペイン（左：進捗 / 中央：ボタン / 右：同期情報） */
-    #dba-top-progress .dba-top-progress__panes {
+    #dba-top-progress .dba-top-progress__metaRow {
       display: flex;
-      gap: 8px;
-      align-items: stretch;
-      justify-content: space-between;
-      min-width: 0; /* はみ出し抑止 */
-    }
-    #dba-top-progress .dba-top-progress__paneM {
-      flex: 0 0 auto;
-      min-width: 130px;
-      max-width: 180px;
-      border-left: 1px solid #00000022;
-      border-right: 1px solid #00000022;
-      padding: 0 12px;
-      display: flex;
-      flex-direction: row;
+      flex-wrap: wrap;
       align-items: center;
-      justify-content: center;
-      gap: 6px;
-    }
-    #dba-top-progress .dba-top-progress__paneL {
-      flex: 1 1 auto;
-      min-width: 0; /* はみ出し抑止 */
-    }
-    #dba-top-progress .dba-top-progress__paneR {
-      flex: 0 0 auto;
-      min-width: 240px;
-      max-width: 420px;
-      /* ★中央ペインが境界線を持つので、右ペインは余白だけにする */
-      border-left: none;
-      padding-left: 0;
-      display: none; /* 通常は非表示 */
-    }
-    /* 同期情報ONで右ペイン表示 */
-    #dba-top-progress[data-showinfo="1"] .dba-top-progress__paneR {
-      display: block;
-    }
-    /* ★中央ペイン：横並びボタン（右のマージン系は無効化） */
-    #dba-top-progress .dba-top-progress__paneM #dba-top-progress-sync-info,
-    #dba-top-progress .dba-top-progress__paneM #dba-top-progress-sync-now {
-      margin-left: 0;
-      width: calc(50% - 4px);
-      border-radius: 10px;
-      padding: 6px 10px;
-      line-height: 1.15;
-      white-space: normal;
-      text-align: center;
-    }
-    #dba-top-progress .dba-top-progress__paneM #dba-top-progress-sync-now[disabled] {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-    /* ★「第xx期」＋プログレスバー＋ボタンを1行にまとめる */
-    #dba-top-progress .dba-top-progress__termRow {
+      justify-content: flex-start;
+      gap: 20px;
+      min-width: 0;
+      margin: 0 0 2px 0;
       font-weight: 900;
-      margin: 0 0 6px 0;
-      text-align: left;
-      line-height: 1.2em;
+      line-height: 1.2;
+    }
+    #dba-top-progress .dba-top-progress__metaTerm,
+    #dba-top-progress .dba-top-progress__metaMatch,
+    #dba-top-progress .dba-top-progress__metaTime {
+      white-space: nowrap;
+    }
+    #dba-top-progress .dba-top-progress__barRow {
       display: flex;
       align-items: center;
       justify-content: flex-start;
       gap: 10px;
-      min-width: 0; /* 子要素（term/bar）が縮められるように */
+      min-width: 0;
     }
-    /* 「第xx期」テキストが長い時は省略（はみ出し抑止） */
-    #dba-top-progress-title {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      max-width: 12em; /* ★バー領域を確保 */
-      display: inline-block;
-    }
-    /* 「今すぐ同期」ボタン（第xx期の右） */
+    /* 「同期」ボタン */
     #dba-top-progress-sync-now {
-      margin-left: 1.2em; /* 1～2em 程度 */
+      margin-left: 0;
+      flex: 0 0 auto;
     }
     #dba-top-progress-sync-now[disabled] {
       opacity: 0.6;
       cursor: not-allowed;
     }
-    /* 「同期情報」ボタン（スイッチ） */
-    #dba-top-progress-sync-info {
-      margin-left: 0.6em;
-    }
-    #dba-top-progress-sync-info[data-on="1"] {
-      background: #33a033;
-      color: #fff;
-    }
-    /* ★termRow内で横に伸びるバー */
-    #dba-top-progress .progress-bar {
-      height: 18px;
+    /* プログレスバー */
+    #dba-top-progress .dba-top-progress__matchBar {
+      height: 20px;
       background: #ccc;
       border-radius: 10px;
       font-size: 15px;
       line-height: 17px;
       overflow: hidden;
-      margin-top: 0;     /* ★同一行なので上マージン不要 */
-      flex: 1 1 auto;    /* ★横に伸びる */
-      min-width: 140px;  /* ★極端に潰れないよう最低幅 */
+      margin-top: 0;
+      flex: 1 1 auto;
+      min-width: 140px;
+      cursor: pointer;
+      position: relative;
     }
-    #dba-top-progress .progress-bar > div {
+    #dba-top-progress .dba-top-progress__matchBar > div {
       height: 100%;
       background: #428bca;
       width: 0%;
@@ -385,51 +392,59 @@
       color: white;
       font-weight: 800;
     }
-    /* ===== 期の下：試合進捗（第n試合/総数 + 1試合内バー） ===== */
-    #dba-top-progress .dba-top-progress__matchRow {
-      display: flex;
-      align-items: center;
-      justify-content: flex-start;
-      gap: 1.1em; /* テキストと進捗バーの間隔 */
-      margin-top: 6px;
-      min-width: 0;
+    #dba-top-progress-pop {
+      position: fixed;
+      left: 0;
+      top: 0;
+      z-index: 1000000;
+      display: none;
+      width: min(420px, calc(100vw - 24px));
+      padding: 12px 14px;
+      border: 2px solid #000;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.98);
+      color: #111;
+      box-shadow: 0 10px 24px rgba(0,0,0,0.24);
+      box-sizing: border-box;
     }
-    #dba-top-progress .dba-top-progress__matchLabel {
+    #dba-top-progress-pop[data-open="1"] {
+      display: block;
+    }
+    .dba-top-progress-pop__title {
+      font-size: 1.05em;
       font-weight: 900;
-      white-space: nowrap;
-      flex: 0 0 auto;
-    }
-    #dba-top-progress .dba-top-progress__matchRight {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      flex: 1 1 auto;
-      min-width: 0;
-    }
-    #dba-top-progress .dba-top-progress__matchTime {
-      font-weight: 900;
-      font-size: 0.95em;
-      opacity: 0.9;
+      line-height: 1.2;
       text-align: left;
-      line-height: 1.1em;
+      margin: 0 0 8px 0;
       white-space: nowrap;
     }
-    /* 試合バー */
-    #dba-top-progress .progress-bar.dba-match-progress {
+    .dba-top-progress-pop__bar {
       height: 18px;
-      font-size: 15px;
-      margin-top: 0;
+      background: #ccc;
       border-radius: 10px;
+      font-size: 15px;
+      line-height: 17px;
+      overflow: hidden;
+      margin: 0 0 10px 0;
     }
-    /* 右ペイン：同期情報（縦に1行ずつ） */
-    #dba-top-progress .dba-top-progress__infoLine {
+    .dba-top-progress-pop__bar > div {
+      height: 100%;
+      background: #428bca;
+      width: 0%;
+      text-align: right;
+      padding-right: 5px;
+      box-sizing: border-box;
+      color: #fff;
+      font-weight: 800;
+    }
+    .dba-top-progress-pop__line {
       font-size: 0.92em;
       font-weight: 800;
-      opacity: 0.88;
       text-align: left;
       line-height: 1.35em;
       margin: 0 0 6px 0;
-      white-space: nowrap;
+      white-space: normal;
+      overflow-wrap: anywhere;
     }
 
     /* ===== バトルマップ透明レイヤー（将来の拡張用土台） ===== */
@@ -582,19 +597,22 @@
     /* 汎用ボタン（機能系ボタン共通） */
     .dba-btn-fn {
       appearance: none;
+      min-height: 3em;
       margin:4px;
-      padding: 10px 6px;
+      padding: 4px 6px;
       border: 2px solid #000;
       border-radius: 12px;
       background: #f08800;
       color: #fff;
       font-size: 1em;
       font-weight: 500;
-      line-height: 1em;
+      line-height: 1.1em;
       cursor: pointer;
       user-select: none;
       box-shadow: 0 1px 2px rgba(0,0,0,0.12);
       transition: transform 0.05s ease, box-shadow 0.15s ease, background 0.15s ease;
+      white-space: normal;
+      text-align: center;
     }
     /* ラピッド攻撃：ON状態の視認性 */
     .dba-btn-fn[data-on="1"] {
@@ -1201,7 +1219,7 @@
       gap: 10px;
       align-items: center;
       justify-content: flex-start;
-      margin: 12px 0;
+      margin: 10px 0;
       flex: 0 0 auto;
     }
     .dba-roster-list {
@@ -1685,7 +1703,7 @@
       white-space: normal;
     }
     .dba-roster-opt-note {
-      margin: 0;
+      margin: 0 0 0 24px;
       padding: 0;
       font-size: 0.92em;
       font-weight: 600;
@@ -2390,6 +2408,7 @@
   const LS_ROSTER_SCROLL_REMEMBER_KEY = 'dba.roster.scrollRemember.v1'; // 0/1
   const LS_ROSTER_SCROLL_TOP_KEY = 'dba.roster.scrollTop.v1'; // number
   const LS_ROSTER_PRESET_CLICK_ACTION_KEY = 'dba.roster.presetClickAction.v1'; // equip / menu
+  const LS_ROSTER_HIDE_MENU_ROW2_KEY = 'dba.roster.hideMenuRow2.v1'; // 0/1
   const LS_BR_TAIL2_KEY = 'dba.battleResult.tail2.v1'; // 戦闘結果「末尾2行のみ表示」ON/OFF
   const LS_BR_ALIGN_KEY = 'dba.battleResult.align.v1'; // left / center / right
   const LS_BR_PASS_KEY  = 'dba.battleResult.passThrough.v1'; // 0/1 クリック透過
@@ -2822,6 +2841,179 @@
     return { left: '[', body: raw, right: ']' };
   }
 
+  function closeFnHeaderPrevMenu(){
+    const panel = document.getElementById('dba-fn-header-info-prevmenu-panel');
+    if(panel) panel.dataset.open = '0';
+  }
+
+  function bindFnHeaderPrevMenuAutoClose(){
+    if(document.documentElement.dataset.dbaFnPrevMenuBound === '1') return;
+    document.documentElement.dataset.dbaFnPrevMenuBound = '1';
+
+    document.addEventListener('pointerdown', (e) => {
+      const root = document.getElementById('dba-fn-header-info-prevmenu');
+      if(!root) return;
+      if(root.contains(e.target)) return;
+      closeFnHeaderPrevMenu();
+    }, true);
+  }
+
+  const DBA_TOP_PROGRESS_POP_STATE = {
+    hideTimer: 0
+  };
+
+  function ensureTopProgressPopup(){
+    let pop = document.getElementById('dba-top-progress-pop');
+    if(pop) return pop;
+
+    pop = document.createElement('div');
+    pop.id = 'dba-top-progress-pop';
+    pop.dataset.open = '0';
+
+    const ttl = document.createElement('div');
+    ttl.className = 'dba-top-progress-pop__title';
+    ttl.id = 'dba-top-progress-pop-title';
+    ttl.textContent = '第 ? 期';
+
+    const bar = document.createElement('div');
+    bar.className = 'dba-top-progress-pop__bar';
+
+    const inner = document.createElement('div');
+    inner.id = 'dba-top-progress-pop-inner';
+    inner.style.width = '0%';
+    inner.textContent = '0%';
+    bar.appendChild(inner);
+
+    const line1 = document.createElement('div');
+    line1.className = 'dba-top-progress-pop__line';
+    line1.id = 'dba-top-progress-pop-sync';
+    line1.textContent = '最終同期（手動＆自動）： --- 秒前';
+
+    const line2 = document.createElement('div');
+    line2.className = 'dba-top-progress-pop__line';
+    line2.id = 'dba-top-progress-pop-auto';
+    line2.textContent = '最終補正（自動）： --- 秒前';
+
+    pop.appendChild(ttl);
+    pop.appendChild(bar);
+    pop.appendChild(line1);
+    pop.appendChild(line2);
+
+    pop.addEventListener('pointerenter', () => {
+      if(DBA_TOP_PROGRESS_POP_STATE.hideTimer){
+        clearTimeout(DBA_TOP_PROGRESS_POP_STATE.hideTimer);
+        DBA_TOP_PROGRESS_POP_STATE.hideTimer = 0;
+      }
+    });
+    pop.addEventListener('pointerleave', () => {
+      hideTopProgressPopupSoon();
+    });
+
+    (document.body || document.documentElement).appendChild(pop);
+    return pop;
+  }
+
+  function updateTopProgressPopupContent(){
+    const pop = ensureTopProgressPopup();
+    if(!pop) return;
+
+    const title = document.getElementById('dba-top-progress-pop-title');
+    const inner = document.getElementById('dba-top-progress-pop-inner');
+    const lineSync = document.getElementById('dba-top-progress-pop-sync');
+    const lineAuto = document.getElementById('dba-top-progress-pop-auto');
+
+    const pct = estimateTopElapsedProgressPct();
+    const data = loadTopElapsedProgress();
+    const now = Date.now();
+    const titleText = (data && data.term) ? data.term : '第 ? 期';
+
+    if(title) title.textContent = titleText;
+    if(inner){
+      inner.style.width = `${pct}%`;
+      inner.textContent = `${pct}%`;
+    }
+    if(lineSync){
+      lineSync.textContent = !data
+        ? '最終同期（手動＆自動）： --- 秒前'
+        : `最終同期（手動＆自動）： ${Math.floor(Math.max(0, now - data.fetchedAt) / 1000)} 秒前`;
+    }
+    if(lineAuto){
+      lineAuto.textContent = (DBA_TOP_PROGRESS_AUTOSYNC.lastAutoAt > 0)
+        ? `最終補正（自動）： ${Math.floor(Math.max(0, now - DBA_TOP_PROGRESS_AUTOSYNC.lastAutoAt) / 1000)} 秒前`
+        : '最終補正（自動）： --- 秒前';
+    }
+  }
+
+  function hideTopProgressPopup(){
+    if(DBA_TOP_PROGRESS_POP_STATE.hideTimer){
+      clearTimeout(DBA_TOP_PROGRESS_POP_STATE.hideTimer);
+      DBA_TOP_PROGRESS_POP_STATE.hideTimer = 0;
+    }
+    const pop = document.getElementById('dba-top-progress-pop');
+    if(pop) pop.dataset.open = '0';
+  }
+
+  function hideTopProgressPopupSoon(){
+    if(DBA_TOP_PROGRESS_POP_STATE.hideTimer){
+      clearTimeout(DBA_TOP_PROGRESS_POP_STATE.hideTimer);
+      DBA_TOP_PROGRESS_POP_STATE.hideTimer = 0;
+    }
+    DBA_TOP_PROGRESS_POP_STATE.hideTimer = setTimeout(() => {
+      DBA_TOP_PROGRESS_POP_STATE.hideTimer = 0;
+      hideTopProgressPopup();
+    }, 120);
+  }
+
+  function showTopProgressPopupNearAnchor(anchor){
+    if(!(anchor instanceof HTMLElement)) return;
+    const pop = ensureTopProgressPopup();
+    if(!pop) return;
+
+    updateTopProgressPopupContent();
+    pop.dataset.open = '1';
+
+    const rect = anchor.getBoundingClientRect();
+    const popRect = pop.getBoundingClientRect();
+
+    let left = rect.left + (rect.width / 2) - (popRect.width / 2);
+    left = Math.max(12, Math.min(left, window.innerWidth - popRect.width - 12));
+
+    let top = rect.bottom + 10;
+    if(top + popRect.height > window.innerHeight - 8){
+      top = Math.max(8, rect.top - popRect.height - 10);
+    }
+
+    pop.style.left = `${Math.round(left)}px`;
+    pop.style.top = `${Math.round(top)}px`;
+  }
+
+  function bindTopProgressPopup(anchor){
+    if(!(anchor instanceof HTMLElement)) return;
+    if(anchor.dataset.dbaTopProgressPopupBound === '1') return;
+    anchor.dataset.dbaTopProgressPopupBound = '1';
+
+    anchor.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const pop = ensureTopProgressPopup();
+      if(pop && pop.dataset.open === '1'){
+        hideTopProgressPopup();
+      }else{
+        showTopProgressPopupNearAnchor(anchor);
+      }
+    });
+
+    document.addEventListener('pointerdown', (e) => {
+      const pop = document.getElementById('dba-top-progress-pop');
+      if(anchor.contains(e.target)) return;
+      if(pop && pop.contains(e.target)) return;
+      hideTopProgressPopup();
+    }, true);
+
+    window.addEventListener('resize', hideTopProgressPopup, { passive:true });
+    window.addEventListener('orientationchange', hideTopProgressPopup, { passive:true });
+  }
+
   function ensureFnHeaderInfoContainer(targetParent){
     const existed = document.getElementById('dba-fn-header-info');
     if(existed){
@@ -2847,10 +3039,13 @@
     const info = extractFnHeaderInfoFromCurrentHeader();
     wrap.textContent = '';
 
+    const line1 = document.createElement('div');
+    line1.className = 'dba-fn-header-info__line1';
+
     const title = document.createElement('span');
     title.className = 'dba-fn-header-info__title';
     title.textContent = 'どんぐりチーム戦い';
-    wrap.appendChild(title);
+    line1.appendChild(title);
 
     const modeLabel = document.createElement('span');
     modeLabel.className = 'dba-fn-header-info__mode';
@@ -2863,7 +3058,7 @@
     }else{
       modeLabel.textContent = '《 unknown mode 》';
     }
-    wrap.appendChild(modeLabel);
+    line1.appendChild(modeLabel);
 
     if(mode === 'rb'){
       const reg = document.createElement('span');
@@ -2879,7 +3074,7 @@
       regValue.textContent = getRbUnifiedRegDisplayText();
       reg.appendChild(regValue);
 
-      wrap.appendChild(reg);
+      line1.appendChild(reg);
     }
 
     if(mode === 'rb' && (info.teamName || info.teamColor)){
@@ -2910,43 +3105,74 @@
         team.appendChild(dot);
       }
 
-      wrap.appendChild(team);
+      line1.appendChild(team);
     }
 
     if(info.prevHref || info.animHref){
-      const links = document.createElement('span');
-      links.className = 'dba-fn-header-info__links';
+      const menuWrap = document.createElement('span');
+      menuWrap.className = 'dba-fn-header-info__prevmenu';
+      menuWrap.id = 'dba-fn-header-info-prevmenu';
+
+      const bracketL = document.createElement('span');
+      bracketL.className = 'dba-fn-header-info__prevmenu-bracket';
+      bracketL.textContent = '[';
+
+      const trigger = document.createElement('button');
+      trigger.type = 'button';
+      trigger.className = 'dba-fn-header-info__prevmenu-btn';
+      trigger.textContent = '前の試合';
+
+      const bracketR = document.createElement('span');
+      bracketR.className = 'dba-fn-header-info__prevmenu-bracket';
+      bracketR.textContent = ']';
+
+      const panel = document.createElement('div');
+      panel.className = 'dba-fn-header-info__prevmenu-panel';
+      panel.id = 'dba-fn-header-info-prevmenu-panel';
+      panel.dataset.open = '0';
 
       if(info.prevHref){
+        const row = document.createElement('div');
+        row.className = 'dba-fn-header-info__prevmenu-row';
+
         const aPrev = document.createElement('a');
         aPrev.href = info.prevHref;
-        aPrev.textContent = info.prevText || '前回のチームバトルの結果';
         aPrev.target = '_self';
-        links.appendChild(aPrev);
+        aPrev.className = 'dba-fn-header-info__prevmenu-link';
+        aPrev.textContent = '前回のチームバトルの結果';
+
+        row.appendChild(aPrev);
+        panel.appendChild(row);
       }
 
       if(info.animHref){
-        const anim = normalizeAnimLinkText(info.animText || '[アニメーション]');
-
-        const bL = document.createElement('span');
-        bL.className = 'dba-fn-header-info__anim-bracket';
-        bL.textContent = anim.left || '[';
-        links.appendChild(bL);
+        const row = document.createElement('div');
+        row.className = 'dba-fn-header-info__prevmenu-row';
 
         const aAnim = document.createElement('a');
         aAnim.href = info.animHref;
-        aAnim.textContent = anim.body || 'アニメーション';
         aAnim.target = '_self';
-        links.appendChild(aAnim);
+        aAnim.className = 'dba-fn-header-info__prevmenu-link';
+        aAnim.textContent = 'アニメーション';
 
-        const bR = document.createElement('span');
-        bR.className = 'dba-fn-header-info__anim-bracket';
-        bR.textContent = anim.right || ']';
-        links.appendChild(bR);
+        row.appendChild(aAnim);
+        panel.appendChild(row);
       }
 
-      wrap.appendChild(links);
+      trigger.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        panel.dataset.open = (panel.dataset.open === '1') ? '0' : '1';
+      });
+
+      menuWrap.appendChild(bracketL);
+      menuWrap.appendChild(trigger);
+      menuWrap.appendChild(bracketR);
+      menuWrap.appendChild(panel);
+      line1.appendChild(menuWrap);
+      bindFnHeaderPrevMenuAutoClose();
     }
+    wrap.appendChild(line1);
   }
 
   function ensureTopProgressContainer(targetParent){
@@ -2965,34 +3191,34 @@
     wrap.id = 'dba-top-progress';
     wrap.dataset.showinfo = loadTopSyncInfoShow() ? '1' : '0';
 
-    // --- panes root ---
-    const panes = document.createElement('div');
-    panes.className = 'dba-top-progress__panes';
+    const metaRow = document.createElement('div');
+    metaRow.className = 'dba-top-progress__metaRow';
 
-    // --- left pane ---
-    const paneL = document.createElement('div');
-    paneL.className = 'dba-top-progress__paneL';
+    const metaTerm = document.createElement('span');
+    metaTerm.className = 'dba-top-progress__metaTerm';
+    metaTerm.id = 'dba-top-progress-meta-term';
+    metaTerm.textContent = '第 ? 期';
 
-    // --- middle pane (buttons) ---
-    const paneM = document.createElement('div');
-    paneM.className = 'dba-top-progress__paneM';
+    const metaMatch = document.createElement('span');
+    metaMatch.className = 'dba-top-progress__metaMatch';
+    metaMatch.id = 'dba-top-progress-match-label';
+    metaMatch.textContent = '第 1 試合／?';
 
-    // ★termRow（左=期 / 中=プログレスバー / 右=ボタン）
-    const termRow = document.createElement('div');
-    termRow.className = 'dba-top-progress__termRow';
-    const d0 = loadTopElapsedProgress();
+    const metaTime = document.createElement('span');
+    metaTime.className = 'dba-top-progress__metaTime';
+    metaTime.id = 'dba-top-progress-match-time';
+    metaTime.textContent = '残り: --分--秒（誤差±20秒？）';
 
-    // 「第 xx 期」表示（span）
-    const termSpan = document.createElement('span');
-    termSpan.id = 'dba-top-progress-title';
-    termSpan.textContent = (d0 && d0.term) ? d0.term : '第 ? 期';
+    metaRow.appendChild(metaTerm);
+    metaRow.appendChild(metaMatch);
+    metaRow.appendChild(metaTime);
 
     // 「今すぐ同期」ボタン
     const btnSync = document.createElement('button');
     btnSync.type = 'button';
     btnSync.id = 'dba-top-progress-sync-now';
     btnSync.className = 'dba-btn-progress-mini';
-    btnSync.innerHTML = '今すぐ<br>同期';
+    btnSync.textContent = '同期';
     btnSync.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -3000,96 +3226,27 @@
       fetchTopElapsedProgressFromTopPageOnce('manual').catch(()=>{});
     });
 
-    // 「同期情報」ボタン（スイッチ）
-    const btnInfo = document.createElement('button');
-    btnInfo.type = 'button';
-    btnInfo.id = 'dba-top-progress-sync-info';
-    btnInfo.className = 'dba-btn-progress-mini';
-    btnInfo.innerHTML = '同期<br>情報';
-    btnInfo.dataset.on = (wrap.dataset.showinfo === '1') ? '1' : '0';
-    btnInfo.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const on = (wrap.dataset.showinfo === '1') ? false : true;
-      wrap.dataset.showinfo = on ? '1' : '0';
-      btnInfo.dataset.on = on ? '1' : '0';
-      saveTopSyncInfoShow(on);
-      renderTopProgress();
-    });
+    const barRow = document.createElement('div');
+    barRow.className = 'dba-top-progress__barRow';
 
     const bar = document.createElement('div');
-    bar.className = 'progress-bar';
+    bar.className = 'dba-top-progress__matchBar';
+    bar.id = 'dba-top-progress-match-bar';
 
     const inner = document.createElement('div');
-    inner.id = 'dba-top-progress-inner';
+    inner.id = 'dba-top-progress-match-inner';
     inner.style.width = '0%';
     inner.textContent = '0%';
     bar.appendChild(inner);
 
-    // ★左ペイン：期 → バー（ボタンは中央ペインへ）
-    termRow.appendChild(termSpan);
-    termRow.appendChild(bar);
+    barRow.appendChild(bar);
+    barRow.appendChild(btnSync);
 
-    paneL.appendChild(termRow);
+    wrap.appendChild(metaRow);
+    wrap.appendChild(barRow);
 
-    // ★中央ペイン：左から「今すぐ同期」→「同期情報」
-    paneM.appendChild(btnSync);
-    paneM.appendChild(btnInfo);
-
-    // --- match progress (under term progress) ---
-    const matchRow = document.createElement('div');
-    matchRow.className = 'dba-top-progress__matchRow';
-
-    const matchLabel = document.createElement('div');
-    matchLabel.className = 'dba-top-progress__matchLabel';
-    matchLabel.id = 'dba-top-progress-match-label';
-    matchLabel.textContent = '第 1 試合／?';
-
-    const matchRight = document.createElement('div');
-    matchRight.className = 'dba-top-progress__matchRight';
-
-    const matchTime = document.createElement('div');
-    matchTime.className = 'dba-top-progress__matchTime';
-    matchTime.id = 'dba-top-progress-match-time';
-    matchTime.textContent = '残り時間： --分--秒';
-
-    const matchBar = document.createElement('div');
-    matchBar.className = 'progress-bar dba-match-progress';
-
-    const matchInner = document.createElement('div');
-    matchInner.id = 'dba-top-progress-match-inner';
-    matchInner.style.width = '0%';
-    matchInner.textContent = '0%';
-    matchBar.appendChild(matchInner);
-
-    matchRight.appendChild(matchTime);
-    matchRight.appendChild(matchBar);
-
-    matchRow.appendChild(matchLabel);
-    matchRow.appendChild(matchRight);
-    paneL.appendChild(matchRow);
-
-    // --- right pane ---
-    const paneR = document.createElement('div');
-    paneR.className = 'dba-top-progress__paneR';
-
-    const line1 = document.createElement('div');
-    line1.className = 'dba-top-progress__infoLine';
-    line1.id = 'dba-top-progress-info-sync';
-    line1.textContent = '最終同期（手動＆自動）： --- 秒前';
-
-    const line2 = document.createElement('div');
-    line2.className = 'dba-top-progress__infoLine';
-    line2.id = 'dba-top-progress-info-auto';
-    line2.textContent = '最終補正（自動）： --- 秒前';
-
-    paneR.appendChild(line1);
-    paneR.appendChild(line2);
-
-    panes.appendChild(paneL);
-    panes.appendChild(paneM);
-    panes.appendChild(paneR);
-    wrap.appendChild(panes);
+    bindTopProgressPopup(bar);
+    ensureTopProgressPopup();
 
     // ★設置先：targetParent が指定されていれば fnbar 内へ、無ければ従来通り header 直後
     if(targetParent){
@@ -3110,38 +3267,29 @@
   }
 
   const DBA_TOP_PROGRESS_RENDER_CACHE = {
-    pct: null,
+    termPct: null,
     matchLabel: '',
     matchTime: '',
     matchPct: null,
-    title: '',
+    termTitle: '',
     syncDisabled: null,
-    syncHtml: '',
-    infoBtnOn: '',
-    infoSync: '',
-    infoAuto: ''
+    syncText: ''
   };
 
   function renderTopProgress(){
-    const inner = document.getElementById('dba-top-progress-inner');
-    const title = document.getElementById('dba-top-progress-title');
+    const matchInner = document.getElementById('dba-top-progress-match-inner');
+    const termTitle = document.getElementById('dba-top-progress-meta-term');
     const btnSync = document.getElementById('dba-top-progress-sync-now');
-    const btnInfo = document.getElementById('dba-top-progress-sync-info');
-    const wrap = document.getElementById('dba-top-progress');
-    const infoSync = document.getElementById('dba-top-progress-info-sync');
     const infoAuto = document.getElementById('dba-top-progress-info-auto');
     const matchLabel = document.getElementById('dba-top-progress-match-label');
     const matchTime  = document.getElementById('dba-top-progress-match-time');
-    const matchInner = document.getElementById('dba-top-progress-match-inner');
 
-    if(!inner) return;
+    if(!matchInner) return;
     let needsHeightSync = false;
 
-    const pct = estimateTopElapsedProgressPct();
-    if(DBA_TOP_PROGRESS_RENDER_CACHE.pct !== pct){
-      DBA_TOP_PROGRESS_RENDER_CACHE.pct = pct;
-      inner.style.width = `${pct}%`;
-      inner.textContent = `${pct}%`;
+    const termPct = estimateTopElapsedProgressPct();
+    if(DBA_TOP_PROGRESS_RENDER_CACHE.termPct !== termPct){
+      DBA_TOP_PROGRESS_RENDER_CACHE.termPct = termPct;
     }
 
     // ===== 期内の「試合番号」&「1試合内進捗」 =====
@@ -3189,7 +3337,7 @@
       const s = Math.floor(remainSec % 60);
       const matchPct = (matchSec <= 0) ? 0 : Math.max(0, Math.min(100, (inSec / matchSec) * 100));
       const matchLabelText = `第 ${matchNo} 試合／${totalMatches}`;
-      const matchTimeText = `残り時間： ${m}分${s}秒 （およそ±20秒？の誤差あり）`;
+      const matchTimeText = `残り: ${m}分${s}秒（誤差±20秒？）`;
 
       if(matchLabel){
         if(DBA_TOP_PROGRESS_RENDER_CACHE.matchLabel !== matchLabelText){
@@ -3214,67 +3362,37 @@
     }catch(_e){}
 
     // 期（第 xxxx 期）表示を最新保存値で更新
-    if(title){
+    if(termTitle){
       const d0 = loadTopElapsedProgress();
       const titleText = (d0 && d0.term) ? d0.term : '第 ? 期';
-      if(DBA_TOP_PROGRESS_RENDER_CACHE.title !== titleText){
-        DBA_TOP_PROGRESS_RENDER_CACHE.title = titleText;
-        title.textContent = titleText;
+      if(DBA_TOP_PROGRESS_RENDER_CACHE.termTitle !== titleText){
+        DBA_TOP_PROGRESS_RENDER_CACHE.termTitle = titleText;
+        termTitle.textContent = titleText;
         needsHeightSync = true;
       }
     }
 
-    // 「今すぐ同期」ボタン状態
+    // 「同期」ボタン状態
     if(btnSync){
       const inflight = !!DBA_TOP_PROGRESS_AUTOSYNC.inFlight;
-      const syncHtml = inflight ? '同期中…' : '今すぐ<br>同期';
+      const syncText = inflight ? '同期中…' : '同期';
       if(DBA_TOP_PROGRESS_RENDER_CACHE.syncDisabled !== inflight){
         DBA_TOP_PROGRESS_RENDER_CACHE.syncDisabled = inflight;
         btnSync.disabled = inflight;
       }
-      if(DBA_TOP_PROGRESS_RENDER_CACHE.syncHtml !== syncHtml){
-        DBA_TOP_PROGRESS_RENDER_CACHE.syncHtml = syncHtml;
-        btnSync.innerHTML = syncHtml;
+      if(DBA_TOP_PROGRESS_RENDER_CACHE.syncText !== syncText){
+        DBA_TOP_PROGRESS_RENDER_CACHE.syncText = syncText;
+        btnSync.textContent = syncText;
         needsHeightSync = true;
       }
     }
 
-    // 「同期情報」スイッチ状態（見た目だけ同期）
-    if(btnInfo && wrap){
-      const on = (wrap.dataset.showinfo === '1');
-      const onText = on ? '1' : '0';
-      if(DBA_TOP_PROGRESS_RENDER_CACHE.infoBtnOn !== onText){
-        DBA_TOP_PROGRESS_RENDER_CACHE.infoBtnOn = onText;
-        btnInfo.dataset.on = onText;
-        needsHeightSync = true;
-      }
-    }
-
-    // 右ペイン（同期情報）更新
-    const data = loadTopElapsedProgress();
-    const now = Date.now();
-    if(infoSync){
-      const infoSyncText = !data
-        ? '最終同期（手動＆自動）： --- 秒前'
-        : `最終同期（手動＆自動）： ${Math.floor(Math.max(0, now - data.fetchedAt) / 1000)} 秒前`;
-      if(DBA_TOP_PROGRESS_RENDER_CACHE.infoSync !== infoSyncText){
-        DBA_TOP_PROGRESS_RENDER_CACHE.infoSync = infoSyncText;
-        infoSync.textContent = infoSyncText;
-      }
-    }
-    if(infoAuto){
-      const infoAutoText = (DBA_TOP_PROGRESS_AUTOSYNC.lastAutoAt > 0)
-        ? `最終補正（自動）： ${Math.floor(Math.max(0, now - DBA_TOP_PROGRESS_AUTOSYNC.lastAutoAt) / 1000)} 秒前`
-        : '最終補正（自動）： --- 秒前';
-      if(DBA_TOP_PROGRESS_RENDER_CACHE.infoAuto !== infoAutoText){
-        DBA_TOP_PROGRESS_RENDER_CACHE.infoAuto = infoAutoText;
-        infoAuto.textContent = infoAutoText;
-      }
-    }
     // レイアウトに影響する更新があった時だけ fnbar 高さを再同期
     if(needsHeightSync){
       try{ scheduleFnbarHeightSync(); }catch(_e){}
     }
+
+    updateTopProgressPopupContent();
   }
 
   // =========================
@@ -3918,6 +4036,22 @@
     const v = (modeValue === 'menu') ? 'menu' : 'equip';
     try{
       localStorage.setItem(LS_ROSTER_PRESET_CLICK_ACTION_KEY, v);
+    }catch(_e){}
+  }
+
+  function loadRosterHideMenuRow2Enabled(){
+    try{
+      const raw = localStorage.getItem(LS_ROSTER_HIDE_MENU_ROW2_KEY);
+      if(raw == null) return false; // デフォルトOFF
+      return raw === '1';
+    }catch(_e){
+      return false;
+    }
+  }
+
+  function saveRosterHideMenuRow2Enabled(on){
+    try{
+      localStorage.setItem(LS_ROSTER_HIDE_MENU_ROW2_KEY, on ? '1' : '0');
     }catch(_e){}
   }
 
@@ -8534,6 +8668,84 @@
     setPresetAt(name, triple, null);
   }
 
+  function makeDuplicatedPresetName(sourceName){
+    const src = sanitizeText(sourceName);
+    if(!src) throw new Error('複製元のプリセット名が不正です');
+
+    const base = `コピー：${src}`;
+    if(!hasPresetName(base)){
+      return base;
+    }
+
+    let n = 2;
+    while(n <= 9999){
+      const cand = `${base} (${n})`;
+      if(!hasPresetName(cand)){
+        return cand;
+      }
+      n += 1;
+    }
+
+    throw new Error(`複製先のプリセット名を確保できませんでした: ${base}`);
+  }
+
+  function duplicatePresetBelow(name){
+    const { roster } = getActiveRoster();
+    const nm = sanitizeText(name);
+    if(!nm) throw new Error('複製元のプリセット名が不正です');
+
+    roster.presets = (roster && roster.presets && typeof roster.presets === 'object') ? roster.presets : {};
+    roster.presetOrder = Array.isArray(roster.presetOrder) ? roster.presetOrder : [];
+
+    if(!Object.prototype.hasOwnProperty.call(roster.presets, nm)){
+      throw new Error(`プリセットが見つかりません: ${nm}`);
+    }
+
+    const triple = roster.presets[nm];
+    if(!Array.isArray(triple) || triple.length !== 3){
+      throw new Error(`プリセット内容が不正です: ${nm}`);
+    }
+
+    const baseIdx = roster.presetOrder.indexOf(nm);
+    const insertIdx = (baseIdx >= 0) ? (baseIdx + 1) : roster.presetOrder.length;
+    const newName = makeDuplicatedPresetName(nm);
+
+    setPresetAt(newName, [
+      (triple[0] === null) ? null : Number(triple[0]),
+      (triple[1] === null) ? null : Number(triple[1]),
+      (triple[2] === null) ? null : Number(triple[2])
+    ], insertIdx);
+
+    return newName;
+  }
+
+  function movePresetBy(name, delta){
+    const { store, roster } = getActiveRoster();
+    const nm = sanitizeText(name);
+    const d = Number(delta);
+
+    if(!nm) return false;
+    if(!Number.isFinite(d) || d === 0) return false;
+
+    roster.presets = (roster && roster.presets && typeof roster.presets === 'object') ? roster.presets : {};
+    roster.presetOrder = Array.isArray(roster.presetOrder) ? roster.presetOrder.slice() : [];
+
+    const from = roster.presetOrder.indexOf(nm);
+    if(from < 0) return false;
+
+    const to = from + (d < 0 ? -1 : 1);
+    if(to < 0 || to >= roster.presetOrder.length) return false;
+
+    const tmp = roster.presetOrder[from];
+    roster.presetOrder[from] = roster.presetOrder[to];
+    roster.presetOrder[to] = tmp;
+
+    roster.updatedAt = nowIso();
+    store.rosters[store.activeId] = roster;
+    saveRosterStore(store);
+    return true;
+  }
+
   function deletePreset(name){
     const { store, roster } = getActiveRoster();
     const n = sanitizeText(name);
@@ -8859,6 +9071,8 @@
     const delMode = !!(rosterDlg && rosterDlg.dataset.dbaDelMode === '1');
     // 再編集モード（「再編集」→対象選択 方式）
     const editMode = !!(rosterDlg && rosterDlg.dataset.dbaEditMode === '1');
+    // 複製モード（「複製」→対象選択 方式）
+    const dupMode = !!(rosterDlg && rosterDlg.dataset.dbaDupMode === '1');
     // 追加位置選択モード（「追加」→挿入位置選択 方式）
     const addPickMode = !!(rosterDlg && rosterDlg.dataset.dbaAddPickMode === '1');
     const presetClickAction = loadRosterPresetClickAction();
@@ -8896,27 +9110,26 @@
     const headBtns = document.createElement('div');
     headBtns.className = 'dba-roster-head-btns';
 
-    const btnRename = document.createElement('button');
-    btnRename.type = 'button';
-    btnRename.className = 'dba-btn-mini';
-    btnRename.textContent = '名前変更';
+    const btnAuto = document.createElement('button');
+    btnAuto.type = 'button';
+    btnAuto.className = 'dba-btn-mini';
+    btnAuto.textContent = 'オート装備設定';
 
     const btnOption = document.createElement('button');
     btnOption.type = 'button';
     btnOption.className = 'dba-btn-mini';
-    btnOption.textContent = 'オプション';
+    btnOption.textContent = 'ロスターオプション';
 
-    const btnWipe = document.createElement('button');
-    btnWipe.type = 'button';
-    btnWipe.className = 'dba-btn-mini dba-btn-mini--danger';
-    btnWipe.textContent = 'ロスター削除';
 
-    headBtns.appendChild(btnRename);
+    headBtns.appendChild(btnAuto);
     headBtns.appendChild(btnOption);
-    headBtns.appendChild(btnWipe);
 
     head.appendChild(headTitle);
     head.appendChild(headBtns);
+    const hideMenuRow2 = loadRosterHideMenuRow2Enabled();
+    if(hideMenuRow2){
+      head.style.borderBottom = '0';
+    }
     box.appendChild(head);
 
     // 2段目：追加/削除
@@ -8927,6 +9140,12 @@
     btnAdd.type = 'button';
     btnAdd.className = 'dba-btn-mini dba-btn-mini--ok';
     btnAdd.textContent = addPickMode ? '追加位置:選択してください' : '追加';
+
+    const btnDuplicate = document.createElement('button');
+    btnDuplicate.type = 'button';
+    btnDuplicate.className = 'dba-btn-mini';
+    btnDuplicate.textContent = dupMode ? '複製:選択してください' : '複製';
+    btnDuplicate.disabled = false;
 
     const btnEdit = document.createElement('button');
     btnEdit.type = 'button';
@@ -8949,16 +9168,15 @@
     btnDel.disabled = false;
 
     row2.appendChild(btnAdd);
+    row2.appendChild(btnDuplicate);
     row2.appendChild(btnEdit);
     row2.appendChild(btnSort);
 
-    const btnAuto = document.createElement('button');
-    btnAuto.type = 'button';
-    btnAuto.className = 'dba-btn-mini';
-    btnAuto.textContent = 'オート装備設定';
-
-    row2.appendChild(btnAuto);
     row2.appendChild(btnDel);
+    if(hideMenuRow2){
+      row2.style.display = 'none';
+      row2.hidden = true;
+    }
     box.appendChild(row2);
 
     // リスト
@@ -8985,7 +9203,7 @@
         item.dataset.name = nm;
         // 削除モード中は「選択＝装備適用」ではないため、選択強調はOFFにする
         item.dataset.selected = (
-          !delMode && (
+          !delMode && !dupMode && (
             (nm === selectedPresetName) ||
             (presetClickAction === 'menu' && nm === expandedMenuPresetName)
           )
@@ -9047,6 +9265,21 @@
             return;
           }
 
+          // 複製モード中：クリック＝複製対象の選択（装備はしない）
+          if(rosterDlg && rosterDlg.dataset.dbaDupMode === '1'){
+            let duplicatedName = '';
+            try{
+              duplicatedName = duplicatePresetBelow(nm);
+            }catch(err){
+              alert(err && err.message ? err.message : 'プリセットの複製に失敗しました。');
+              return;
+            }
+            rosterDlg.dataset.dbaDupMode = '0';
+            rosterDlg.dataset.dbaMenuPresetName = duplicatedName;
+            renderRosterModalState(duplicatedName);
+            return;
+          }
+
           // 再編集モード中：クリック＝再編集対象の選択（装備はしない）
           if(rosterDlg && rosterDlg.dataset.dbaEditMode === '1'){
             // 再編集モード解除（選択後は通常に戻す）
@@ -9074,6 +9307,10 @@
           const actionWrap = document.createElement('div');
           actionWrap.className = 'dba-roster-item__actions';
 
+          const baseIdx = names.indexOf(nm);
+          const canMoveUp = baseIdx > 0;
+          const canMoveDown = baseIdx >= 0 && baseIdx < (names.length - 1);
+
           const btnCancelMenu = document.createElement('button');
           btnCancelMenu.type = 'button';
           btnCancelMenu.className = 'dba-btn-mini dba-btn-mini--cancel';
@@ -9089,6 +9326,11 @@
           btnReeditMenu.className = 'dba-btn-mini';
           btnReeditMenu.textContent = '再編集';
 
+          const btnDuplicateMenu = document.createElement('button');
+          btnDuplicateMenu.type = 'button';
+          btnDuplicateMenu.className = 'dba-btn-mini';
+          btnDuplicateMenu.textContent = '複製';
+
           const btnAddAboveMenu = document.createElement('button');
           btnAddAboveMenu.type = 'button';
           btnAddAboveMenu.className = 'dba-btn-mini';
@@ -9098,6 +9340,18 @@
           btnAddBelowMenu.type = 'button';
           btnAddBelowMenu.className = 'dba-btn-mini';
           btnAddBelowMenu.textContent = '下に追加';
+
+          const btnMoveUpMenu = document.createElement('button');
+          btnMoveUpMenu.type = 'button';
+          btnMoveUpMenu.className = 'dba-btn-mini';
+          btnMoveUpMenu.textContent = '1つ上げる';
+          btnMoveUpMenu.disabled = !canMoveUp;
+
+          const btnMoveDownMenu = document.createElement('button');
+          btnMoveDownMenu.type = 'button';
+          btnMoveDownMenu.className = 'dba-btn-mini';
+          btnMoveDownMenu.textContent = '1つ下げる';
+          btnMoveDownMenu.disabled = !canMoveDown;
 
           const btnDeleteMenu = document.createElement('button');
           btnDeleteMenu.type = 'button';
@@ -9120,11 +9374,26 @@
           btnReeditMenu.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
+            if(rosterDlg) rosterDlg.dataset.dbaDupMode = '0';
             if(rosterDlg) rosterDlg.dataset.dbaMenuPresetName = '';
             renderRosterModalState(null);
             openRosterEditPresetModal(nm, () => {
               renderRosterModalState(nm);
             });
+          });
+
+          btnDuplicateMenu.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            let duplicatedName = '';
+            try{
+              duplicatedName = duplicatePresetBelow(nm);
+            }catch(err){
+              alert(err && err.message ? err.message : 'プリセットの複製に失敗しました。');
+              return;
+            }
+            if(rosterDlg) rosterDlg.dataset.dbaMenuPresetName = duplicatedName;
+            renderRosterModalState(selectedPresetName || null);
           });
 
           btnAddAboveMenu.addEventListener('click', (e) => {
@@ -9133,6 +9402,10 @@
             const baseIdx = names.indexOf(nm);
             const insertIdx = (baseIdx >= 0) ? baseIdx : 0;
             if(rosterDlg) rosterDlg.dataset.dbaMenuPresetName = '';
+            if(rosterDlg) rosterDlg.dataset.dbaAddPickMode = '0';
+            if(rosterDlg) rosterDlg.dataset.dbaDelMode = '0';
+            if(rosterDlg) rosterDlg.dataset.dbaDupMode = '0';
+            if(rosterDlg) rosterDlg.dataset.dbaEditMode = '0';
             renderRosterModalState(null);
             openRosterAddPresetModal(() => {
               renderRosterModalState(null);
@@ -9145,10 +9418,34 @@
             const baseIdx = names.indexOf(nm);
             const insertIdx = (baseIdx >= 0) ? (baseIdx + 1) : names.length;
             if(rosterDlg) rosterDlg.dataset.dbaMenuPresetName = '';
+            if(rosterDlg) rosterDlg.dataset.dbaAddPickMode = '0';
+            if(rosterDlg) rosterDlg.dataset.dbaDelMode = '0';
+            if(rosterDlg) rosterDlg.dataset.dbaDupMode = '0';
+            if(rosterDlg) rosterDlg.dataset.dbaEditMode = '0';
             renderRosterModalState(null);
             openRosterAddPresetModal(() => {
               renderRosterModalState(null);
             }, insertIdx);
+          });
+
+          btnMoveUpMenu.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if(!canMoveUp) return;
+            const moved = movePresetBy(nm, -1);
+            if(!moved) return;
+            if(rosterDlg) rosterDlg.dataset.dbaMenuPresetName = nm;
+            renderRosterModalState(selectedPresetName || null);
+          });
+
+          btnMoveDownMenu.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if(!canMoveDown) return;
+            const moved = movePresetBy(nm, 1);
+            if(!moved) return;
+            if(rosterDlg) rosterDlg.dataset.dbaMenuPresetName = nm;
+            renderRosterModalState(selectedPresetName || null);
           });
 
           btnDeleteMenu.addEventListener('click', (e) => {
@@ -9164,8 +9461,11 @@
           actionWrap.appendChild(btnCancelMenu);
           actionWrap.appendChild(btnEquipMenu);
           actionWrap.appendChild(btnReeditMenu);
+          actionWrap.appendChild(btnDuplicateMenu);
           actionWrap.appendChild(btnAddAboveMenu);
           actionWrap.appendChild(btnAddBelowMenu);
+          actionWrap.appendChild(btnMoveUpMenu);
+          actionWrap.appendChild(btnMoveDownMenu);
           actionWrap.appendChild(btnDeleteMenu);
           item.appendChild(actionWrap);
         }
@@ -9331,21 +9631,11 @@
       }, { capture: true });
     }
 
-    // --- handlers ---
-    btnRename.addEventListener('click', (e) => {
-      e.preventDefault(); e.stopPropagation();
-      if(rosterDlg) rosterDlg.dataset.dbaDelMode = '0';
-      if(rosterDlg) rosterDlg.dataset.dbaEditMode = '0';
-      if(rosterDlg) rosterDlg.dataset.dbaMenuPresetName = '';
-      openRosterRenameModal(title, (newName) => {
-        setRosterTitle(newName);
-        renderRosterModalState(selectedPresetName || null);
-      });
-    });
-
+    // ----- Handlers (1) -----
     btnOption.addEventListener('click', (e) => {
       e.preventDefault(); e.stopPropagation();
       if(rosterDlg) rosterDlg.dataset.dbaDelMode = '0';
+      if(rosterDlg) rosterDlg.dataset.dbaDupMode = '0';
       if(rosterDlg) rosterDlg.dataset.dbaEditMode = '0';
       if(rosterDlg) rosterDlg.dataset.dbaAddPickMode = '0';
       if(rosterDlg) rosterDlg.dataset.dbaMenuPresetName = '';
@@ -9354,20 +9644,11 @@
       });
     });
 
-    btnWipe.addEventListener('click', (e) => {
-      e.preventDefault(); e.stopPropagation();
-      if(rosterDlg) rosterDlg.dataset.dbaDelMode = '0';
-      if(rosterDlg) rosterDlg.dataset.dbaEditMode = '0';
-      if(rosterDlg) rosterDlg.dataset.dbaMenuPresetName = '';
-      openRosterWipeModal(() => {
-        deleteActiveRosterAndSwitch();
-        renderRosterModalState(null);
-      });
-    });
-
+    // ----- Handlers (2) -----
     btnAdd.addEventListener('click', (e) => {
       e.preventDefault(); e.stopPropagation();
       if(rosterDlg) rosterDlg.dataset.dbaDelMode = '0';
+      if(rosterDlg) rosterDlg.dataset.dbaDupMode = '0';
       if(rosterDlg) rosterDlg.dataset.dbaEditMode = '0';
       if(rosterDlg) rosterDlg.dataset.dbaMenuPresetName = '';
       if(!rosterDlg) return;
@@ -9376,12 +9657,31 @@
       renderRosterModalState(null);
     });
 
+    // ----- Handlers (3) -----
+    btnDuplicate.addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      if(!rosterDlg) return;
+      rosterDlg.dataset.dbaDelMode = '0';
+      rosterDlg.dataset.dbaEditMode = '0';
+      rosterDlg.dataset.dbaAddPickMode = '0';
+      rosterDlg.dataset.dbaMenuPresetName = '';
+      const next = (rosterDlg.dataset.dbaDupMode === '1') ? '0' : '1';
+      rosterDlg.dataset.dbaDupMode = next;
+      if(next === '1'){
+        renderRosterModalState(null);
+      }else{
+        renderRosterModalState(selectedPresetName || null);
+      }
+    });
+
+    // ----- Handlers (4) -----
     btnEdit.addEventListener('click', (e) => {
       e.preventDefault(); e.stopPropagation();
       // 「再編集」→「対象選択」へ切り替え
       if(!rosterDlg) return;
       // 再編集モードに入るときは削除モードをOFF（誤操作防止）
       rosterDlg.dataset.dbaDelMode = '0';
+      rosterDlg.dataset.dbaDupMode = '0';
       rosterDlg.dataset.dbaAddPickMode = '0';
       rosterDlg.dataset.dbaMenuPresetName = '';
       const next = (rosterDlg.dataset.dbaEditMode === '1') ? '0' : '1';
@@ -9394,9 +9694,11 @@
       }
     });
 
+    // ----- Handlers (5) -----
     btnSort.addEventListener('click', (e) => {
       e.preventDefault(); e.stopPropagation();
       if(rosterDlg) rosterDlg.dataset.dbaDelMode = '0';
+      if(rosterDlg) rosterDlg.dataset.dbaDupMode = '0';
       if(rosterDlg) rosterDlg.dataset.dbaEditMode = '0';
       if(rosterDlg) rosterDlg.dataset.dbaMenuPresetName = '';
       openRosterSortModal(() => {
@@ -9404,20 +9706,24 @@
       });
     });
 
+    // ----- Handlers (6) -----
     btnAuto.addEventListener('click', (e) => {
       e.preventDefault(); e.stopPropagation();
       if(rosterDlg) rosterDlg.dataset.dbaDelMode = '0';
+      if(rosterDlg) rosterDlg.dataset.dbaDupMode = '0';
       if(rosterDlg) rosterDlg.dataset.dbaEditMode = '0';
       if(rosterDlg) rosterDlg.dataset.dbaAddPickMode = '0';
       if(rosterDlg) rosterDlg.dataset.dbaMenuPresetName = '';
       openAutoEquipSettingsModal();
     });
 
+    // ----- Handlers (7) -----
     btnDel.addEventListener('click', (e) => {
       e.preventDefault(); e.stopPropagation();
       // 「削除」→「対象選択」へ切り替え
       if(!rosterDlg) return;
       // 削除モードに入るときは再編集モードをOFF（誤操作防止）
+      rosterDlg.dataset.dbaDupMode = '0';
       rosterDlg.dataset.dbaEditMode = '0';
       rosterDlg.dataset.dbaAddPickMode = '0';
       const next = (rosterDlg.dataset.dbaDelMode === '1') ? '0' : '1';
@@ -9440,6 +9746,7 @@
       if(dlg){
         dlg.dataset.dbaAddPickMode = '0';
         dlg.dataset.dbaDelMode = '0';
+        dlg.dataset.dbaDupMode = '0';
         dlg.dataset.dbaEditMode = '0';
         dlg.dataset.dbaMenuPresetName = '';
       }
@@ -10873,7 +11180,7 @@
 
     const actionNote = document.createElement('p');
     actionNote.className = 'dba-roster-opt-note';
-    actionNote.textContent = '「メニューを展開」を選ぶと、プリセットをクリック／タップした時にキャンセル・装備・再編集・上に追加・下に追加・削除のメニューを表示します。';
+    actionNote.textContent = '「メニューを展開」を選ぶと、プリセットを クリック／タップ した時に「キャンセル・装備・再編集・複製・上に追加・下に追加・1つ上げる・1つ下げる・削除」のメニューを表示します。';
     actionBody.appendChild(actionNote);
 
     actionSection.appendChild(actionBody);
@@ -10889,6 +11196,23 @@
 
     const rememberBody = document.createElement('div');
     rememberBody.className = 'dba-roster-opt-section__body';
+
+    const hideMenuRow2Label = document.createElement('label');
+    hideMenuRow2Label.className = 'dba-roster-opt-row';
+    const hideMenuRow2Chk = document.createElement('input');
+    hideMenuRow2Chk.type = 'checkbox';
+    hideMenuRow2Chk.id = 'dba-roster-option-hide-menu-row2';
+    const hideMenuRow2Text = document.createElement('span');
+    hideMenuRow2Text.className = 'dba-roster-opt-rowtext';
+    hideMenuRow2Text.textContent = '装備ロスターのメニュー2段目を隠す。';
+    hideMenuRow2Label.appendChild(hideMenuRow2Chk);
+    hideMenuRow2Label.appendChild(hideMenuRow2Text);
+    rememberBody.appendChild(hideMenuRow2Label);
+
+    const hideMenuRow2Note = document.createElement('p');
+    hideMenuRow2Note.className = 'dba-roster-opt-note';
+    hideMenuRow2Note.textContent = '2段目の「追加」「複製」…「削除」等のメニューを非表示化し、空間を詰めます。';
+    rememberBody.appendChild(hideMenuRow2Note);
 
     const rememberLabel = document.createElement('label');
     rememberLabel.className = 'dba-roster-opt-row';
@@ -10910,6 +11234,43 @@
     rememberSection.appendChild(rememberBody);
 
     mid.appendChild(rememberSection);
+
+    const manageSection = document.createElement('section');
+    manageSection.className = 'dba-roster-opt-section';
+
+    const manageTitle = document.createElement('div');
+    manageTitle.className = 'dba-roster-opt-section__title';
+    manageTitle.textContent = '装備ロスター管理';
+    manageSection.appendChild(manageTitle);
+
+    const manageBody = document.createElement('div');
+    manageBody.className = 'dba-roster-opt-section__body';
+
+    const manageNote = document.createElement('p');
+    manageNote.className = 'dba-roster-opt-note';
+    manageNote.textContent = '現在読み込んでいる装備ロスターの名前変更や削除を行います。';
+    manageBody.appendChild(manageNote);
+
+    const manageWrap = document.createElement('div');
+    manageWrap.className = 'dba-roster-opt-btngrid';
+
+    const btnRename = document.createElement('button');
+    btnRename.type = 'button';
+    btnRename.id = 'dba-roster-option-btn-rename';
+    btnRename.className = 'dba-btn-mini';
+    btnRename.textContent = '名前変更';
+
+    const btnWipe = document.createElement('button');
+    btnWipe.type = 'button';
+    btnWipe.id = 'dba-roster-option-btn-wipe';
+    btnWipe.className = 'dba-btn-mini dba-btn-mini--danger';
+    btnWipe.textContent = 'ロスター削除';
+
+    manageWrap.appendChild(btnRename);
+    manageWrap.appendChild(btnWipe);
+    manageBody.appendChild(manageWrap);
+    manageSection.appendChild(manageBody);
+    mid.appendChild(manageSection);
 
     const backupSection = document.createElement('section');
     backupSection.className = 'dba-roster-opt-section';
@@ -10952,7 +11313,6 @@
     backupWrap.appendChild(btnImport);
     backupWrap.appendChild(btnEdit);
     backupBody.appendChild(backupWrap);
-    backupBody.appendChild(backupWrap);
     backupSection.appendChild(backupBody);
     mid.appendChild(backupSection);
 
@@ -10983,12 +11343,48 @@
       const dlg = document.getElementById('dba-m-roster-option');
       if(!dlg) return;
 
+      const btnX = dlg.querySelector('.dba-btn-x');
+      const btnClose = dlg.querySelector('.dba-btn-close');
+      const chkHideMenuRow2 = document.getElementById('dba-roster-option-hide-menu-row2');
       const chkRemember = document.getElementById('dba-roster-option-scroll-remember');
       const radioEquip = document.getElementById('dba-roster-option-preset-click-equip');
       const radioMenu = document.getElementById('dba-roster-option-preset-click-menu');
       const btnExport = document.getElementById('dba-roster-option-btn-export');
       const btnImport = document.getElementById('dba-roster-option-btn-import');
       const btnEdit = document.getElementById('dba-roster-option-btn-edit');
+      const btnRename = document.getElementById('dba-roster-option-btn-rename');
+      const btnWipe = document.getElementById('dba-roster-option-btn-wipe');
+
+      const initialClickAction = loadRosterPresetClickAction();
+      let pendingClickAction = initialClickAction;
+      let pendingHideMenuRow2 = loadRosterHideMenuRow2Enabled();
+      let pendingRemember = loadRosterScrollRememberEnabled();
+      let appliedOnClose = false;
+
+      const applyPendingOptions = () => {
+        if(appliedOnClose) return;
+        appliedOnClose = true;
+
+        saveRosterPresetClickAction(pendingClickAction);
+        saveRosterHideMenuRow2Enabled(pendingHideMenuRow2);
+        saveRosterScrollRememberEnabled(pendingRemember);
+
+        if(pendingRemember){
+          const top = captureRosterListScrollState();
+          saveRosterSavedScrollTop(top);
+        }else{
+          clearRosterSavedScrollTop();
+        }
+
+        if(typeof onDone === 'function'){
+          try{ onDone(); }catch(_e){}
+        }
+      };
+
+      const closeDirect = () => {
+        applyPendingOptions();
+        try{ dlg.close(); }catch(_e){ dlg.removeAttribute('open'); }
+      };
 
       const clickAction = loadRosterPresetClickAction();
       if(radioEquip) radioEquip.checked = (clickAction === 'equip');
@@ -10997,31 +11393,50 @@
       if(radioEquip){
         radioEquip.onchange = () => {
           if(radioEquip.checked){
-            saveRosterPresetClickAction('equip');
+            pendingClickAction = 'equip';
           }
         };
       }
       if(radioMenu){
         radioMenu.onchange = () => {
           if(radioMenu.checked){
-            saveRosterPresetClickAction('menu');
+            pendingClickAction = 'menu';
           }
         };
       }
 
-      if(chkRemember){
-        chkRemember.checked = loadRosterScrollRememberEnabled();
-        chkRemember.onchange = () => {
-          const on = !!chkRemember.checked;
-          saveRosterScrollRememberEnabled(on);
-          if(on){
-            const top = captureRosterListScrollState();
-            saveRosterSavedScrollTop(top);
-          }else{
-            clearRosterSavedScrollTop();
-          }
+      if(chkHideMenuRow2){
+        chkHideMenuRow2.checked = pendingHideMenuRow2;
+        chkHideMenuRow2.onchange = () => {
+          pendingHideMenuRow2 = !!chkHideMenuRow2.checked;
         };
       }
+
+      if(chkRemember){
+        chkRemember.checked = pendingRemember;
+        chkRemember.onchange = () => {
+          pendingRemember = !!chkRemember.checked;
+        };
+      }
+
+      if(btnX){
+        btnX.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          closeDirect();
+        };
+      }
+      if(btnClose){
+        btnClose.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          closeDirect();
+        };
+      }
+      dlg.oncancel = (e) => {
+        e.preventDefault();
+        closeDirect();
+      };
 
       if(btnExport){
         btnExport.onclick = (e) => {
@@ -11042,6 +11457,30 @@
           e.preventDefault();
           e.stopPropagation();
           openRosterBackupEditorModal(onDone);
+        };
+      }
+      if(btnRename){
+        btnRename.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          openRosterRenameModal(getActiveRoster().roster?.title || '', (newName) => {
+            setRosterTitle(newName);
+            if(typeof onDone === 'function'){
+              try{ onDone(); }catch(_e){}
+            }
+          });
+        };
+      }
+      if(btnWipe){
+        btnWipe.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          openRosterWipeModal(() => {
+            deleteActiveRosterAndSwitch();
+            if(typeof onDone === 'function'){
+              try{ onDone(); }catch(_e){}
+            }
+          });
         };
       }
 
@@ -11480,37 +11919,9 @@
       }
 
       if(dlg){
-        const onWheelCapture = (e) => {
-          if(!(dlg.open || dlg.hasAttribute('open'))) return;
-          const target = e.target;
-          if(target instanceof Node && dlg.contains(target)) return;
-          e.preventDefault();
-          e.stopPropagation();
-          e.stopImmediatePropagation();
-        };
-
-        const onTouchMoveCapture = (e) => {
-          if(!(dlg.open || dlg.hasAttribute('open'))) return;
-          const target = e.target;
-          if(target instanceof Node && dlg.contains(target)) return;
-          e.preventDefault();
-          e.stopPropagation();
-          e.stopImmediatePropagation();
-        };
-
-        document.addEventListener('wheel', onWheelCapture, { capture: true, passive: false });
-        document.addEventListener('touchmove', onTouchMoveCapture, { capture: true, passive: false });
-
-        const cleanupScrollBlock = () => {
-          document.removeEventListener('wheel', onWheelCapture, { capture: true });
-          document.removeEventListener('touchmove', onTouchMoveCapture, { capture: true });
-        };
-
-        dlg.addEventListener('close', cleanupScrollBlock, { once: true });
-        dlg.addEventListener('cancel', cleanupScrollBlock, { once: true });
-
         try{ dlg.showModal(); }catch(_e){ dlg.setAttribute('open',''); }
       }
+
     };
     if(document.body) openNow(); else document.addEventListener('DOMContentLoaded', openNow, { once:true });
   }
@@ -12251,6 +12662,7 @@
   async function openPickItemModal(kind){
     buildPickItemModal();
     const dlg = document.getElementById('dba-m-pick-item');
+    const mid = dlg ? dlg.querySelector('.dba-modal__mid') : null;
     const title = document.getElementById('dba-pick-title');
     const hint = document.getElementById('dba-pick-hint');
     const box = document.getElementById('dba-pick-box');
@@ -12262,6 +12674,11 @@
     if(title) title.textContent = `${kLabel}を選択`;
     if(hint) hint.textContent = '行をクリックして選択してください（装/解/分解列は非表示）。';
     box.textContent = '読み込み中…';
+
+    // dba-m-pick-item は使い回しなので、前回のスクロール位置を毎回破棄する
+    try{ dlg.scrollTop = 0; }catch(_e){}
+    try{ if(mid) mid.scrollTop = 0; }catch(_e){}
+    try{ box.scrollTop = 0; }catch(_e){}
 
     let selectedRow = null;
     let activeRarity = 'ALL';
@@ -12404,6 +12821,11 @@
       box.appendChild(filterBar);
       box.appendChild(imported);
 
+      // 中身を差し替えた直後にも先頭へ戻す
+      try{ dlg.scrollTop = 0; }catch(_e){}
+      try{ if(mid) mid.scrollTop = 0; }catch(_e){}
+      try{ box.scrollTop = 0; }catch(_e){}
+
       // 初期状態でフィルタ適用（念のため）
       applyPickFilters();
     }
@@ -12446,6 +12868,9 @@
       };
 
       try{ dlg.showModal(); }catch(_e){ dlg.setAttribute('open',''); }
+      try{ dlg.scrollTop = 0; }catch(_e){}
+      try{ if(mid) mid.scrollTop = 0; }catch(_e){}
+      try{ box.scrollTop = 0; }catch(_e){}
     });
   }
 
@@ -14710,7 +15135,7 @@ function avatarsKeyToMap(avatarsKey){
       if(btn){
         btn.disabled = false;
         btn.dataset.dbaBusy = '0';
-        btn.textContent = '戦況情報';
+        btn.innerHTML = '戦況<br>情報';
       }
       if(showAlertOnError){
         alert('戦況情報の取得に失敗しました。');
@@ -14745,7 +15170,7 @@ function avatarsKeyToMap(avatarsKey){
     if(btn){
       btn.disabled = false;
       btn.dataset.dbaBusy = '0';
-      btn.textContent = '戦況情報';
+      btn.innerHTML = '戦況<br>情報';
     }
   }
 
@@ -15403,7 +15828,7 @@ function avatarsKeyToMap(avatarsKey){
         if(btn){
           btn.disabled = false;
           btn.dataset.dbaBusy = '0';
-          btn.textContent = '戦況情報';
+          btn.innerHTML = '戦況<br>情報';
         }
         return;
       }
@@ -15420,7 +15845,7 @@ function avatarsKeyToMap(avatarsKey){
         if(btn){
           btn.disabled = false;
           btn.dataset.dbaBusy = '0';
-          btn.textContent = '戦況情報';
+          btn.innerHTML = '戦況<br>情報';
         }
         return;
       }
@@ -15453,14 +15878,14 @@ function avatarsKeyToMap(avatarsKey){
       if(btn){
         btn.disabled = false;
         btn.dataset.dbaBusy = '0';
-        btn.textContent = '戦況情報';
+        btn.innerHTML = '戦況<br>情報';
       }
     }catch(e){
       dbgLog('battleInfo', 'warn', 'CLICK update failed', { mode, error: String(e && e.message ? e.message : e) });
       if(btn){
         btn.disabled = false;
         btn.dataset.dbaBusy = '0';
-        btn.textContent = '戦況情報';
+        btn.innerHTML = '戦況<br>情報';
       }
       if(showAlertOnError){
         alert('戦況情報の取得に失敗しました。');
@@ -16501,7 +16926,7 @@ function avatarsKeyToMap(avatarsKey){
     function syncRapidBtn(){
       const on = loadRapidAttackEnabled();
       btnRapid.dataset.on = on ? '1' : '0';
-      btnRapid.textContent = on ? 'ラピッド攻撃:ON' : 'ラピッド攻撃:OFF';
+      btnRapid.innerHTML = on ? 'ラピッド攻撃<br>ON' : 'ラピッド攻撃<br>OFF';
     }
     syncRapidBtn();
     btnRapid.addEventListener('click', (e) => {
@@ -16515,7 +16940,7 @@ function avatarsKeyToMap(avatarsKey){
     const btnRoster = document.createElement('button');
     btnRoster.type = 'button';
     btnRoster.className = 'dba-btn-fn';
-    btnRoster.textContent = '装備ロスター';
+    btnRoster.innerHTML = '装備<br>ロスター';
     btnRoster.id = 'dba-btn-roster';
     // 長押し（1.4秒）：ロスター名一覧ポップアップ（ボタン直下）
     // 短押し：従来通りロスター本体modal
@@ -16564,7 +16989,7 @@ function avatarsKeyToMap(avatarsKey){
     const btnBattleInfo = document.createElement('button');
     btnBattleInfo.type = 'button';
     btnBattleInfo.className = 'dba-btn-fn';
-    btnBattleInfo.textContent = '戦況情報';
+    btnBattleInfo.innerHTML = '戦況<br>情報';
     btnBattleInfo.id = 'dba-btn-battleinfo';
 
     // 長押し（1.4秒）で全セル巡回してレイヤーに表示
@@ -16637,7 +17062,7 @@ function avatarsKeyToMap(avatarsKey){
     function syncAutoEquipBtn(){
       const on = loadAutoEquipEnabled();
       btnAutoEquip.dataset.on = on ? '1' : '0';
-      btnAutoEquip.textContent = on ? 'オート装備:ON' : 'オート装備:OFF';
+      btnAutoEquip.innerHTML = on ? 'オート装備<br>ON' : 'オート装備<br>OFF';
     }
     syncAutoEquipBtn();
     btnAutoEquip.addEventListener('click', (e) => {
